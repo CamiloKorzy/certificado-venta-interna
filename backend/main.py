@@ -37,78 +37,52 @@ def get_indicadores():
     conn = None
     df = None
     try:
-        # 1. Intentar leer desde el Excel proporcionado con el Detalle
-        excel_path = r"C:\Datos\Proyectos IT\Certificado_Venta_Interna\Documentos\Detalle de Certificados de Ventas Generados.xlsx"
-        excel_path_fallback = r"C:\Datos\Proyectos IT\Certificado_Venta_Interna\Documentos\Certificados de Ventas Generados.xlsx"
-        
-        if os.path.exists(excel_path):
-            df = pd.read_excel(excel_path)
-            print("Datos cargados exitosamente desde Excel Detalle.")
-        elif os.path.exists(excel_path_fallback):
-            df = pd.read_excel(excel_path_fallback)
-            print("Datos cargados desde Excel (Fallback).")
-        elif SUPABASE_URL and SUPABASE_KEY:
-            # Fallback a Supabase si no hay Excel local (ej: Entorno Vercel)
-            from supabase import create_client, Client
-            supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-            response = supabase.table('certificados_detalle').select('*').execute()
-            if response.data:
-                df = pd.DataFrame(response.data)
-                print("Datos cargados desde Supabase.")
-            else:
-                print("Tabla en Supabase vacía o sin datos.")
-            
         conn = get_db_connection()
-        if df is not None and not df.empty:
-            if 'Comprobante' in df.columns:
-                # We have the excel, let's enrich it with estadoautorizacion from DB
-                try:
-                    db_df = pd.read_sql("SELECT numerodocumento, estadoautorizacion, solicitante FROM ceesa_cee_certificados_ventas_internos", conn)
-                    
-                    # Prioritize 'Autorizado' rows over 'Pendiente' / others when grouping by numerodocumento
-                    db_df['is_auth'] = db_df['estadoautorizacion'].astype(str).str.lower().str.contains('autorizado|aprobado', na=False)
-                    db_df = db_df.sort_values(by=['numerodocumento', 'is_auth'], ascending=[True, False])
-                    db_df = db_df.drop_duplicates(subset=['numerodocumento'], keep='first')
-                    
-                    df['Comprobante_clean'] = df['Comprobante'].astype(str).str.strip()
-                    db_df['numerodocumento_clean'] = db_df['numerodocumento'].astype(str).str.strip()
-                    
-                    # Merge
-                    merged = pd.merge(df, db_df, left_on='Comprobante_clean', right_on='numerodocumento_clean', how='left')
-                    
-                    # Replace EstadoAutorizacion
-                    df['EstadoAutorizacion'] = merged['estadoautorizacion']
-                    df['Solicitante'] = merged['solicitante']
-                    
-                    df.drop(columns=['Comprobante_clean'], inplace=True)
-                    print("Enriched Excel data with DB estadoautorizacion and solicitante.")
-                except Exception as e:
-                    print(f"Error enriching data from DB: {e}")
-            else:
-                print("No 'Comprobante' column found, skipping DB enrichment.")
-        else:
-            # 2. Fallback a Base de Datos si no existe el Excel
-            queries_to_try = [
-                "SELECT * FROM ceesa_cee_certificados_ventas_internos LIMIT 1000",
-                "SELECT * FROM CEE_Certificados_Ventas_Internos LIMIT 1000"
-            ]
-            for q in queries_to_try:
-                try:
-                    df = pd.read_sql(q, conn)
-                    if 'estadoautorizacion' in df.columns:
-                        df['EstadoAutorizacion'] = df['estadoautorizacion']
-                    if 'solicitante' in df.columns:
-                        df['Solicitante'] = df['solicitante']
-                    break
-                except Exception as ex:
-                    conn.rollback()
-                    continue
-                    
+        print("Conectado a Aurora. Consultando dataset de Finnegans...")
+        
+        query = "SELECT * FROM ceesa_cee_certificados_ventas_internos"
+        df = pd.read_sql(query, conn)
+        
         if df is None or df.empty:
-            raise Exception("No data found")
+            raise Exception("No data found en Aurora")
+            
+        print(f"Cargados {len(df)} registros desde Aurora.")
+        
+        # Mapeo de columnas para asegurar compatibilidad con el Frontend (React)
+        # El frontend espera: 'Fecha', 'Comprobante', 'Empresa' (Prestador), 'Unidad de Negocio', 'Sector', 
+        # 'Descripción', 'Total Bruto', 'Total Gravado', 'EstadoAutorizacion', 'Solicitante'
+        
+        # Diccionario de mapeo tentativo (se ajusta dinámicamente si es necesario)
+        column_mapping = {}
+        for col in df.columns:
+            col_lower = col.lower()
+            if 'fecha' in col_lower and 'Fecha' not in df.columns:
+                column_mapping[col] = 'Fecha'
+            elif ('documento' in col_lower or 'comprobante' in col_lower) and 'Comprobante' not in df.columns:
+                column_mapping[col] = 'Comprobante'
+            elif 'empresa' in col_lower and 'Empresa' not in df.columns:
+                column_mapping[col] = 'Empresa'
+            elif 'unidad' in col_lower and 'negocio' in col_lower and 'Unidad de Negocio' not in df.columns:
+                column_mapping[col] = 'Unidad de Negocio'
+            elif 'sector' in col_lower and 'Sector' not in df.columns:
+                column_mapping[col] = 'Sector'
+            elif 'descripc' in col_lower and 'Descripción' not in df.columns:
+                column_mapping[col] = 'Descripción'
+            elif 'gravado' in col_lower and 'Total Gravado' not in df.columns:
+                column_mapping[col] = 'Total Gravado'
+            elif 'total' in col_lower and 'bruto' not in col_lower and 'Total Bruto' not in df.columns:
+                column_mapping[col] = 'Total Bruto'
+            elif 'estadoautorizacion' == col_lower and 'EstadoAutorizacion' not in df.columns:
+                column_mapping[col] = 'EstadoAutorizacion'
+            elif 'solicitante' == col_lower and 'Solicitante' not in df.columns:
+                column_mapping[col] = 'Solicitante'
+                
+        if column_mapping:
+            df = df.rename(columns=column_mapping)
+            print(f"Columnas mapeadas: {column_mapping}")
             
     except Exception as e:
-        print(f"Error cargando Excel o BD. Usando Mock Data. Detalles: {e}")
+        print(f"Error consultando BD. Usando Mock Data. Detalles: {e}")
         # Fallback a Mock Data si todo falla
         data = {
             'Fecha': ['2026-05-01', '2026-05-02'],
