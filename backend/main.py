@@ -41,7 +41,15 @@ def get_indicadores():
         print("Conectado a Aurora. Consultando dataset de Finnegans...")
         
         query = "SELECT * FROM ceesa_cee_certificados_ventas_internos"
-        df = pd.read_sql(query, conn)
+        
+        # Ejecutar consulta directamente con psycopg2 para evitar dependencias de SQLAlchemy en Pandas
+        cursor = conn.cursor()
+        cursor.execute(query)
+        columns_db = [desc[0] for desc in cursor.description]
+        data_rows = cursor.fetchall()
+        cursor.close()
+        
+        df = pd.DataFrame(data_rows, columns=columns_db)
         
         if df is None or df.empty:
             raise Exception("No data found en Aurora")

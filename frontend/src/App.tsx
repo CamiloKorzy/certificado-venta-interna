@@ -56,6 +56,7 @@ export default function App() {
   const [rawData, setRawData] = useState<any[]>([]);
   const [columns, setColumns] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const currentMonth = (new Date().getMonth() + 1).toString().padStart(2, '0');
   const currentYear = new Date().getFullYear();
@@ -82,7 +83,13 @@ export default function App() {
 
   useEffect(() => {
     fetch('/api/indicadores')
-      .then(res => res.json())
+      .then(async res => {
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`HTTP ${res.status}: ${text}`);
+        }
+        return res.json();
+      })
       .then(json => {
         setRawData(json.data || []);
         setColumns(json.columns || []);
@@ -90,6 +97,7 @@ export default function App() {
       })
       .catch(err => {
         console.error("Error fetching data:", err);
+        setFetchError(err.message);
         setLoading(false);
       });
   }, []);
@@ -396,14 +404,24 @@ export default function App() {
         
         {/* Debug Info si está vacío */}
         {filteredData.length === 0 && !loading && (
-          <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl text-amber-800 mb-6">
-            <h3 className="font-bold flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div> Modo Diagnóstico (0 resultados)</h3>
-            <p className="text-sm mt-2"><strong>Total de registros crudos en BD:</strong> {rawData.length}</p>
-            <p className="text-sm mt-1"><strong>Columnas recibidas de la BD:</strong> {columns.join(', ')}</p>
-            <p className="text-sm mt-1"><strong>Filtro aplicado:</strong> Periodo {filters.periodo}</p>
-            <div className="mt-3 text-xs bg-white p-3 rounded border border-amber-100 max-h-32 overflow-auto">
-              {rawData.length > 0 ? JSON.stringify(rawData[0]) : "La base de datos no devolvió ningún registro o la conexión falló."}
-            </div>
+          <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl text-amber-800 mb-6 shadow-sm">
+            <h3 className="font-bold flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div> Modo Diagnóstico de Fallos</h3>
+            
+            {fetchError ? (
+              <div className="mt-3 bg-red-50 text-red-800 border border-red-200 p-3 rounded text-sm font-mono whitespace-pre-wrap">
+                <strong>Error de Conexión al Backend (Vercel):</strong><br/>
+                {fetchError}
+              </div>
+            ) : (
+              <>
+                <p className="text-sm mt-2"><strong>Total de registros crudos en BD:</strong> {rawData.length}</p>
+                <p className="text-sm mt-1"><strong>Columnas recibidas de la BD:</strong> {columns.join(', ')}</p>
+                <p className="text-sm mt-1"><strong>Filtro aplicado:</strong> Periodo {filters.periodo}</p>
+                <div className="mt-3 text-xs bg-white p-3 rounded border border-amber-100 max-h-32 overflow-auto">
+                  {rawData.length > 0 ? JSON.stringify(rawData[0]) : "La base de datos no devolvió ningún registro o la conexión falló."}
+                </div>
+              </>
+            )}
           </div>
         )}
         {/* Filters Section */}
