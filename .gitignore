@@ -1,0 +1,23 @@
+# Entornos virtuales
+venv/
+.venv/
+env/
+__pycache__/
+
+# Node
+node_modules/
+dist/
+build/
+
+# Archivos de entorno y variables sensibles
+.env
+.env.local
+
+# Archivos de la base de datos local y documentos
+Documentos/
+*.xlsx
+*.csv
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
