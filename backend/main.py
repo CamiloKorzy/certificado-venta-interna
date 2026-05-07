@@ -32,6 +32,10 @@ def get_db_connection():
         host=DB_HOST, port=DB_PORT, database=DB_NAME, user=DB_USER, password=DB_PASS, sslmode="require"
     )
 
+@app.get("/api/health")
+def health_check():
+    return {"status": "ok", "message": "El backend responde correctamente"}
+
 @app.get("/api/indicadores")
 def get_indicadores():
     conn = None
@@ -40,7 +44,7 @@ def get_indicadores():
         conn = get_db_connection()
         print("Conectado a Aurora. Consultando dataset de Finnegans...")
         
-        query = "SELECT * FROM ceesa_cee_certificados_ventas_internos"
+        query = "SELECT * FROM ceesa_cee_certificados_ventas_internos ORDER BY 1 DESC LIMIT 2000"
         
         # Ejecutar consulta directamente con psycopg2 para evitar dependencias de SQLAlchemy en Pandas
         cursor = conn.cursor()
@@ -137,10 +141,9 @@ def get_indicadores():
     else:
         total_certificados = len(df)
 
-    # Limpiar columnas temporales de calculo
-    if '_num_gravado' in df.columns: df = df.drop(columns=['_num_gravado'])
-    if '_num_total' in df.columns: df = df.drop(columns=['_num_total'])
-
+    # Convertir a dict y verificar tamaño para evitar Crash de Vercel (Límite 4.5MB)
+    response_data = df.to_dict(orient="records")
+    
     return {
         "kpis": {
             "total_certificados": total_certificados,
@@ -149,7 +152,7 @@ def get_indicadores():
             "clientes_activos": clientes_activos
         },
         "columns": list(df.columns),
-        "data": df.to_dict(orient="records")
+        "data": response_data
     }
 
 if __name__ == "__main__":
