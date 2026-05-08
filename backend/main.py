@@ -1,7 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import psycopg2
-import pandas as pd
 from datetime import datetime
 import os
 
@@ -52,97 +51,101 @@ def get_indicadores():
         columns_db = [desc[0] for desc in cursor.description]
         data_rows = cursor.fetchall()
         cursor.close()
-        
-        df = pd.DataFrame(data_rows, columns=columns_db)
-        
-        if df is None or df.empty:
+        # 1. Convertir data_rows (tuplas) a una lista de diccionarios
+        records = []
+        for row in data_rows:
+            # Crear diccionario uniendo nombre de columna con valor
+            record = dict(zip(columns_db, row))
+            records.append(record)
+            
+        if not records:
             raise Exception("No data found en Aurora")
             
-        print(f"Cargados {len(df)} registros desde Aurora.")
+        print(f"Cargados {len(records)} registros desde Aurora.")
         
-        # Mapeo de columnas para asegurar compatibilidad con el Frontend (React)
-        # El frontend espera: 'Fecha', 'Comprobante', 'Empresa' (Prestador), 'Unidad de Negocio', 'Sector', 
-        # 'Descripción', 'Total Bruto', 'Total Gravado', 'EstadoAutorizacion', 'Solicitante'
-        
-        # Diccionario de mapeo tentativo (se ajusta dinámicamente si es necesario)
+        # 2. Mapeo de columnas para el Frontend
         column_mapping = {}
-        for col in df.columns:
+        for col in columns_db:
             col_lower = col.lower()
-            if 'fecha' in col_lower and 'Fecha' not in df.columns:
+            if 'fecha' in col_lower and 'Fecha' not in columns_db:
                 column_mapping[col] = 'Fecha'
-            elif ('documento' in col_lower or 'comprobante' in col_lower) and 'Comprobante' not in df.columns:
+            elif ('documento' in col_lower or 'comprobante' in col_lower) and 'Comprobante' not in columns_db:
                 column_mapping[col] = 'Comprobante'
-            elif 'empresa' in col_lower and 'Empresa' not in df.columns:
+            elif 'empresa' in col_lower and 'Empresa' not in columns_db:
                 column_mapping[col] = 'Empresa'
-            elif 'unidad' in col_lower and 'negocio' in col_lower and 'Unidad de Negocio' not in df.columns:
+            elif 'unidad' in col_lower and 'negocio' in col_lower and 'Unidad de Negocio' not in columns_db:
                 column_mapping[col] = 'Unidad de Negocio'
-            elif 'sector' in col_lower and 'Sector' not in df.columns:
+            elif 'sector' in col_lower and 'Sector' not in columns_db:
                 column_mapping[col] = 'Sector'
-            elif 'descripc' in col_lower and 'Descripción' not in df.columns:
+            elif 'descripc' in col_lower and 'Descripción' not in columns_db:
                 column_mapping[col] = 'Descripción'
-            elif 'gravado' in col_lower and 'Total Gravado' not in df.columns:
+            elif 'gravado' in col_lower and 'Total Gravado' not in columns_db:
                 column_mapping[col] = 'Total Gravado'
-            elif 'total' in col_lower and 'bruto' not in col_lower and 'Total Bruto' not in df.columns:
+            elif 'total' in col_lower and 'bruto' not in col_lower and 'Total Bruto' not in columns_db:
                 column_mapping[col] = 'Total Bruto'
-            elif 'estadoautorizacion' == col_lower and 'EstadoAutorizacion' not in df.columns:
+            elif 'estadoautorizacion' == col_lower and 'EstadoAutorizacion' not in columns_db:
                 column_mapping[col] = 'EstadoAutorizacion'
-            elif 'solicitante' == col_lower and 'Solicitante' not in df.columns:
+            elif 'solicitante' == col_lower and 'Solicitante' not in columns_db:
                 column_mapping[col] = 'Solicitante'
                 
-        if column_mapping:
-            df = df.rename(columns=column_mapping)
-            print(f"Columnas mapeadas: {column_mapping}")
+        # Aplicar mapeo y formatear fechas/nulos
+        for record in records:
+            # Renombrar keys
+            for old_col, new_col in column_mapping.items():
+                if old_col in record:
+                    record[new_col] = record.pop(old_col)
             
+            # Limpiar nulos y formatear fechas
+            for k, v in record.items():
+                if v == 'NULL' or v is None:
+                    record[k] = ''
+                elif isinstance(v, datetime):
+                    record[k] = v.strftime('%d/%m/%Y')
+                    
+        # Actualizar lista de columnas finales
+        final_columns = list(records[0].keys()) if records else []
+        
     except Exception as e:
         print(f"Error consultando BD. Usando Mock Data. Detalles: {e}")
         # Fallback a Mock Data si todo falla
-        data = {
-            'Fecha': ['2026-05-01', '2026-05-02'],
-            'Documento': ['CVI-0001', 'CVI-0002'],
-            'Producto': ['Hormigón H21', 'Servicio IT'],
-            'Cantidad': [150.0, 1.0],
-            'Importe': [1500000.0, 2500000.0]
-        }
-        df = pd.DataFrame(data)
+        records = [
+            {'Fecha': '01/05/2026', 'Comprobante': 'CVI-0001', 'Producto': 'Hormigón H21', 'Cantidad': 150.0, 'Importe': 1500000.0},
+            {'Fecha': '02/05/2026', 'Comprobante': 'CVI-0002', 'Producto': 'Servicio IT', 'Cantidad': 1.0, 'Importe': 2500000.0}
+        ]
+        final_columns = list(records[0].keys())
 
     finally:
         if conn:
             conn.close()
 
-    # Formatear Fechas para JSON (ISO o string)
-    for col in df.columns:
-        if 'fecha' in col.lower() and pd.api.types.is_datetime64_any_dtype(df[col]):
-            df[col] = df[col].dt.strftime('%d/%m/%Y')
-            
-    # Limpieza de nulos
-    df = df.replace('NULL', None)
-    df = df.fillna('')
-    
-    # Identificar columnas clave para KPIs basadas en Finnegans Excel
-    col_gravado = next((c for c in df.columns if 'gravado' in c.lower()), None)
-    col_total = next((c for c in df.columns if 'total' in c.lower() and 'bruto' not in c.lower()), None)
-    col_cliente = next((c for c in df.columns if 'cliente' in c.lower()), None)
-    col_doc = next((c for c in df.columns if 'documento' in c.lower() or 'comprobante' in c.lower()), None)
-    
-    # Asegurar tipo numérico para sumatorias
-    if col_gravado: df['_num_gravado'] = pd.to_numeric(df[col_gravado], errors='coerce').fillna(0)
-    if col_total: df['_num_total'] = pd.to_numeric(df[col_total], errors='coerce').fillna(0)
-    
-    total_gravado = float(df['_num_gravado'].sum()) if col_gravado else 0.0
-    total_final = float(df['_num_total'].sum()) if col_total else 0.0
-    
-    clientes_activos = 0
-    if col_cliente:
-        clientes_activos = len([u for u in df[col_cliente].unique() if pd.notna(u) and str(u).strip() != ''])
-        
-    total_certificados = 0
-    if col_doc:
-        total_certificados = len([d for d in df[col_doc].unique() if pd.notna(d) and str(d).strip() != ''])
-    else:
-        total_certificados = len(df)
+    # 3. Calcular KPIs
+    total_gravado = 0.0
+    total_final = 0.0
+    clientes_set = set()
+    certificados_set = set()
 
-    # Convertir a dict y verificar tamaño para evitar Crash de Vercel (Límite 4.5MB)
-    response_data = df.to_dict(orient="records")
+    for record in records:
+        # Encontrar columna gravado y total (ignorando mayusculas)
+        val_gravado = 0
+        val_total = 0
+        for k, v in record.items():
+            k_lower = k.lower()
+            if 'gravado' in k_lower:
+                try: val_gravado = float(v) if v != '' else 0.0
+                except: pass
+            if 'total' in k_lower and 'bruto' not in k_lower:
+                try: val_total = float(v) if v != '' else 0.0
+                except: pass
+            if 'cliente' in k_lower and v != '':
+                clientes_set.add(v)
+            if ('documento' in k_lower or 'comprobante' in k_lower) and v != '':
+                certificados_set.add(v)
+                
+        total_gravado += val_gravado
+        total_final += val_total
+
+    clientes_activos = len(clientes_set)
+    total_certificados = len(certificados_set) if certificados_set else len(records)
     
     return {
         "kpis": {
@@ -151,8 +154,8 @@ def get_indicadores():
             "total_final": total_final,
             "clientes_activos": clientes_activos
         },
-        "columns": list(df.columns),
-        "data": response_data
+        "columns": final_columns,
+        "data": records
     }
 
 if __name__ == "__main__":
