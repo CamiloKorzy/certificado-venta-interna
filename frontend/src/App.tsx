@@ -872,7 +872,12 @@ function LoginScreen({ onLogin }: { onLogin: (token: string, user: any) => void 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
       });
-      if (!res.ok) { const d = await res.json().catch(() => ({ detail: 'Error' })); throw new Error(d.detail || 'Error'); }
+      if (!res.ok) { 
+        const text = await res.text();
+        let msg = `Error ${res.status}`;
+        try { const d = JSON.parse(text); msg = d.detail || d.error || msg; } catch { msg += `: ${text.substring(0, 150)}`; }
+        throw new Error(msg); 
+      }
       const data = await res.json();
       onLogin(data.token, data.user);
     } catch (err: any) {

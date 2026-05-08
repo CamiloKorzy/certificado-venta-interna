@@ -11,6 +11,14 @@ try:
 except ImportError:
     pass
 
+import sys
+import traceback
+
+# INYECCIÓN CRÍTICA PARA VERCEL: los módulos están en /var/task/backend
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+
 from auth import hash_password, verify_password, create_token, decode_token
 from telegram_service import telegram_nuevo_certificado, telegram_test
 
@@ -23,6 +31,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Middleware que atrapa TODAS las excepciones y devuelve JSON informativo
+from fastapi.responses import JSONResponse
+
+@app.middleware("http")
+async def catch_exceptions_middleware(request: Request, call_next):
+    try:
+        response = await call_next(request)
+        return response
+    except Exception as e:
+        tb = traceback.format_exc()
+        print(f"UNHANDLED EXCEPTION: {tb}")
+        return JSONResponse(status_code=500, content={"error": str(e), "trace": tb[:500]})
 
 # ─── Credenciales ───
 DB_HOST = os.environ.get("DB_HOST", "infraestructura-aurora-datawarehouse-instance-zxhlvevffc1c.cijt7auhxunw.us-east-1.rds.amazonaws.com")
