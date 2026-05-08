@@ -5,9 +5,11 @@ from typing import Optional, List
 import psycopg2
 from datetime import datetime
 import os
-from dotenv import load_dotenv
-
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 from auth import hash_password, verify_password, create_token, decode_token
 from telegram_service import telegram_nuevo_certificado, telegram_test
