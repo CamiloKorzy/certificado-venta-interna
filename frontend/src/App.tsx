@@ -343,10 +343,21 @@ export default function App() {
       addStat(byUnidad, comp.unidad);
       addStat(byEmpresa, comp.cliente);
       
-      // Por concepto: usar los ítems embebidos
-      const itemNames = (comp.items || []).map((i: any) => i.Producto || 'Sin Detalle');
-      if (itemNames.length === 0) itemNames.push('Sin Detalle de Concepto');
-      itemNames.forEach((name: string) => addStat(byConcepto, name));
+      // Por concepto: usar los ítems embebidos con su importe individual
+      const items = comp.items || [];
+      if (items.length === 0) {
+        addStat(byConcepto, 'Sin Detalle de Concepto');
+      } else {
+        items.forEach((item: any) => {
+          const nombre = item.Producto || item.producto || 'Sin Detalle';
+          const itemImporte = Number(item.Importe || item.importe || 0);
+          if (!byConcepto[nombre]) byConcepto[nombre] = { ids: new Set(), authIds: new Set(), pendIds: new Set(), total: 0 };
+          byConcepto[nombre].ids.add(comp.id);
+          if (isAuth) byConcepto[nombre].authIds.add(comp.id);
+          else byConcepto[nombre].pendIds.add(comp.id);
+          byConcepto[nombre].total += itemImporte;
+        });
+      }
       
       addStat(byEstado, comp.estado);
     });
