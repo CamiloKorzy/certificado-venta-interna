@@ -261,7 +261,7 @@ export default function App() {
     // Deduplicar por Comprobante para evitar sumar múltiples veces el total de cabecera si hay varios ítems
     const uniqueComprobantes = new Map();
     rawFiltered.forEach((d: any) => {
-      const compId = d._original['numerointerno'] || d._original['transaccionid'] || d._original['Comprobante'] || d._original['comprobante'] || d._original['Documento'] || d._original['documento'] || Math.random().toString();
+      const compId = d._original['Comprobante'] || d._original['comprobante'] || d._original['Documento'] || d._original['documento'] || d._original['numerointerno'] || d._original['transaccionid'] || Math.random().toString();
       if (!uniqueComprobantes.has(compId)) {
         uniqueComprobantes.set(compId, d);
       }
@@ -293,7 +293,7 @@ export default function App() {
 
     filteredData.forEach((d: any) => {
       grandTotal += d._total;
-      const compId = d._original['numerointerno'] || d._original['transaccionid'] || d._original['Comprobante'] || d._original['Documento'] || 'Sin ID';
+      const compId = d._original['Comprobante'] || d._original['comprobante'] || d._original['Documento'] || d._original['documento'] || d._original['numerointerno'] || d._original['transaccionid'] || 'Sin ID';
       const isAuth = d._estado === 'Autorizado';
 
       const addStat = (record: Record<string, any>, key: string) => {
@@ -335,7 +335,7 @@ export default function App() {
   const comprobantesData = useMemo(() => {
     const groups: Record<string, any> = {};
     filteredData.forEach(d => {
-      const compId = d._original['numerointerno'] || d._original['transaccionid'] || d._original['Comprobante'] || d._original['Documento'] || 'Sin ID';
+      const compId = d._original['Comprobante'] || d._original['comprobante'] || d._original['Documento'] || d._original['documento'] || d._original['numerointerno'] || d._original['transaccionid'] || 'Sin ID';
       if (!groups[compId]) {
         groups[compId] = {
           id: compId,
