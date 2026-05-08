@@ -125,9 +125,9 @@ export default function App() {
         return 0;
       };
 
-      if (lowerRow['total bruto'] !== undefined) total = parseAmount(lowerRow['total bruto']);
+      if (lowerRow['total'] !== undefined) total = parseAmount(lowerRow['total']);
+      else if (lowerRow['total bruto'] !== undefined) total = parseAmount(lowerRow['total bruto']);
       else if (lowerRow['total gravado'] !== undefined) total = parseAmount(lowerRow['total gravado']);
-      else if (lowerRow['total'] !== undefined) total = parseAmount(lowerRow['total']);
       else if (lowerRow['gravado'] !== undefined) total = parseAmount(lowerRow['gravado']);
       else if (lowerRow['importe'] !== undefined) total = parseAmount(lowerRow['importe']);
 
@@ -257,6 +257,17 @@ export default function App() {
 
       return matchEmpresa && matchUnidad && matchConcepto && matchEstado && matchPeriodo && matchFecha;
     });
+
+    // Deduplicar por Comprobante para evitar sumar múltiples veces el total de cabecera si hay varios ítems
+    const uniqueComprobantes = new Map();
+    rawFiltered.forEach((d: any) => {
+      const compId = d._original['numerointerno'] || d._original['transaccionid'] || d._original['Comprobante'] || d._original['comprobante'] || d._original['Documento'] || d._original['documento'] || Math.random().toString();
+      if (!uniqueComprobantes.has(compId)) {
+        uniqueComprobantes.set(compId, d);
+      }
+    });
+
+    return Array.from(uniqueComprobantes.values()) as any[];
   }, [normalizedData, filters]);
 
   // 4. Calcular KPIs basados en datos filtrados
