@@ -115,9 +115,11 @@ export default function App() {
 
       // Extraer importe total
       let total = 0;
-      if (lowerRow['total'] !== undefined && lowerRow['total'] !== null) total = parseFloat(lowerRow['total']);
-      else if (lowerRow['gravado'] !== undefined && lowerRow['gravado'] !== null) total = parseFloat(lowerRow['gravado']);
-      else if (lowerRow['importe'] !== undefined && lowerRow['importe'] !== null) total = parseFloat(lowerRow['importe']);
+      if (lowerRow['total bruto'] !== undefined && lowerRow['total bruto'] !== null && lowerRow['total bruto'] !== '') total = parseFloat(lowerRow['total bruto']);
+      else if (lowerRow['total gravado'] !== undefined && lowerRow['total gravado'] !== null && lowerRow['total gravado'] !== '') total = parseFloat(lowerRow['total gravado']);
+      else if (lowerRow['total'] !== undefined && lowerRow['total'] !== null && lowerRow['total'] !== '') total = parseFloat(lowerRow['total']);
+      else if (lowerRow['gravado'] !== undefined && lowerRow['gravado'] !== null && lowerRow['gravado'] !== '') total = parseFloat(lowerRow['gravado']);
+      else if (lowerRow['importe'] !== undefined && lowerRow['importe'] !== null && lowerRow['importe'] !== '') total = parseFloat(lowerRow['importe']);
 
       // Extraer concepto (Producto)
       let concepto = lowerRow['producto'] || lowerRow['concepto'];
@@ -269,7 +271,7 @@ export default function App() {
 
     filteredData.forEach((d: any) => {
       grandTotal += d._total;
-      const compId = d._original['Comprobante'] || d._original['Documento'] || 'Sin ID';
+      const compId = d._original['numerointerno'] || d._original['transaccionid'] || d._original['Comprobante'] || d._original['Documento'] || 'Sin ID';
       const isAuth = d._estado === 'Autorizado';
 
       const addStat = (record: Record<string, any>, key: string) => {
@@ -311,7 +313,7 @@ export default function App() {
   const comprobantesData = useMemo(() => {
     const groups: Record<string, any> = {};
     filteredData.forEach(d => {
-      const compId = d._original['Comprobante'] || d._original['Documento'] || 'Sin ID';
+      const compId = d._original['numerointerno'] || d._original['transaccionid'] || d._original['Comprobante'] || d._original['Documento'] || 'Sin ID';
       if (!groups[compId]) {
         groups[compId] = {
           id: compId,
