@@ -40,12 +40,17 @@ def get_supabase():
     return psycopg2.connect(SUPABASE_DB_URL)
 
 # ─── Auto-setup: crea tablas en Supabase si no existen ───
+_setup_done = False
 def auto_setup_db():
+    global _setup_done
+    if _setup_done:
+        return
+    _setup_done = True
     if not SUPABASE_DB_URL:
         print("[SETUP] SUPABASE_DB_URL no configurada, saltando auto-setup")
         return
     try:
-        conn = psycopg2.connect(SUPABASE_DB_URL)
+        conn = psycopg2.connect(SUPABASE_DB_URL, connect_timeout=10)
         conn.autocommit = True
         cur = conn.cursor()
         cur.execute("""
@@ -54,7 +59,7 @@ def auto_setup_db():
                 email TEXT UNIQUE NOT NULL,
                 nombre TEXT NOT NULL,
                 password TEXT NOT NULL,
-                rol TEXT NOT NULL CHECK(rol IN ('admin','responsable_un','consulta')),
+                rol TEXT NOT NULL,
                 telegram_chat_id TEXT,
                 activo INTEGER DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -95,9 +100,7 @@ def auto_setup_db():
         conn.close()
     except Exception as e:
         print(f"[SETUP] ⚠️ Error en auto-setup: {e}")
-
-# Ejecutar auto-setup al importar (primera invocación en Vercel)
-auto_setup_db()
+        _setup_done = False  # Reintentar en próxima llamada
 
 # ─── Auth Dependency ───
 async def get_current_user(request: Request):
@@ -147,10 +150,32 @@ class UnidadAsignacion(BaseModel):
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "ok", "message": "El backend responde correctamente"}
+    info = {"status": "ok", "supabase_url_set": bool(SUPABASE_DB_URL), "setup_done": _setup_done}
+    # Test Supabase connectivity
+    try:
+        conn = psycopg2.connect(SUPABASE_DB_URL, connect_timeout=5)
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM cert_usuarios")
+        count = cur.fetchone()[0]
+        info["supabase"] = "connected"
+        info["users_count"] = count
+        cur.close()
+        conn.close()
+    except Exception as e:
+        info["supabase"] = f"error: {str(e)[:200]}"
+    return info
+
+@app.get("/api/setup")
+def run_setup():
+    """Endpoint manual para forzar la creación de tablas."""
+    global _setup_done
+    _setup_done = False
+    auto_setup_db()
+    return {"status": "setup ejecutado", "done": _setup_done}
 
 @app.post("/api/login")
 def login(req: LoginRequest):
+    auto_setup_db()  # Asegurar tablas existen
     conn = get_supabase()
     try:
         cur = conn.cursor()
@@ -171,6 +196,10 @@ def login(req: LoginRequest):
         
         token = create_token(user_id, email, rol, nombre)
         return {"token": token, "user": {"id": user_id, "email": email, "nombre": nombre, "rol": rol}}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)[:200]}")
     finally:
         conn.close()
 
