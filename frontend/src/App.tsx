@@ -233,7 +233,7 @@ export default function App() {
 
   // 3. Aplicar filtros a los datos
   const filteredData = useMemo(() => {
-    return normalizedData.filter(d => {
+    const rawFiltered = normalizedData.filter(d => {
       const matchEmpresa = filters.empresa === 'Todas' || d._empresa === filters.empresa;
       const matchUnidad = filters.unidad === 'Todas' || d._unidad === filters.unidad;
       const matchConcepto = filters.concepto === 'Todos' || d._concepto === filters.concepto;
