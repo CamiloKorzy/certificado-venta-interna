@@ -9,6 +9,13 @@
       }
     },
     {
+      "src": "backend/health.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxDuration": 60
+      }
+    },
+    {
       "src": "frontend/package.json",
       "use": "@vercel/static-build",
       "config": {
@@ -17,6 +24,10 @@
     }
   ],
   "routes": [
+    {
+      "src": "/health",
+      "dest": "backend/health.py"
+    },
     {
       "src": "/api/(.*)",
       "dest": "backend/main.py"
