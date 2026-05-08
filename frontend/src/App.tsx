@@ -363,11 +363,12 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
           const nombre = item.Producto || item.producto || 'Sin Detalle';
           const itemImporte = Number(item.Importe || item.importe || 0);
           if (!byConcepto[nombre]) byConcepto[nombre] = { ids: new Set(), authIds: new Set(), pendIds: new Set(), total: 0, qty: 0 };
-          byConcepto[nombre].qty += Number(item.Cantidad || item.cantidad || 0);
-          byConcepto[nombre].ids.add(comp.id);
-          if (isAuth) byConcepto[nombre].authIds.add(comp.id);
-          else byConcepto[nombre].pendIds.add(comp.id);
-          byConcepto[nombre].total += itemImporte;
+          const entry = byConcepto[nombre];
+          entry.qty = (entry.qty || 0) + Number(item.Cantidad || item.cantidad || 0);
+          entry.ids.add(comp.id);
+          if (isAuth) entry.authIds.add(comp.id);
+          else entry.pendIds.add(comp.id);
+          entry.total += itemImporte;
         });
       }
       
