@@ -73,7 +73,7 @@ def get_indicadores():
                 column_mapping[col] = 'Comprobante'
             elif 'empresa' in col_lower and 'Empresa' not in columns_db:
                 column_mapping[col] = 'Empresa'
-            elif 'unidad' in col_lower and 'negocio' in col_lower and 'Unidad de Negocio' not in columns_db:
+            elif 'organizacion' == col_lower and 'Unidad de Negocio' not in columns_db:
                 column_mapping[col] = 'Unidad de Negocio'
             elif 'sector' in col_lower and 'Sector' not in columns_db:
                 column_mapping[col] = 'Sector'
@@ -81,7 +81,7 @@ def get_indicadores():
                 column_mapping[col] = 'Descripción'
             elif 'gravado' in col_lower and 'Total Gravado' not in columns_db:
                 column_mapping[col] = 'Total Gravado'
-            elif 'total' in col_lower and 'bruto' not in col_lower and 'Total Bruto' not in columns_db:
+            elif ('importe' == col_lower or ('total' in col_lower and 'bruto' not in col_lower)) and 'Total Bruto' not in columns_db:
                 column_mapping[col] = 'Total Bruto'
             elif 'estadoautorizacion' == col_lower and 'EstadoAutorizacion' not in columns_db:
                 column_mapping[col] = 'EstadoAutorizacion'
@@ -95,12 +95,21 @@ def get_indicadores():
                 if old_col in record:
                     record[new_col] = record.pop(old_col)
             
+            # Duplicar Total Bruto a Total Gravado si este ultimo no existe (para los KPIs del frontend)
+            if 'Total Bruto' in record and 'Total Gravado' not in record:
+                record['Total Gravado'] = record['Total Bruto']
+            
             # Limpiar nulos y formatear fechas
-            for k, v in record.items():
+            for k, v in list(record.items()):
                 if v == 'NULL' or v is None:
                     record[k] = ''
                 elif isinstance(v, datetime):
                     record[k] = v.strftime('%d/%m/%Y')
+                elif k == 'Fecha' and isinstance(v, str) and len(v) >= 10:
+                    try:
+                        record[k] = datetime.strptime(v[:10], '%Y-%m-%d').strftime('%d/%m/%Y')
+                    except Exception:
+                        pass
                     
         # Actualizar lista de columnas finales
         final_columns = list(records[0].keys()) if records else []
