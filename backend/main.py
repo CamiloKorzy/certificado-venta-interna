@@ -38,7 +38,6 @@ def health_check():
 @app.get("/api/indicadores")
 def get_indicadores():
     conn = None
-    df = None
     try:
         conn = get_db_connection()
         print("Conectado a Aurora. Consultando dataset de Finnegans...")
