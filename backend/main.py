@@ -35,6 +35,17 @@ def get_db_connection():
 def health_check():
     return {"status": "ok", "message": "El backend responde correctamente"}
 
+@app.get("/api/debug")
+def debug_endpoint():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT numerodocumento, importe, producto, cantidadworkflow, precio FROM ceesa_cee_certificados_ventas_internos WHERE numerodocumento = 'CI-0001-00000003'")
+    cols = [desc[0] for desc in cur.description]
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return {"cols": cols, "rows": rows}
+
 @app.get("/api/indicadores")
 def get_indicadores():
     conn = None
@@ -64,28 +75,40 @@ def get_indicadores():
         
         # 2. Mapeo de columnas para el Frontend
         column_mapping = {}
+        mapped_targets = set()
+        
         for col in columns_db:
             col_lower = col.lower()
-            if 'fecha' in col_lower and 'Fecha' not in columns_db:
+            if 'fecha' in col_lower and 'Fecha' not in mapped_targets:
                 column_mapping[col] = 'Fecha'
-            elif ('documento' in col_lower or 'comprobante' in col_lower) and 'Comprobante' not in columns_db:
+                mapped_targets.add('Fecha')
+            elif col_lower in ['numerodocumento', 'comprobante', 'nrocomprobante'] and 'Comprobante' not in mapped_targets:
                 column_mapping[col] = 'Comprobante'
-            elif 'empresa' in col_lower and 'Empresa' not in columns_db:
+                mapped_targets.add('Comprobante')
+            elif 'empresa' in col_lower and 'Empresa' not in mapped_targets:
                 column_mapping[col] = 'Empresa'
-            elif 'organizacion' == col_lower and 'Unidad de Negocio' not in columns_db:
+                mapped_targets.add('Empresa')
+            elif 'organizacion' == col_lower and 'Unidad de Negocio' not in mapped_targets:
                 column_mapping[col] = 'Unidad de Negocio'
-            elif 'sector' in col_lower and 'Sector' not in columns_db:
+                mapped_targets.add('Unidad de Negocio')
+            elif 'sector' in col_lower and 'Sector' not in mapped_targets:
                 column_mapping[col] = 'Sector'
-            elif 'descripc' in col_lower and 'Descripción' not in columns_db:
+                mapped_targets.add('Sector')
+            elif col_lower in ['documentodescripcion', 'descripción', 'descripcion', 'detalledescripcion'] and 'Descripción' not in mapped_targets:
                 column_mapping[col] = 'Descripción'
-            elif 'gravado' in col_lower and 'Total Gravado' not in columns_db:
+                mapped_targets.add('Descripción')
+            elif 'gravado' in col_lower and 'Total Gravado' not in mapped_targets:
                 column_mapping[col] = 'Total Gravado'
-            elif ('importe' == col_lower or ('total' in col_lower and 'bruto' not in col_lower)) and 'Total Bruto' not in columns_db:
+                mapped_targets.add('Total Gravado')
+            elif ('importe' == col_lower or ('total' in col_lower and 'bruto' not in col_lower)) and 'Total Bruto' not in mapped_targets:
                 column_mapping[col] = 'Total Bruto'
-            elif 'estadoautorizacion' == col_lower and 'EstadoAutorizacion' not in columns_db:
+                mapped_targets.add('Total Bruto')
+            elif 'estadoautorizacion' == col_lower and 'EstadoAutorizacion' not in mapped_targets:
                 column_mapping[col] = 'EstadoAutorizacion'
-            elif 'solicitante' == col_lower and 'Solicitante' not in columns_db:
+                mapped_targets.add('EstadoAutorizacion')
+            elif 'solicitante' == col_lower and 'Solicitante' not in mapped_targets:
                 column_mapping[col] = 'Solicitante'
+                mapped_targets.add('Solicitante')
                 
         # Aplicar mapeo y formatear fechas/nulos
         for record in records:

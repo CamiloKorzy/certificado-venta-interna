@@ -125,11 +125,11 @@ export default function App() {
         return 0;
       };
 
-      if (lowerRow['total'] !== undefined) total = parseAmount(lowerRow['total']);
-      else if (lowerRow['total bruto'] !== undefined) total = parseAmount(lowerRow['total bruto']);
-      else if (lowerRow['total gravado'] !== undefined) total = parseAmount(lowerRow['total gravado']);
-      else if (lowerRow['gravado'] !== undefined) total = parseAmount(lowerRow['gravado']);
-      else if (lowerRow['importe'] !== undefined) total = parseAmount(lowerRow['importe']);
+      if (lowerRow['total'] !== undefined && parseAmount(lowerRow['total']) !== 0) total = parseAmount(lowerRow['total']);
+      else if (lowerRow['total bruto'] !== undefined && parseAmount(lowerRow['total bruto']) !== 0) total = parseAmount(lowerRow['total bruto']);
+      else if (lowerRow['total gravado'] !== undefined && parseAmount(lowerRow['total gravado']) !== 0) total = parseAmount(lowerRow['total gravado']);
+      else if (lowerRow['gravado'] !== undefined && parseAmount(lowerRow['gravado']) !== 0) total = parseAmount(lowerRow['gravado']);
+      else if (lowerRow['importe'] !== undefined && parseAmount(lowerRow['importe']) !== 0) total = parseAmount(lowerRow['importe']);
 
 
       // Extraer concepto (Producto)
@@ -262,7 +262,9 @@ export default function App() {
     const uniqueComprobantes = new Map();
     rawFiltered.forEach((d: any) => {
       const compId = d._original['Comprobante'] || d._original['comprobante'] || d._original['Documento'] || d._original['documento'] || d._original['numerointerno'] || d._original['transaccionid'] || Math.random().toString();
-      if (!uniqueComprobantes.has(compId)) {
+      
+      const current = uniqueComprobantes.get(compId);
+      if (!current || d._total > current._total) {
         uniqueComprobantes.set(compId, d);
       }
     });
