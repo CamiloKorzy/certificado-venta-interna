@@ -550,8 +550,8 @@ export default function App() {
                 <TrendingUp size={20} className="text-emerald-400" />
                 <p className="text-slate-300 text-xs font-bold uppercase tracking-wider">Total Consolidado</p>
               </div>
-              <h3 className="text-4xl lg:text-4xl font-extrabold tracking-tight text-white drop-shadow-sm truncate" title={'$' + kpis.totalValorizado.toLocaleString('es-AR', { maximumFractionDigits: 0 })}>
-                ${kpis.totalValorizado.toLocaleString('es-AR', { maximumFractionDigits: 0 })}
+              <h3 className="text-4xl lg:text-4xl font-extrabold tracking-tight text-white drop-shadow-sm truncate" title={'$' + kpis.totalConsolidado.toLocaleString('es-AR', { maximumFractionDigits: 0 })}>
+                ${kpis.totalConsolidado.toLocaleString('es-AR', { maximumFractionDigits: 0 })}
               </h3>
             </div>
             <div className="absolute -right-6 -bottom-6 w-32 h-32 bg-white opacity-5 rounded-full blur-2xl"></div>
@@ -569,7 +569,7 @@ export default function App() {
             <div className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl"><Building2 size={32} /></div>
             <div>
               <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Alcance</p>
-              <h3 className="text-3xl font-bold text-slate-800">{kpis.unidadesActivas} <span className="text-sm font-medium text-slate-400">unidades</span></h3>
+              <h3 className="text-3xl font-bold text-slate-800">{kpis.alcance} <span className="text-sm font-medium text-slate-400">unidades</span></h3>
             </div>
           </div>
 
