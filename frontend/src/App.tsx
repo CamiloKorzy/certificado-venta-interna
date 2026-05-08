@@ -119,15 +119,25 @@ export default function App() {
         if (val === undefined || val === null || val === '') return 0;
         if (typeof val === 'number') return val;
         if (typeof val === 'string') {
-          let cleaned = val.replace(/\./g, '').replace(/,/g, '.');
-          return parseFloat(cleaned) || 0;
+          // El backend envía valores como "447700.0" (punto = decimal)
+          // Si tiene comas como separador de miles (ej: "1.234.567,50"), convertir
+          if (val.includes(',') && val.includes('.')) {
+            // Formato argentino: 1.234.567,50
+            let cleaned = val.replace(/\./g, '').replace(/,/g, '.');
+            return parseFloat(cleaned) || 0;
+          } else if (val.includes(',') && !val.includes('.')) {
+            // Solo coma decimal: 447700,50
+            return parseFloat(val.replace(',', '.')) || 0;
+          }
+          // Formato estándar: 447700.0 o 447700
+          return parseFloat(val) || 0;
         }
         return 0;
       };
 
-      if (lowerRow['total'] !== undefined && parseAmount(lowerRow['total']) !== 0) total = parseAmount(lowerRow['total']);
-      else if (lowerRow['total bruto'] !== undefined && parseAmount(lowerRow['total bruto']) !== 0) total = parseAmount(lowerRow['total bruto']);
+      if (lowerRow['total bruto'] !== undefined && parseAmount(lowerRow['total bruto']) !== 0) total = parseAmount(lowerRow['total bruto']);
       else if (lowerRow['total gravado'] !== undefined && parseAmount(lowerRow['total gravado']) !== 0) total = parseAmount(lowerRow['total gravado']);
+      else if (lowerRow['total'] !== undefined && parseAmount(lowerRow['total']) !== 0) total = parseAmount(lowerRow['total']);
       else if (lowerRow['gravado'] !== undefined && parseAmount(lowerRow['gravado']) !== 0) total = parseAmount(lowerRow['gravado']);
       else if (lowerRow['importe'] !== undefined && parseAmount(lowerRow['importe']) !== 0) total = parseAmount(lowerRow['importe']);
 
@@ -263,37 +273,18 @@ export default function App() {
     return rawFiltered;
   }, [normalizedData, filters]);
 
-  // 5. Agrupación por Comprobante para la Grilla y KPIs
+  // 5. Datos de Comprobantes - El backend ya entrega 1 registro = 1 comprobante
   const comprobantesData = useMemo(() => {
-    const groups: Record<string, any> = {};
-    const statesPriority: Record<string, number> = { 'Autorizado': 4, 'Rechazado / Anulado': 3, 'Pendiente / No Autorizado': 2, 'Sin Estado': 1 };
-    
-    filteredData.forEach(d => {
-      const compId = d._original['Comprobante'] || d._original['comprobante'] || d._original['Documento'] || d._original['documento'] || d._original['numerointerno'] || d._original['transaccionid'] || 'Sin ID';
-      if (!groups[compId]) {
-        groups[compId] = {
-          id: compId,
-          fecha: d._fecha,
-          cliente: d._original['Cliente'] || d._original['Empresa'] || '-',
-          descripcion: d._descripcion,
-          unidad: d._unidad,
-          estado: d._estado,
-          total: 0,
-          items: []
-        };
-      }
-      
-      // Upgrade state priority if current item has higher priority
-      const currentPrio = statesPriority[groups[compId].estado] || 0;
-      const newPrio = statesPriority[d._estado] || 0;
-      if (newPrio > currentPrio) {
-        groups[compId].estado = d._estado;
-      }
-
-      groups[compId].total += d._total;
-      groups[compId].items.push(d);
-    });
-    return Object.values(groups).sort((a, b) => b.total - a.total);
+    return filteredData.map(d => ({
+      id: d._original['Comprobante'] || d._original['comprobante'] || 'Sin ID',
+      fecha: d._fecha,
+      cliente: d._original['Empresa'] || d._empresa || '-',
+      descripcion: d._descripcion,
+      unidad: d._unidad,
+      estado: d._estado,
+      total: d._total,
+      items: d._original['items'] || []   // Items embebidos del backend
+    })).sort((a, b) => b.total - a.total);
   }, [filteredData]);
 
   // 6. KPIs y Métricas Globales
@@ -322,26 +313,27 @@ export default function App() {
 
     let grandTotal = 0;
 
-    filteredData.forEach((d: any) => {
-      grandTotal += d._total;
-      const compId = d._original['Comprobante'] || d._original['comprobante'] || d._original['Documento'] || d._original['documento'] || d._original['numerointerno'] || d._original['transaccionid'] || 'Sin ID';
-      
-      // Encontrar el estado real del comprobante
-      const compEstado = comprobantesData.find(c => c.id === compId)?.estado || d._estado;
-      const isAuth = compEstado === 'Autorizado';
+    comprobantesData.forEach((comp: any) => {
+      grandTotal += comp.total;
+      const isAuth = comp.estado === 'Autorizado';
 
       const addStat = (record: Record<string, any>, key: string) => {
         if (!record[key]) record[key] = { ids: new Set(), authIds: new Set(), pendIds: new Set(), total: 0 };
-        record[key].ids.add(compId);
-        if (isAuth) record[key].authIds.add(compId);
-        else record[key].pendIds.add(compId);
-        record[key].total += d._total;
+        record[key].ids.add(comp.id);
+        if (isAuth) record[key].authIds.add(comp.id);
+        else record[key].pendIds.add(comp.id);
+        record[key].total += comp.total;
       };
 
-      addStat(byUnidad, d._unidad);
-      addStat(byEmpresa, d._empresa);
-      addStat(byConcepto, d._concepto);
-      addStat(byEstado, compEstado);
+      addStat(byUnidad, comp.unidad);
+      addStat(byEmpresa, comp.cliente);
+      
+      // Por concepto: usar los ítems embebidos
+      const itemNames = (comp.items || []).map((i: any) => i.Producto || 'Sin Detalle');
+      if (itemNames.length === 0) itemNames.push('Sin Detalle de Concepto');
+      itemNames.forEach((name: string) => addStat(byConcepto, name));
+      
+      addStat(byEstado, comp.estado);
     });
 
     const formatGroup = (group: Record<string, { ids: Set<string>, authIds: Set<string>, pendIds: Set<string>, total: number }>) => {
@@ -363,7 +355,7 @@ export default function App() {
       concepto: formatGroup(byConcepto),
       estado: formatGroup(byEstado)
     };
-  }, [filteredData, comprobantesData]);
+  }, [comprobantesData]);
 
   // 7. Filtros locales para la grilla
   const gridOptions = useMemo(() => {
@@ -550,8 +542,8 @@ export default function App() {
                 <TrendingUp size={20} className="text-emerald-400" />
                 <p className="text-slate-300 text-xs font-bold uppercase tracking-wider">Total Consolidado</p>
               </div>
-              <h3 className="text-4xl lg:text-4xl font-extrabold tracking-tight text-white drop-shadow-sm truncate" title={'$' + kpis.totalConsolidado.toLocaleString('es-AR', { maximumFractionDigits: 0 })}>
-                ${kpis.totalConsolidado.toLocaleString('es-AR', { maximumFractionDigits: 0 })}
+              <h3 className="text-2xl md:text-3xl lg:text-4xl font-extrabold tracking-tight text-white drop-shadow-sm" title={'$' + kpis.totalConsolidado.toLocaleString('es-AR', { maximumFractionDigits: 2 })}>
+                ${kpis.totalConsolidado.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </h3>
             </div>
             <div className="absolute -right-6 -bottom-6 w-32 h-32 bg-white opacity-5 rounded-full blur-2xl"></div>
@@ -700,18 +692,18 @@ export default function App() {
                                   </thead>
                                   <tbody className="divide-y divide-slate-100">
                                     {comp.items.map((item: any, idx: number) => {
-                                      const row = item._original;
-                                      const producto = row['Producto'] || row['Concepto'] || '-';
-                                      const cantidad = parseFloat(row['Cantidad']) || 1;
-                                      const precio = parseFloat(row['Precio']) || 0;
-                                      const importe = item._total;
+                                      const producto = item.Producto || item.producto || '-';
+                                      const cantidad = item.Cantidad || item.cantidad || 1;
+                                      const precio = item.Precio || item.precio || 0;
+                                      const importe = item.Importe || item.importe || 0;
+                                      const unidadItem = item.Unidad || item.unidad || '';
                                       
                                       return (
                                         <tr key={idx} className="hover:bg-slate-50">
                                           <td className="px-4 py-3 text-slate-700 font-medium">{producto}</td>
-                                          <td className="px-4 py-3 text-slate-600 text-right">{cantidad.toLocaleString('es-AR')} {row['Unidad'] || ''}</td>
-                                          <td className="px-4 py-3 text-slate-600 text-right">${precio.toLocaleString('es-AR', {minimumFractionDigits: 2})}</td>
-                                          <td className="px-4 py-3 text-slate-800 font-bold text-right">${importe.toLocaleString('es-AR', {minimumFractionDigits: 2})}</td>
+                                          <td className="px-4 py-3 text-slate-600 text-right">{Number(cantidad).toLocaleString('es-AR')} {unidadItem}</td>
+                                          <td className="px-4 py-3 text-slate-600 text-right">${Number(precio).toLocaleString('es-AR', {minimumFractionDigits: 2})}</td>
+                                          <td className="px-4 py-3 text-slate-800 font-bold text-right">${Number(importe).toLocaleString('es-AR', {minimumFractionDigits: 2})}</td>
                                         </tr>
                                       )
                                     })}

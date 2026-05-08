@@ -59,113 +59,137 @@ def get_indicadores():
         
         query = "SELECT * FROM ceesa_cee_certificados_ventas_internos ORDER BY 1 DESC LIMIT 50000"
         
-        # Ejecutar consulta directamente con psycopg2 para evitar dependencias de SQLAlchemy en Pandas
         cursor = conn.cursor()
         cursor.execute(query)
         columns_db = [desc[0] for desc in cursor.description]
         data_rows = cursor.fetchall()
         cursor.close()
-        # 1. Convertir data_rows a diccionarios y deduplicar por operacionitemid
-        # La vista de Finnegans devuelve múltiples filas por ítem debido a los cambios de estado (workflow)
-        unique_items = {}
-        states_priority = {'Autorizado': 4, 'Rechazado': 3, 'Anulado': 3, 'Pendiente': 2, 'Sin Estado': 1}
         
+        print(f"Filas crudas del dataset: {len(data_rows)}")
+        
+        # ─── PASO 1: Agrupar por numerodocumento ───
+        # La vista de Finnegans devuelve N filas por comprobante:
+        #   - Filas de cabecera (sin producto, importe = total del comprobante)
+        #   - Filas de subtotales (sin producto, importe = gravado, otros)
+        #   - Filas de ítems (con producto, importe = monto del ítem)
+        #   - Cada una multiplicada por ~10 estados de workflow
+        # Solución: MAX(importe numérico) = total cabecera, estado de mayor prioridad
+        
+        states_priority = {'Autorizado': 4, 'Rechazado': 3, 'Anulado': 3, 'Pendiente': 2, 'Sin Estado': 1, '': 0}
+        
+        comprobantes = {}
         for row in data_rows:
             record = dict(zip(columns_db, row))
-            item_id = record.get('operacionitemid')
-            
-            # Si no hay operacionitemid, armamos una clave compuesta (transaccion + producto + importe)
-            if not item_id or item_id == 'NULL':
-                item_id = f"{record.get('transaccionid', '')}_{record.get('producto', '')}_{record.get('importe', '')}"
+            num_doc = record.get('numerodocumento', '')
+            if not num_doc or num_doc == 'NULL':
+                continue
                 
-            new_state = record.get('estadoautorizacion', '')
+            # Parsear importe como número
+            imp_raw = record.get('importe', '0') or '0'
+            try:
+                imp = float(str(imp_raw).replace(',', '.'))
+            except:
+                imp = 0.0
             
-            if item_id in unique_items:
-                current_state = unique_items[item_id].get('estadoautorizacion', '')
-                new_prio = states_priority.get(new_state, 0)
-                curr_prio = states_priority.get(current_state, 0)
-                
-                if new_prio > curr_prio:
-                    unique_items[item_id]['estadoautorizacion'] = new_state
-            else:
-                unique_items[item_id] = record
-                
-        records = list(unique_items.values())
+            state = str(record.get('estadoautorizacion', '') or '').strip()
+            producto = str(record.get('producto', '') or '').strip()
             
+            if num_doc not in comprobantes:
+                comprobantes[num_doc] = {
+                    'metadata': record,      # Guardar un registro como referencia para metadata
+                    'max_importe': imp,
+                    'best_state': state,
+                    'items': {},             # Clave: producto, para deduplicar
+                }
+            
+            # Actualizar MAX importe (total cabecera)
+            if imp > comprobantes[num_doc]['max_importe']:
+                comprobantes[num_doc]['max_importe'] = imp
+            
+            # Actualizar mejor estado
+            if states_priority.get(state, 0) > states_priority.get(comprobantes[num_doc]['best_state'], 0):
+                comprobantes[num_doc]['best_state'] = state
+            
+            # Recoger ítems únicos (filas con producto)
+            if producto and producto != 'NULL':
+                if producto not in comprobantes[num_doc]['items']:
+                    # Parsear cantidad y precio del ítem
+                    cant_raw = record.get('cantidadworkflow', '0') or '0'
+                    precio_raw = record.get('precio', '0') or '0'
+                    try:
+                        cant = float(str(cant_raw).replace(',', '.'))
+                    except:
+                        cant = 1.0
+                    try:
+                        precio = float(str(precio_raw).replace(',', '.'))
+                    except:
+                        precio = 0.0
+                    
+                    comprobantes[num_doc]['items'][producto] = {
+                        'Producto': producto,
+                        'Cantidad': cant,
+                        'Precio': precio,
+                        'Importe': imp,
+                        'Unidad': record.get('unidad', '')
+                    }
+        
+        print(f"Comprobantes únicos encontrados: {len(comprobantes)}")
+        
+        # ─── PASO 2: Construir registros finales ───
+        records = []
+        for num_doc, data in comprobantes.items():
+            meta = data['metadata']
+            
+            # Formatear fecha
+            fecha_raw = meta.get('fecha', '')
+            fecha_fmt = ''
+            if fecha_raw:
+                try:
+                    if isinstance(fecha_raw, datetime):
+                        fecha_fmt = fecha_raw.strftime('%d/%m/%Y')
+                    elif isinstance(fecha_raw, str) and len(fecha_raw) >= 10:
+                        fecha_fmt = datetime.strptime(fecha_raw[:10], '%Y-%m-%d').strftime('%d/%m/%Y')
+                    else:
+                        fecha_fmt = str(fecha_raw)
+                except:
+                    fecha_fmt = str(fecha_raw)
+            
+            # Limpiar campos nulos
+            def clean(val):
+                if val is None or val == 'NULL':
+                    return ''
+                return str(val).strip()
+            
+            # Descripción del certificado
+            desc = clean(meta.get('documentodescripcion', ''))
+            if not desc:
+                desc = clean(meta.get('detalledescripcion', ''))
+            
+            # Construir ítems para la vista expandible
+            items_list = list(data['items'].values())
+            
+            record = {
+                'Fecha': fecha_fmt,
+                'Comprobante': num_doc,
+                'Empresa': clean(meta.get('empresa', '')),
+                'Descripción': desc,
+                'Solicitante': clean(meta.get('solicitante', '')),
+                'EstadoAutorizacion': data['best_state'] if data['best_state'] else 'Sin Estado',
+                'Total Bruto': str(data['max_importe']),
+                'Total Gravado': str(data['max_importe']),
+                'items': items_list,
+            }
+            records.append(record)
+        
         if not records:
             raise Exception("No data found en Aurora")
             
-        print(f"Cargados {len(records)} ítems únicos desde Aurora (filtrando duplicados de workflow).")
-        
-        # 2. Mapeo de columnas para el Frontend
-        column_mapping = {}
-        mapped_targets = set()
-        
-        for col in columns_db:
-            col_lower = col.lower()
-            if 'fecha' in col_lower and 'Fecha' not in mapped_targets:
-                column_mapping[col] = 'Fecha'
-                mapped_targets.add('Fecha')
-            elif col_lower in ['numerodocumento', 'comprobante', 'nrocomprobante'] and 'Comprobante' not in mapped_targets:
-                column_mapping[col] = 'Comprobante'
-                mapped_targets.add('Comprobante')
-            elif 'empresa' in col_lower and 'Empresa' not in mapped_targets:
-                column_mapping[col] = 'Empresa'
-                mapped_targets.add('Empresa')
-            elif 'organizacion' == col_lower and 'Unidad de Negocio' not in mapped_targets:
-                column_mapping[col] = 'Unidad de Negocio'
-                mapped_targets.add('Unidad de Negocio')
-            elif 'sector' in col_lower and 'Sector' not in mapped_targets:
-                column_mapping[col] = 'Sector'
-                mapped_targets.add('Sector')
-            elif col_lower in ['documentodescripcion', 'descripción', 'descripcion', 'detalledescripcion'] and 'Descripción' not in mapped_targets:
-                column_mapping[col] = 'Descripción'
-                mapped_targets.add('Descripción')
-            elif 'gravado' in col_lower and 'Total Gravado' not in mapped_targets:
-                column_mapping[col] = 'Total Gravado'
-                mapped_targets.add('Total Gravado')
-            elif ('importe' == col_lower or ('total' in col_lower and 'bruto' not in col_lower)) and 'Total Bruto' not in mapped_targets:
-                column_mapping[col] = 'Total Bruto'
-                mapped_targets.add('Total Bruto')
-            elif 'estadoautorizacion' == col_lower and 'EstadoAutorizacion' not in mapped_targets:
-                column_mapping[col] = 'EstadoAutorizacion'
-                mapped_targets.add('EstadoAutorizacion')
-            elif 'solicitante' == col_lower and 'Solicitante' not in mapped_targets:
-                column_mapping[col] = 'Solicitante'
-                mapped_targets.add('Solicitante')
-                
-        # Aplicar mapeo y formatear fechas/nulos
-        for record in records:
-            # Renombrar keys
-            for old_col, new_col in column_mapping.items():
-                if old_col in record:
-                    record[new_col] = record.pop(old_col)
-            
-            # Duplicar Total Bruto a Total Gravado si este ultimo no existe (para los KPIs del frontend)
-            if 'Total Bruto' in record and 'Total Gravado' not in record:
-                record['Total Gravado'] = record['Total Bruto']
-            
-            # Limpiar nulos y formatear fechas
-            for k, v in list(record.items()):
-                if v == 'NULL' or v is None:
-                    record[k] = ''
-                elif isinstance(v, datetime):
-                    record[k] = v.strftime('%d/%m/%Y')
-                elif k == 'Fecha' and isinstance(v, str) and len(v) >= 10:
-                    try:
-                        record[k] = datetime.strptime(v[:10], '%Y-%m-%d').strftime('%d/%m/%Y')
-                    except Exception:
-                        pass
-                    
-        # Actualizar lista de columnas finales
-        final_columns = list(records[0].keys()) if records else []
+        final_columns = ['Fecha', 'Comprobante', 'Empresa', 'Descripción', 'Solicitante', 'EstadoAutorizacion', 'Total Bruto', 'Total Gravado']
         
     except Exception as e:
         print(f"Error consultando BD. Usando Mock Data. Detalles: {e}")
-        # Fallback a Mock Data si todo falla
         records = [
-            {'Fecha': '01/05/2026', 'Comprobante': 'CVI-0001', 'Producto': 'Hormigón H21', 'Cantidad': 150.0, 'Importe': 1500000.0},
-            {'Fecha': '02/05/2026', 'Comprobante': 'CVI-0002', 'Producto': 'Servicio IT', 'Cantidad': 1.0, 'Importe': 2500000.0}
+            {'Fecha': '01/05/2026', 'Comprobante': 'CVI-0001', 'Descripción': 'Mock', 'Empresa': 'CEE', 'Total Bruto': '0', 'Total Gravado': '0', 'EstadoAutorizacion': 'Sin Estado', 'Solicitante': '', 'items': []}
         ]
         final_columns = list(records[0].keys())
 
@@ -173,41 +197,29 @@ def get_indicadores():
         if conn:
             conn.close()
 
-    # 3. Calcular KPIs
+    # ─── PASO 3: Calcular KPIs en base a registros ya agregados ───
     total_gravado = 0.0
     total_final = 0.0
     clientes_set = set()
-    certificados_set = set()
-
+    
     for record in records:
-        # Encontrar columna gravado y total (ignorando mayusculas)
-        val_gravado = 0
-        val_total = 0
-        for k, v in record.items():
-            k_lower = k.lower()
-            if 'gravado' in k_lower:
-                try: val_gravado = float(v) if v != '' else 0.0
-                except: pass
-            if 'total' in k_lower and 'bruto' not in k_lower:
-                try: val_total = float(v) if v != '' else 0.0
-                except: pass
-            if 'cliente' in k_lower and v != '':
-                clientes_set.add(v)
-            if ('documento' in k_lower or 'comprobante' in k_lower) and v != '':
-                certificados_set.add(v)
-                
-        total_gravado += val_gravado
-        total_final += val_total
-
-    clientes_activos = len(clientes_set)
-    total_certificados = len(certificados_set) if certificados_set else len(records)
+        try:
+            val = float(record.get('Total Bruto', '0') or '0')
+        except:
+            val = 0.0
+        total_final += val
+        total_gravado += val
+        
+        empresa = record.get('Empresa', '')
+        if empresa:
+            clientes_set.add(empresa)
     
     return {
         "kpis": {
-            "total_certificados": total_certificados,
+            "total_certificados": len(records),
             "total_gravado": total_gravado,
             "total_final": total_final,
-            "clientes_activos": clientes_activos
+            "clientes_activos": len(clientes_set)
         },
         "columns": final_columns,
         "data": records
