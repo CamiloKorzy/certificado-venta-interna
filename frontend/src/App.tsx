@@ -331,10 +331,11 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
 
   // 6.5 Agrupaciones para presentacion profesional (Gráficos)
   const agrupaciones = useMemo(() => {
-    const byUnidad: Record<string, { ids: Set<string>, authIds: Set<string>, pendIds: Set<string>, total: number }> = {};
-    const byEmpresa: Record<string, { ids: Set<string>, authIds: Set<string>, pendIds: Set<string>, total: number }> = {};
-    const byConcepto: Record<string, { ids: Set<string>, authIds: Set<string>, pendIds: Set<string>, total: number }> = {};
-    const byEstado: Record<string, { ids: Set<string>, authIds: Set<string>, pendIds: Set<string>, total: number }> = {};
+    type GroupStats = { ids: Set<string>, authIds: Set<string>, pendIds: Set<string>, total: number, qty?: number };
+    const byUnidad: Record<string, GroupStats> = {};
+    const byEmpresa: Record<string, GroupStats> = {};
+    const byConcepto: Record<string, GroupStats> = {};
+    const byEstado: Record<string, GroupStats> = {};
 
     let grandTotal = 0;
 
@@ -373,7 +374,7 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
       addStat(byEstado, comp.estado);
     });
 
-    const formatGroup = (group: Record<string, { ids: Set<string>, authIds: Set<string>, pendIds: Set<string>, total: number }>) => {
+    const formatGroup = (group: Record<string, GroupStats>) => {
       return Object.entries(group)
         .sort((a, b) => b[1].total - a[1].total)
         .map(([name, stats]) => ({
@@ -383,7 +384,7 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
           pendCount: stats.pendIds.size,
           total: stats.total,
           percent: grandTotal > 0 ? (stats.total / grandTotal) * 100 : 0,
-          qty: (stats as any).qty != null ? (stats as any).qty : undefined
+          qty: stats.qty != null ? stats.qty : undefined
         }));
     };
 
