@@ -33,7 +33,7 @@ const HorizontalBarChart = ({ title, data, icon: Icon, colorTheme = "blue", show
               <div className="text-right flex flex-col items-end shrink-0 gap-1 mt-0.5">
                 <span className="font-bold text-slate-800 leading-none">${item.total.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</span>
                 <span className={`text-[11px] font-bold ${theme.text} ${theme.light} px-2 py-0.5 rounded leading-none`}>{item.percent.toFixed(1)}%</span>
-                <span className="text-[10px] font-medium text-slate-400 leading-none">{item.qty != null ? `${item.qty.toLocaleString('es-AR')} uds.` : `${item.count} ${countLabel}`}</span>
+                <span className="text-[10px] font-medium text-slate-400 leading-none">{typeof item.qty === 'number' ? `${item.qty.toLocaleString('es-AR')} uds.` : `${item.count} certif.`}</span>
               </div>
             </div>
             <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
