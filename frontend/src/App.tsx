@@ -115,11 +115,22 @@ export default function App() {
 
       // Extraer importe total
       let total = 0;
-      if (lowerRow['total bruto'] !== undefined && lowerRow['total bruto'] !== null && lowerRow['total bruto'] !== '') total = parseFloat(lowerRow['total bruto']);
-      else if (lowerRow['total gravado'] !== undefined && lowerRow['total gravado'] !== null && lowerRow['total gravado'] !== '') total = parseFloat(lowerRow['total gravado']);
-      else if (lowerRow['total'] !== undefined && lowerRow['total'] !== null && lowerRow['total'] !== '') total = parseFloat(lowerRow['total']);
-      else if (lowerRow['gravado'] !== undefined && lowerRow['gravado'] !== null && lowerRow['gravado'] !== '') total = parseFloat(lowerRow['gravado']);
-      else if (lowerRow['importe'] !== undefined && lowerRow['importe'] !== null && lowerRow['importe'] !== '') total = parseFloat(lowerRow['importe']);
+      const parseAmount = (val: any) => {
+        if (val === undefined || val === null || val === '') return 0;
+        if (typeof val === 'number') return val;
+        if (typeof val === 'string') {
+          let cleaned = val.replace(/\./g, '').replace(/,/g, '.');
+          return parseFloat(cleaned) || 0;
+        }
+        return 0;
+      };
+
+      if (lowerRow['total bruto'] !== undefined) total = parseAmount(lowerRow['total bruto']);
+      else if (lowerRow['total gravado'] !== undefined) total = parseAmount(lowerRow['total gravado']);
+      else if (lowerRow['total'] !== undefined) total = parseAmount(lowerRow['total']);
+      else if (lowerRow['gravado'] !== undefined) total = parseAmount(lowerRow['gravado']);
+      else if (lowerRow['importe'] !== undefined) total = parseAmount(lowerRow['importe']);
+
 
       // Extraer concepto (Producto)
       let concepto = lowerRow['producto'] || lowerRow['concepto'];
