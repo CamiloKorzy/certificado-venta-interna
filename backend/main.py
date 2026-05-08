@@ -43,7 +43,7 @@ def get_indicadores():
         conn = get_db_connection()
         print("Conectado a Aurora. Consultando dataset de Finnegans...")
         
-        query = "SELECT * FROM ceesa_cee_certificados_ventas_internos ORDER BY 1 DESC LIMIT 2000"
+        query = "SELECT * FROM ceesa_cee_certificados_ventas_internos ORDER BY 1 DESC LIMIT 50000"
         
         # Ejecutar consulta directamente con psycopg2 para evitar dependencias de SQLAlchemy en Pandas
         cursor = conn.cursor()
