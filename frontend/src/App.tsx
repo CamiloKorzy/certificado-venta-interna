@@ -885,12 +885,9 @@ function LoginScreen({ onLogin }: { onLogin: (token: string, user: any) => void 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4 shadow-lg shadow-blue-600/30">
-            <Shield size={32} className="text-white" />
-          </div>
+          <img src="/logo_cee.png" alt="CEE ENRIQUEZ" className="w-24 h-24 mx-auto mb-4 rounded-2xl shadow-lg shadow-blue-600/20" />
           <h1 className="text-2xl font-bold text-white">Certificados de Ventas Internos</h1>
-          <p className="text-blue-300/70 text-sm mt-1">CEE ENRIQUEZ — Panel de Gestión</p>
+          <p className="text-blue-300/70 text-sm mt-1">Panel de Gestión</p>
         </div>
         <form onSubmit={handleSubmit} className="bg-white/10 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl">
           <div className="space-y-4">
@@ -1143,7 +1140,7 @@ export default function App() {
         <div className="max-w-[1600px] mx-auto px-6 flex items-center justify-between h-14">
           <div className="flex items-center gap-6">
             <h1 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-              <Shield size={18} className="text-blue-600" />
+              <img src="/logo_cee.png" alt="CEE" className="h-8 w-8 rounded-md object-contain bg-slate-800" />
               Certificados de Ventas Internos
             </h1>
             <nav className="flex gap-1">

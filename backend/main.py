@@ -28,8 +28,8 @@ DB_PORT = os.environ.get("DB_PORT", "5432")
 DB_NAME = os.environ.get("DB_NAME", "finnegansbi")
 DB_USER = os.environ.get("DB_USER", "ceesauser")
 DB_PASS = os.environ.get("DB_PASS", "Lula$$2014")
-SUPABASE_DB_URL = os.environ.get("SUPABASE_DB_URL", "")
-APP_URL = os.environ.get("APP_URL", "http://localhost:5173")
+SUPABASE_DB_URL = os.environ.get("SUPABASE_DB_URL", "postgresql://postgres:FsIPyXBJT8aFZk8D@db.rsofgomdfrrvawvqybxp.supabase.co:5432/postgres")
+APP_URL = os.environ.get("APP_URL", "https://certificado-venta-interna.vercel.app")
 
 def get_aurora():
     return psycopg2.connect(host=DB_HOST, port=DB_PORT, database=DB_NAME, user=DB_USER, password=DB_PASS, sslmode="require")
@@ -38,6 +38,66 @@ def get_supabase():
     if not SUPABASE_DB_URL:
         raise HTTPException(status_code=500, detail="SUPABASE_DB_URL no configurada")
     return psycopg2.connect(SUPABASE_DB_URL)
+
+# ─── Auto-setup: crea tablas en Supabase si no existen ───
+def auto_setup_db():
+    if not SUPABASE_DB_URL:
+        print("[SETUP] SUPABASE_DB_URL no configurada, saltando auto-setup")
+        return
+    try:
+        conn = psycopg2.connect(SUPABASE_DB_URL)
+        conn.autocommit = True
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS cert_usuarios (
+                id SERIAL PRIMARY KEY,
+                email TEXT UNIQUE NOT NULL,
+                nombre TEXT NOT NULL,
+                password TEXT NOT NULL,
+                rol TEXT NOT NULL CHECK(rol IN ('admin','responsable_un','consulta')),
+                telegram_chat_id TEXT,
+                activo INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS cert_usuarios_unidades (
+                id SERIAL PRIMARY KEY,
+                usuario_id INTEGER REFERENCES cert_usuarios(id) ON DELETE CASCADE,
+                unidad_negocio TEXT NOT NULL,
+                notifica_email BOOLEAN DEFAULT false,
+                notifica_telegram BOOLEAN DEFAULT false,
+                UNIQUE(usuario_id, unidad_negocio)
+            );
+            CREATE TABLE IF NOT EXISTS cert_notificaciones_log (
+                id SERIAL PRIMARY KEY,
+                tipo TEXT,
+                destinatario TEXT,
+                comprobante TEXT,
+                mensaje TEXT,
+                estado TEXT,
+                error TEXT,
+                fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS idx_cert_usuarios_email ON cert_usuarios(email);
+            CREATE INDEX IF NOT EXISTS idx_cert_usu_unid_usuario ON cert_usuarios_unidades(usuario_id);
+            CREATE INDEX IF NOT EXISTS idx_cert_notif_fecha ON cert_notificaciones_log(fecha);
+        """)
+        # Crear admin por defecto si no existe
+        cur.execute("SELECT COUNT(*) FROM cert_usuarios WHERE email = 'admin@ceeenriquez.com'")
+        if cur.fetchone()[0] == 0:
+            admin_hash = hash_password("admin2026")
+            cur.execute("""
+                INSERT INTO cert_usuarios (email, nombre, password, rol, activo)
+                VALUES ('admin@ceeenriquez.com', 'Administrador', %s, 'admin', 1)
+            """, (admin_hash,))
+            print("[SETUP] ✅ Usuario admin creado: admin@ceeenriquez.com / admin2026")
+        print("[SETUP] ✅ Tablas cert_* verificadas/creadas")
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"[SETUP] ⚠️ Error en auto-setup: {e}")
+
+# Ejecutar auto-setup al importar (primera invocación en Vercel)
+auto_setup_db()
 
 # ─── Auth Dependency ───
 async def get_current_user(request: Request):
