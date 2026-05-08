@@ -152,28 +152,40 @@ class UnidadAsignacion(BaseModel):
 
 @app.get("/api/health")
 def health_check():
-    info = {"status": "ok", "supabase_url_set": bool(SUPABASE_DB_URL), "setup_done": _setup_done}
-    # Test Supabase connectivity
+    import traceback
     try:
-        conn = psycopg2.connect(SUPABASE_DB_URL, connect_timeout=5)
-        cur = conn.cursor()
-        cur.execute("SELECT COUNT(*) FROM cert_usuarios")
-        count = cur.fetchone()[0]
-        info["supabase"] = "connected"
-        info["users_count"] = count
-        cur.close()
-        conn.close()
+        info = {"status": "ok", "supabase_url_set": bool(SUPABASE_DB_URL), "setup_done": _setup_done}
+        info["supabase_url_preview"] = SUPABASE_DB_URL[:30] + "..." if SUPABASE_DB_URL else "VACIA"
+        # Test Supabase connectivity
+        try:
+            conn = psycopg2.connect(SUPABASE_DB_URL, connect_timeout=5)
+            cur = conn.cursor()
+            cur.execute("SELECT 1")
+            info["supabase_connect"] = "OK"
+            try:
+                cur.execute("SELECT COUNT(*) FROM cert_usuarios")
+                count = cur.fetchone()[0]
+                info["users_count"] = count
+            except Exception as e2:
+                info["table_check"] = f"tabla no existe: {str(e2)[:100]}"
+            cur.close()
+            conn.close()
+        except Exception as e:
+            info["supabase_connect"] = f"error: {str(e)[:200]}"
+        return info
     except Exception as e:
-        info["supabase"] = f"error: {str(e)[:200]}"
-    return info
+        return {"error": str(e), "trace": traceback.format_exc()[:500]}
 
 @app.get("/api/setup")
 def run_setup():
-    """Endpoint manual para forzar la creación de tablas."""
-    global _setup_done
-    _setup_done = False
-    auto_setup_db()
-    return {"status": "setup ejecutado", "done": _setup_done}
+    import traceback
+    try:
+        global _setup_done
+        _setup_done = False
+        auto_setup_db()
+        return {"status": "setup ejecutado", "done": _setup_done}
+    except Exception as e:
+        return {"error": str(e), "trace": traceback.format_exc()[:500]}
 
 @app.post("/api/login")
 def login(req: LoginRequest):
