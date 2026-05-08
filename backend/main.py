@@ -39,12 +39,16 @@ def health_check():
 def debug_endpoint():
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT numerodocumento, importe, estadoautorizacion, cantidadworkflow, precio, fecha, producto, cantidadvinculada FROM ceesa_cee_certificados_ventas_internos WHERE numerodocumento = 'CI-0001-00000023'")
-    cols = [desc[0] for desc in cur.description]
-    rows = cur.fetchall()
+    # Ver todas las columnas del dataset
+    cur.execute("SELECT * FROM ceesa_cee_certificados_ventas_internos LIMIT 1")
+    all_cols = [desc[0] for desc in cur.description]
+    cur.fetchall()
+    # Contar filas totales y por comprobante
+    cur.execute("SELECT numerodocumento, COUNT(*) as cnt, MAX(importe) as max_imp FROM ceesa_cee_certificados_ventas_internos GROUP BY numerodocumento ORDER BY numerodocumento")
+    summary = [{"doc": r[0], "count": r[1], "max_importe": r[2]} for r in cur.fetchall()]
     cur.close()
     conn.close()
-    return {"cols": cols, "rows": rows}
+    return {"all_columns": all_cols, "comprobantes_summary": summary}
 
 @app.get("/api/indicadores")
 def get_indicadores():
