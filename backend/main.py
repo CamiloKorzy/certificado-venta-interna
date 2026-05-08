@@ -39,16 +39,18 @@ def health_check():
 def debug_endpoint():
     conn = get_db_connection()
     cur = conn.cursor()
-    # Ver todas las columnas del dataset
-    cur.execute("SELECT * FROM ceesa_cee_certificados_ventas_internos LIMIT 1")
-    all_cols = [desc[0] for desc in cur.description]
-    cur.fetchall()
-    # Contar filas totales y por comprobante
-    cur.execute("SELECT numerodocumento, COUNT(*) as cnt, MAX(importe) as max_imp FROM ceesa_cee_certificados_ventas_internos GROUP BY numerodocumento ORDER BY numerodocumento")
-    summary = [{"doc": r[0], "count": r[1], "max_importe": r[2]} for r in cur.fetchall()]
+    # Ver estructura de importes para un comprobante conocido (CI-0001-00000023 = total 447700)
+    cur.execute("""
+        SELECT DISTINCT numerodocumento, importe, producto, detalledescripcion, precio, cantidadworkflow
+        FROM ceesa_cee_certificados_ventas_internos 
+        WHERE numerodocumento = 'CI-0001-00000003'
+        ORDER BY CAST(NULLIF(importe,'0') AS DECIMAL) DESC NULLS LAST
+    """)
+    cols = [desc[0] for desc in cur.description]
+    rows = [dict(zip(cols, r)) for r in cur.fetchall()]
     cur.close()
     conn.close()
-    return {"all_columns": all_cols, "comprobantes_summary": summary}
+    return {"sample_rows": rows}
 
 @app.get("/api/indicadores")
 def get_indicadores():
@@ -96,15 +98,20 @@ def get_indicadores():
             
             if num_doc not in comprobantes:
                 comprobantes[num_doc] = {
-                    'metadata': record,      # Guardar un registro como referencia para metadata
+                    'metadata': record,
                     'max_importe': imp,
                     'best_state': state,
-                    'items': {},             # Clave: producto, para deduplicar
+                    'items': {},
+                    'distinct_importes': set(),  # Para identificar Gravado vs IVA vs Total
                 }
             
             # Actualizar MAX importe (total cabecera)
             if imp > comprobantes[num_doc]['max_importe']:
                 comprobantes[num_doc]['max_importe'] = imp
+            
+            # Recoger importes distintos (para descomponer Gravado/IVA/Total)
+            if imp > 0:
+                comprobantes[num_doc]['distinct_importes'].add(round(imp, 2))
             
             # Actualizar mejor estado
             if states_priority.get(state, 0) > states_priority.get(comprobantes[num_doc]['best_state'], 0):
@@ -168,6 +175,12 @@ def get_indicadores():
             # Construir ítems para la vista expandible
             items_list = list(data['items'].values())
             
+            # Calcular Gravado e IVA a partir del Total
+            # Total = Gravado + IVA = Gravado × 1.21
+            total_val = data['max_importe']
+            gravado_val = round(total_val / 1.21, 2)
+            iva_val = round(total_val - gravado_val, 2)
+            
             record = {
                 'Fecha': fecha_fmt,
                 'Comprobante': num_doc,
@@ -175,8 +188,9 @@ def get_indicadores():
                 'Descripción': desc,
                 'Solicitante': clean(meta.get('solicitante', '')),
                 'EstadoAutorizacion': data['best_state'] if data['best_state'] else 'Sin Estado',
-                'Total Bruto': str(data['max_importe']),
-                'Total Gravado': str(data['max_importe']),
+                'Total Bruto': str(total_val),
+                'Neto Gravado': str(gravado_val),
+                'IVA': str(iva_val),
                 'items': items_list,
             }
             records.append(record)
@@ -184,7 +198,7 @@ def get_indicadores():
         if not records:
             raise Exception("No data found en Aurora")
             
-        final_columns = ['Fecha', 'Comprobante', 'Empresa', 'Descripción', 'Solicitante', 'EstadoAutorizacion', 'Total Bruto', 'Total Gravado']
+        final_columns = ['Fecha', 'Comprobante', 'Empresa', 'Descripción', 'Solicitante', 'EstadoAutorizacion', 'Neto Gravado', 'IVA', 'Total Bruto']
         
     except Exception as e:
         print(f"Error consultando BD. Usando Mock Data. Detalles: {e}")
@@ -198,17 +212,18 @@ def get_indicadores():
             conn.close()
 
     # ─── PASO 3: Calcular KPIs en base a registros ya agregados ───
-    total_gravado = 0.0
-    total_final = 0.0
+    sum_neto_gravado = 0.0
+    sum_iva = 0.0
+    sum_total = 0.0
     clientes_set = set()
     
     for record in records:
         try:
-            val = float(record.get('Total Bruto', '0') or '0')
+            sum_total += float(record.get('Total Bruto', '0') or '0')
+            sum_neto_gravado += float(record.get('Neto Gravado', '0') or '0')
+            sum_iva += float(record.get('IVA', '0') or '0')
         except:
-            val = 0.0
-        total_final += val
-        total_gravado += val
+            pass
         
         empresa = record.get('Empresa', '')
         if empresa:
@@ -217,8 +232,9 @@ def get_indicadores():
     return {
         "kpis": {
             "total_certificados": len(records),
-            "total_gravado": total_gravado,
-            "total_final": total_final,
+            "neto_gravado": sum_neto_gravado,
+            "iva": sum_iva,
+            "total_final": sum_total,
             "clientes_activos": len(clientes_set)
         },
         "columns": final_columns,

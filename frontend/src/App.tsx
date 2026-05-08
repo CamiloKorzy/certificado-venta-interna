@@ -291,12 +291,27 @@ export default function App() {
   const kpis = useMemo(() => {
     const autorizados = comprobantesData.filter(c => c.estado === 'Autorizado').length;
     let totalConsolidado = 0;
-    comprobantesData.forEach(c => {
-      totalConsolidado += c.total;
+    let netoGravado = 0;
+    let iva = 0;
+    
+    filteredData.forEach(d => {
+      totalConsolidado += d._total;
+      
+      // Parsear Neto Gravado e IVA del backend
+      const parseNum = (val: any) => {
+        if (!val || val === '' || val === 'undefined') return 0;
+        return parseFloat(String(val)) || 0;
+      };
+      const lowerRow: Record<string, any> = {};
+      Object.keys(d._original).forEach(k => { lowerRow[k.toLowerCase()] = d._original[k]; });
+      netoGravado += parseNum(lowerRow['neto gravado']);
+      iva += parseNum(lowerRow['iva']);
     });
 
     return {
       totalConsolidado,
+      netoGravado,
+      iva,
       volumenOperativo: comprobantesData.length,
       alcance: new Set(filteredData.map(d => d._unidad)).size,
       pctAutorizado: comprobantesData.length > 0 ? (autorizados / comprobantesData.length) * 100 : 0,
@@ -534,21 +549,43 @@ export default function App() {
           </div>
         </div>
 
-        {/* KPIs Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-7 rounded-2xl shadow-lg text-white relative overflow-hidden flex flex-col justify-center">
-            <div className="relative z-10">
-              <div className="flex items-center gap-2 mb-3">
-                <TrendingUp size={20} className="text-emerald-400" />
-                <p className="text-slate-300 text-xs font-bold uppercase tracking-wider">Total Consolidado</p>
+        {/* KPIs Summary - Financial Banner */}
+        <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-2xl shadow-lg text-white relative overflow-hidden">
+          <div className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <TrendingUp size={16} className="text-blue-400" />
+                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Neto Gravado</p>
               </div>
-              <h3 className="text-2xl md:text-3xl lg:text-4xl font-extrabold tracking-tight text-white drop-shadow-sm" title={'$' + kpis.totalConsolidado.toLocaleString('es-AR', { maximumFractionDigits: 2 })}>
+              <h3 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">
+                ${kpis.netoGravado.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </h3>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <TrendingUp size={16} className="text-amber-400" />
+                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">IVA (21%)</p>
+              </div>
+              <h3 className="text-2xl md:text-3xl font-extrabold tracking-tight text-amber-300">
+                ${kpis.iva.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </h3>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <TrendingUp size={16} className="text-emerald-400" />
+                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Total Consolidado</p>
+              </div>
+              <h3 className="text-2xl md:text-3xl font-extrabold tracking-tight text-emerald-300">
                 ${kpis.totalConsolidado.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </h3>
             </div>
-            <div className="absolute -right-6 -bottom-6 w-32 h-32 bg-white opacity-5 rounded-full blur-2xl"></div>
           </div>
-          
+          <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-white opacity-5 rounded-full blur-2xl"></div>
+          <div className="absolute -left-10 -top-10 w-32 h-32 bg-blue-500 opacity-5 rounded-full blur-2xl"></div>
+        </div>
+        
+        {/* KPIs Operativos */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-5 hover:border-blue-200 transition-colors">
             <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl"><FileText size={32} /></div>
             <div>
