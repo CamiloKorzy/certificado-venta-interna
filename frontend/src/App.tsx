@@ -257,14 +257,11 @@ export default function App() {
 
       return matchEmpresa && matchUnidad && matchConcepto && matchEstado && matchPeriodo && matchFecha;
     });
-  }, [normalizedData, filters]);
-
-  // 4. Filtrado principal
-  const filteredData = useMemo(() => {
+    
     // Ya no deduplicamos por Comprobante aquí, porque backend entrega ítems únicos. 
     // Todos los ítems deben sumarse para el total del Comprobante.
     return rawFiltered;
-  }, [rawFiltered]);
+  }, [normalizedData, filters]);
 
   // 5. Agrupación por Comprobante para la Grilla y KPIs
   const comprobantesData = useMemo(() => {
