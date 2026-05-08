@@ -257,34 +257,66 @@ export default function App() {
 
       return matchEmpresa && matchUnidad && matchConcepto && matchEstado && matchPeriodo && matchFecha;
     });
-
-    // Deduplicar por Comprobante para evitar sumar múltiples veces el total de cabecera si hay varios ítems
-    const uniqueComprobantes = new Map();
-    rawFiltered.forEach((d: any) => {
-      const compId = d._original['Comprobante'] || d._original['comprobante'] || d._original['Documento'] || d._original['documento'] || d._original['numerointerno'] || d._original['transaccionid'] || Math.random().toString();
-      
-      const current = uniqueComprobantes.get(compId);
-      if (!current || d._total > current._total) {
-        uniqueComprobantes.set(compId, d);
-      }
-    });
-
-    return Array.from(uniqueComprobantes.values()) as any[];
   }, [normalizedData, filters]);
 
-  // 4. Calcular KPIs basados en datos filtrados
-  const kpis = useMemo(() => {
-    const autorizados = filteredData.filter(d => d._estado === 'Autorizado').length;
-    return {
-      movimientos: filteredData.length,
-      unidadesActivas: new Set(filteredData.map(d => d._unidad)).size,
-      totalValorizado: filteredData.reduce((acc, curr) => acc + curr._total, 0),
-      pctAutorizado: filteredData.length > 0 ? (autorizados / filteredData.length) * 100 : 0,
-      qtyAutorizados: autorizados
-    };
+  // 4. Filtrado principal
+  const filteredData = useMemo(() => {
+    // Ya no deduplicamos por Comprobante aquí, porque backend entrega ítems únicos. 
+    // Todos los ítems deben sumarse para el total del Comprobante.
+    return rawFiltered;
+  }, [rawFiltered]);
+
+  // 5. Agrupación por Comprobante para la Grilla y KPIs
+  const comprobantesData = useMemo(() => {
+    const groups: Record<string, any> = {};
+    const statesPriority: Record<string, number> = { 'Autorizado': 4, 'Rechazado / Anulado': 3, 'Pendiente / No Autorizado': 2, 'Sin Estado': 1 };
+    
+    filteredData.forEach(d => {
+      const compId = d._original['Comprobante'] || d._original['comprobante'] || d._original['Documento'] || d._original['documento'] || d._original['numerointerno'] || d._original['transaccionid'] || 'Sin ID';
+      if (!groups[compId]) {
+        groups[compId] = {
+          id: compId,
+          fecha: d._fecha,
+          cliente: d._original['Cliente'] || d._original['Empresa'] || '-',
+          descripcion: d._descripcion,
+          unidad: d._unidad,
+          estado: d._estado,
+          total: 0,
+          items: []
+        };
+      }
+      
+      // Upgrade state priority if current item has higher priority
+      const currentPrio = statesPriority[groups[compId].estado] || 0;
+      const newPrio = statesPriority[d._estado] || 0;
+      if (newPrio > currentPrio) {
+        groups[compId].estado = d._estado;
+      }
+
+      groups[compId].total += d._total;
+      groups[compId].items.push(d);
+    });
+    return Object.values(groups).sort((a, b) => b.total - a.total);
   }, [filteredData]);
 
-  // 5. Agrupaciones para presentacion profesional (Gráficos)
+  // 6. KPIs y Métricas Globales
+  const kpis = useMemo(() => {
+    const autorizados = comprobantesData.filter(c => c.estado === 'Autorizado').length;
+    let totalConsolidado = 0;
+    comprobantesData.forEach(c => {
+      totalConsolidado += c.total;
+    });
+
+    return {
+      totalConsolidado,
+      volumenOperativo: comprobantesData.length,
+      alcance: new Set(filteredData.map(d => d._unidad)).size,
+      pctAutorizado: comprobantesData.length > 0 ? (autorizados / comprobantesData.length) * 100 : 0,
+      qtyAutorizados: autorizados
+    };
+  }, [comprobantesData, filteredData]);
+
+  // 6.5 Agrupaciones para presentacion profesional (Gráficos)
   const agrupaciones = useMemo(() => {
     const byUnidad: Record<string, { ids: Set<string>, authIds: Set<string>, pendIds: Set<string>, total: number }> = {};
     const byEmpresa: Record<string, { ids: Set<string>, authIds: Set<string>, pendIds: Set<string>, total: number }> = {};
@@ -296,7 +328,10 @@ export default function App() {
     filteredData.forEach((d: any) => {
       grandTotal += d._total;
       const compId = d._original['Comprobante'] || d._original['comprobante'] || d._original['Documento'] || d._original['documento'] || d._original['numerointerno'] || d._original['transaccionid'] || 'Sin ID';
-      const isAuth = d._estado === 'Autorizado';
+      
+      // Encontrar el estado real del comprobante
+      const compEstado = comprobantesData.find(c => c.id === compId)?.estado || d._estado;
+      const isAuth = compEstado === 'Autorizado';
 
       const addStat = (record: Record<string, any>, key: string) => {
         if (!record[key]) record[key] = { ids: new Set(), authIds: new Set(), pendIds: new Set(), total: 0 };
@@ -309,7 +344,7 @@ export default function App() {
       addStat(byUnidad, d._unidad);
       addStat(byEmpresa, d._empresa);
       addStat(byConcepto, d._concepto);
-      addStat(byEstado, d._estado);
+      addStat(byEstado, compEstado);
     });
 
     const formatGroup = (group: Record<string, { ids: Set<string>, authIds: Set<string>, pendIds: Set<string>, total: number }>) => {
@@ -331,30 +366,7 @@ export default function App() {
       concepto: formatGroup(byConcepto),
       estado: formatGroup(byEstado)
     };
-  }, [filteredData]);
-
-  // 6. Agrupación por Comprobante para la Grilla
-  const comprobantesData = useMemo(() => {
-    const groups: Record<string, any> = {};
-    filteredData.forEach(d => {
-      const compId = d._original['Comprobante'] || d._original['comprobante'] || d._original['Documento'] || d._original['documento'] || d._original['numerointerno'] || d._original['transaccionid'] || 'Sin ID';
-      if (!groups[compId]) {
-        groups[compId] = {
-          id: compId,
-          fecha: d._fecha,
-          cliente: d._original['Cliente'] || d._original['Empresa'] || '-',
-          descripcion: d._descripcion,
-          unidad: d._unidad,
-          estado: d._estado,
-          total: 0,
-          items: []
-        };
-      }
-      groups[compId].total += d._total;
-      groups[compId].items.push(d);
-    });
-    return Object.values(groups).sort((a, b) => b.total - a.total);
-  }, [filteredData]);
+  }, [filteredData, comprobantesData]);
 
   // 7. Filtros locales para la grilla
   const gridOptions = useMemo(() => {
