@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Building2, PackageCheck, TrendingUp, FileText, Filter, Calendar, LayoutDashboard, Search, ChevronDown, ChevronUp, ChevronRight, BarChart3, Presentation } from 'lucide-react';
+import { Building2, PackageCheck, TrendingUp, FileText, Filter, Calendar, LayoutDashboard, Search, ChevronDown, ChevronUp, ChevronRight, BarChart3, Presentation, Download } from 'lucide-react';
 
 const HorizontalBarChart = ({ title, data, icon: Icon, colorTheme = "blue", showAuthSplit = false }: any) => {
   const themes: any = {
@@ -627,7 +627,64 @@ export default function App() {
               <LayoutDashboard size={20} className="text-blue-600" />
               Comprobantes Emitidos
             </h3>
-            <span className="text-xs font-bold text-slate-400 bg-slate-200 px-3 py-1 rounded-full">{filteredGridData.length} resultados</span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-bold text-slate-400 bg-slate-200 px-3 py-1 rounded-full">{filteredGridData.length} resultados</span>
+              <button
+                onClick={() => {
+                  // Generar Excel XML Spreadsheet
+                  const rows = filteredGridData.map((comp: any) => ({
+                    'Fecha': comp.fecha,
+                    'Comprobante': comp.id,
+                    'Descripción': comp.descripcion,
+                    'Unidad de Negocio': comp.unidad,
+                    'Prestador': comp.cliente,
+                    'Estado': comp.estado,
+                    'Neto Gravado': (comp.total / 1.21),
+                    'IVA 21%': comp.total - (comp.total / 1.21),
+                    'Total': comp.total,
+                  }));
+                  const headers = Object.keys(rows[0] || {});
+                  const escXml = (v: any) => String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+                  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<?mso-application progid="Excel.Sheet"?>\n';
+                  xml += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\n';
+                  xml += '<Styles><Style ss:ID="hdr"><Font ss:Bold="1" ss:Size="11"/><Interior ss:Color="#1E293B" ss:Pattern="Solid"/><Font ss:Color="#FFFFFF" ss:Bold="1" ss:Size="11"/></Style>';
+                  xml += '<Style ss:ID="cur"><NumberFormat ss:Format="$#,##0.00"/></Style>';
+                  xml += '<Style ss:ID="def"><Font ss:Size="10"/></Style></Styles>\n';
+                  xml += '<Worksheet ss:Name="Comprobantes Emitidos"><Table>\n';
+                  // Column widths
+                  [100, 180, 300, 200, 280, 140, 150, 150, 150].forEach(w => { xml += `<Column ss:Width="${w}"/>\n`; });
+                  // Header row
+                  xml += '<Row ss:Height="30">';
+                  headers.forEach(h => { xml += `<Cell ss:StyleID="hdr"><Data ss:Type="String">${escXml(h)}</Data></Cell>`; });
+                  xml += '</Row>\n';
+                  // Data rows
+                  rows.forEach(row => {
+                    xml += '<Row>';
+                    headers.forEach(h => {
+                      const val = (row as any)[h];
+                      if (typeof val === 'number') {
+                        xml += `<Cell ss:StyleID="cur"><Data ss:Type="Number">${val.toFixed(2)}</Data></Cell>`;
+                      } else {
+                        xml += `<Cell ss:StyleID="def"><Data ss:Type="String">${escXml(val)}</Data></Cell>`;
+                      }
+                    });
+                    xml += '</Row>\n';
+                  });
+                  xml += '</Table></Worksheet></Workbook>';
+                  const blob = new Blob([xml], { type: 'application/vnd.ms-excel' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `Comprobantes_Emitidos_${new Date().toISOString().slice(0,10)}.xls`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm"
+              >
+                <Download size={14} />
+                Descargar XLSX
+              </button>
+            </div>
           </div>
           
           {/* Filtros Locales de la Grilla */}
