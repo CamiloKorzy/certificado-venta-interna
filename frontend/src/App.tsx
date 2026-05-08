@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Building2, PackageCheck, TrendingUp, FileText, Filter, Calendar, LayoutDashboard, Search, ChevronDown, ChevronUp, ChevronRight, BarChart3, Presentation, Download } from 'lucide-react';
 
-const HorizontalBarChart = ({ title, data, icon: Icon, colorTheme = "blue", showAuthSplit = false }: any) => {
+const HorizontalBarChart = ({ title, data, icon: Icon, colorTheme = "blue", showAuthSplit = false, countLabel = "certif." }: any) => {
   const themes: any = {
     blue: { bg: "bg-blue-500", text: "text-blue-600", light: "bg-blue-50", icon: "text-blue-600" },
     indigo: { bg: "bg-indigo-500", text: "text-indigo-600", light: "bg-indigo-50", icon: "text-indigo-600" },
@@ -33,7 +33,7 @@ const HorizontalBarChart = ({ title, data, icon: Icon, colorTheme = "blue", show
               <div className="text-right flex flex-col items-end shrink-0 gap-1 mt-0.5">
                 <span className="font-bold text-slate-800 leading-none">${item.total.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</span>
                 <span className={`text-[11px] font-bold ${theme.text} ${theme.light} px-2 py-0.5 rounded leading-none`}>{item.percent.toFixed(1)}%</span>
-                <span className="text-[10px] font-medium text-slate-400 leading-none">{item.count} certif.</span>
+                <span className="text-[10px] font-medium text-slate-400 leading-none">{item.qty != null ? `${item.qty.toLocaleString('es-AR')} uds.` : `${item.count} ${countLabel}`}</span>
               </div>
             </div>
             <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
@@ -351,7 +351,8 @@ export default function App() {
         items.forEach((item: any) => {
           const nombre = item.Producto || item.producto || 'Sin Detalle';
           const itemImporte = Number(item.Importe || item.importe || 0);
-          if (!byConcepto[nombre]) byConcepto[nombre] = { ids: new Set(), authIds: new Set(), pendIds: new Set(), total: 0 };
+          if (!byConcepto[nombre]) byConcepto[nombre] = { ids: new Set(), authIds: new Set(), pendIds: new Set(), total: 0, qty: 0 };
+          byConcepto[nombre].qty += Number(item.Cantidad || item.cantidad || 0);
           byConcepto[nombre].ids.add(comp.id);
           if (isAuth) byConcepto[nombre].authIds.add(comp.id);
           else byConcepto[nombre].pendIds.add(comp.id);
@@ -371,7 +372,8 @@ export default function App() {
           authCount: stats.authIds.size,
           pendCount: stats.pendIds.size,
           total: stats.total,
-          percent: grandTotal > 0 ? (stats.total / grandTotal) * 100 : 0
+          percent: grandTotal > 0 ? (stats.total / grandTotal) * 100 : 0,
+          qty: (stats as any).qty != null ? (stats as any).qty : undefined
         }));
     };
 
