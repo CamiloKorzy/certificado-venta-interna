@@ -39,7 +39,7 @@ def health_check():
 def debug_endpoint():
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT numerodocumento, importe, producto, cantidadworkflow, precio FROM ceesa_cee_certificados_ventas_internos WHERE numerodocumento = 'CI-0001-00000003'")
+    cur.execute("SELECT numerodocumento, importe, estadoautorizacion, cantidadworkflow, precio, fecha, producto, cantidadvinculada FROM ceesa_cee_certificados_ventas_internos WHERE numerodocumento = 'CI-0001-00000023'")
     cols = [desc[0] for desc in cur.description]
     rows = cur.fetchall()
     cur.close()
@@ -61,17 +61,37 @@ def get_indicadores():
         columns_db = [desc[0] for desc in cursor.description]
         data_rows = cursor.fetchall()
         cursor.close()
-        # 1. Convertir data_rows (tuplas) a una lista de diccionarios
-        records = []
+        # 1. Convertir data_rows a diccionarios y deduplicar por operacionitemid
+        # La vista de Finnegans devuelve múltiples filas por ítem debido a los cambios de estado (workflow)
+        unique_items = {}
+        states_priority = {'Autorizado': 4, 'Rechazado': 3, 'Anulado': 3, 'Pendiente': 2, 'Sin Estado': 1}
+        
         for row in data_rows:
-            # Crear diccionario uniendo nombre de columna con valor
             record = dict(zip(columns_db, row))
-            records.append(record)
+            item_id = record.get('operacionitemid')
+            
+            # Si no hay operacionitemid, armamos una clave compuesta (transaccion + producto + importe)
+            if not item_id or item_id == 'NULL':
+                item_id = f"{record.get('transaccionid', '')}_{record.get('producto', '')}_{record.get('importe', '')}"
+                
+            new_state = record.get('estadoautorizacion', '')
+            
+            if item_id in unique_items:
+                current_state = unique_items[item_id].get('estadoautorizacion', '')
+                new_prio = states_priority.get(new_state, 0)
+                curr_prio = states_priority.get(current_state, 0)
+                
+                if new_prio > curr_prio:
+                    unique_items[item_id]['estadoautorizacion'] = new_state
+            else:
+                unique_items[item_id] = record
+                
+        records = list(unique_items.values())
             
         if not records:
             raise Exception("No data found en Aurora")
             
-        print(f"Cargados {len(records)} registros desde Aurora.")
+        print(f"Cargados {len(records)} ítems únicos desde Aurora (filtrando duplicados de workflow).")
         
         # 2. Mapeo de columnas para el Frontend
         column_mapping = {}
