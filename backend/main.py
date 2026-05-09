@@ -758,10 +758,10 @@ def debug_endpoint():
     conn = get_aurora()
     cur = conn.cursor()
     cur.execute("""
-        SELECT DISTINCT numerodocumento, importe, producto, detalledescripcion, precio, cantidadworkflow
+        SELECT numerodocumento, importe, producto, detalledescripcion, precio, cantidadworkflow
         FROM ceesa_cee_certificados_ventas_internos 
         WHERE numerodocumento = 'CI-0001-00000003'
-        ORDER BY CAST(NULLIF(importe,'0') AS DECIMAL) DESC NULLS LAST
+        ORDER BY importe DESC NULLS LAST
     """)
     cols = [desc[0] for desc in cur.description]
     rows = [dict(zip(cols, r)) for r in cur.fetchall()]

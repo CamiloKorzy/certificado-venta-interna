@@ -998,19 +998,35 @@ function Configuracion({ token }: { token: string }) {
         apiFetch(`/api/usuarios/${u.id}/unidades`, token)
       ]);
       
-      if (baseRes.error) throw new Error("Aurora DB: " + baseRes.error);
-      if (userRes.error) throw new Error("Supabase DB: " + userRes.error);
+      // Verificar errores explícitos del backend
+      if (baseRes.error) {
+        setModalMsg({ text: `❌ Aurora DB: ${baseRes.error}${baseRes.trace ? '\n' + baseRes.trace : ''}`, type: 'error' });
+        setUserUnidades([]);
+        setModalLoading(false);
+        return;
+      }
+      if (userRes.error) {
+        setModalMsg({ text: `❌ Supabase DB: ${userRes.error}`, type: 'error' });
+        setUserUnidades([]);
+        setModalLoading(false);
+        return;
+      }
       
       const base: string[] = baseRes.data || [];
       const userInfo: any[] = userRes.data || [];
+      
+      if (base.length === 0) {
+        setModalMsg({ text: '⚠️ Aurora no devolvió unidades de negocio. Verificar tabla ceesa_cee_certificados_ventas_internos en producción.', type: 'error' });
+      }
+      
       setUserUnidades(base.map((un: string) => {
         const existing = userInfo.find((e: any) => String(e.unidad_negocio).trim() === String(un).trim());
         return existing || { unidad_negocio: un, notifica_email: false, notifica_telegram: false };
       }));
     } catch (e: any) { 
       console.error(e); 
-      setErrorMsg(e.message); 
-      setTimeout(() => setErrorMsg(''), 6000);
+      setModalMsg({ text: '❌ Error de conexión: ' + e.message, type: 'error' });
+      setUserUnidades([]);
     }
     setModalLoading(false);
   };
