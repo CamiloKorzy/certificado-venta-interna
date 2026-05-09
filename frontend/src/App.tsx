@@ -997,13 +997,21 @@ function Configuracion({ token }: { token: string }) {
         apiFetch('/api/unidades-negocio', token),
         apiFetch(`/api/usuarios/${u.id}/unidades`, token)
       ]);
+      
+      if (baseRes.error) throw new Error("Aurora DB: " + baseRes.error);
+      if (userRes.error) throw new Error("Supabase DB: " + userRes.error);
+      
       const base: string[] = baseRes.data || [];
       const userInfo: any[] = userRes.data || [];
       setUserUnidades(base.map((un: string) => {
         const existing = userInfo.find((e: any) => String(e.unidad_negocio).trim() === String(un).trim());
         return existing || { unidad_negocio: un, notifica_email: false, notifica_telegram: false };
       }));
-    } catch (e) { console.error(e); }
+    } catch (e: any) { 
+      console.error(e); 
+      setErrorMsg(e.message); 
+      setTimeout(() => setErrorMsg(''), 6000);
+    }
     setModalLoading(false);
   };
 

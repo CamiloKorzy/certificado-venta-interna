@@ -575,16 +575,29 @@ def list_unidades(user=Depends(get_current_user)):
     try:
         conn = get_aurora()
         cur = conn.cursor()
-        cur.execute("""
-            SELECT DISTINCT TRIM(COALESCE(unidaddenegocio, '')) as un 
+        
+        # Primero buscamos dinámicamente cómo se llama la columna
+        cur.execute("SELECT * FROM ceesa_cee_certificados_ventas_internos LIMIT 1")
+        columns = [desc[0].lower() for desc in cur.description]
+        
+        un_col = next((c for c in columns if 'unidad' in c and 'negocio' in c), None)
+        if not un_col:
+            # Fallback a un nombre probable si está vacía la tabla
+            un_col = 'unidaddenegocio'
+            
+        # Ahora consultamos usando la columna real
+        query = f"""
+            SELECT DISTINCT TRIM(COALESCE({un_col}, '')) as un 
             FROM ceesa_cee_certificados_ventas_internos 
-            WHERE unidaddenegocio IS NOT NULL AND unidaddenegocio != ''
+            WHERE {un_col} IS NOT NULL AND TRIM(COALESCE({un_col}, '')) != ''
             ORDER BY un
-        """)
+        """
+        cur.execute(query)
         unidades = [row[0] for row in cur.fetchall() if row[0]]
         cur.close()
         return {"data": unidades}
     except Exception as e:
+        print(f"Error en list_unidades: {e}")
         return {"data": [], "error": str(e)}
     finally:
         if conn:
