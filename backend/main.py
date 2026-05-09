@@ -398,6 +398,9 @@ def get_user_unidades(user_id: int, user=Depends(get_current_user)):
         rows = [dict(zip(cols, r)) for r in cur.fetchall()]
         cur.close()
         return {"data": rows}
+    except Exception as e:
+        print(f"Error en get_user_unidades: {e}")
+        return {"data": []}
     finally:
         conn.close()
 
