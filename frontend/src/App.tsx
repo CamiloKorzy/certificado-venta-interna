@@ -935,7 +935,6 @@ function Configuracion({ token }: { token: string }) {
   const [modalUser, setModalUser] = useState<any>(null);
   const [userUnidades, setUserUnidades] = useState<any[]>([]);
   const [savingUn, setSavingUn] = useState(false);
-  const [savingUn, setSavingUn] = useState(false);
   const [modalLoading, setModalLoading] = useState(false);
   const [modalMsg, setModalMsg] = useState({ text: '', type: '' });
   const [configTab, setConfigTab] = useState<'usuarios' | 'audit'>('usuarios');
