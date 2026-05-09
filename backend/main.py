@@ -57,10 +57,28 @@ APP_URL = os.environ.get("APP_URL", "https://certificado-venta-interna.vercel.ap
 def get_aurora():
     return psycopg2.connect(host=DB_HOST, port=DB_PORT, database=DB_NAME, user=DB_USER, password=DB_PASS, sslmode="require")
 
+import socket
+
+# PARCHE PARA VERCEL: Forzar IPv4 (AF_INET)
+# Vercel intenta usar IPv6 por defecto para Supabase, pero falla con "Cannot assign requested address".
+old_getaddrinfo = socket.getaddrinfo
+def new_getaddrinfo(*args, **kwargs):
+    responses = old_getaddrinfo(*args, **kwargs)
+    return [r for r in responses if r[0] == socket.AF_INET]
+socket.getaddrinfo = new_getaddrinfo
+
 def get_supabase():
     if not SUPABASE_DB_URL:
         raise HTTPException(status_code=500, detail="SUPABASE_DB_URL no configurada")
-    return psycopg2.connect(SUPABASE_DB_URL)
+    try:
+        return psycopg2.connect(SUPABASE_DB_URL, connect_timeout=10)
+    except Exception as e:
+        if "Cannot assign requested address" in str(e) or "IPv6" in str(e):
+            raise HTTPException(
+                status_code=500, 
+                detail="Error de IPv6 en Vercel. Por favor, entrá a Supabase -> Project Settings -> Database y copiá la URL del 'Connection Pooler' (puerto 6543) y reemplazá SUPABASE_DB_URL en Vercel."
+            )
+        raise e
 
 # ─── Auto-setup: crea tablas en Supabase si no existen ───
 _setup_done = False
