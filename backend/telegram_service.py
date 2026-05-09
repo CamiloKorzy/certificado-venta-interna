@@ -53,25 +53,50 @@ def send_telegram_message(chat_id: str, text: str, reply_markup: dict = None) ->
 
 
 def telegram_nuevo_certificado(chat_id: str, comprobante: str, descripcion: str, 
-                                unidad: str, total: float, link: str) -> dict:
-    """Notifica al Responsable de UN que se registró un nuevo certificado."""
-    mensaje = f"""📋 <b>Nuevo Certificado de Venta Interna</b>
-<b>Comprobante:</b> {comprobante}
+                                unidad: str, total: float, link: str,
+                                estado: str = "", es_modificacion: bool = False, finnegans_link: str = "",
+                                actividad: str = "") -> dict:
+    """Notifica al Responsable de UN que se registró un nuevo certificado o se modificó."""
+    import html
+    # Determinar si es modificación
+    titulo = "NUEVO COMPROBANTE" if not es_modificacion else "COMPROBANTE MODIFICADO"
+    
+    mensaje = f"""📋 <b>[CERTIFICADO DE VENTA INTERNA]</b>
+<b>{titulo}:</b> {comprobante}
 <b>Unidad de Negocio:</b> {unidad}
 <b>Descripción:</b> {descripcion}
-<b>Total:</b> ${total:,.2f}
+<b>Total:</b> ${total:,.2f}"""
 
-Se requiere su revisión y autorización.
-👉 <a href="{link}">Abrir Dashboard de Certificados</a>"""
+    if estado:
+        mensaje += f"\n<b>Estado:</b> {estado}"
+        
+    if actividad:
+        mensaje += f"\n⏳ <b>Actividad:</b> <i>{html.escape(actividad)}</i>"
+        
+    mensaje += f"\n\nSe requiere su revisión.\n👉 <a href=\"{link}\">Abrir Dashboard de Certificados</a>"
+
+    reply_markup = None
+    # Solo mostrar el botón de Autorizar si hay una actividad pendiente identificada
+    if actividad and finnegans_link:
+        # Botón con texto dinámico truncado si es muy largo (Telegram limite ~64 bytes)
+        max_btn_len = 45
+        short_act = actividad[:max_btn_len] + "..." if len(actividad) > max_btn_len else actividad
+        btn_text = f"🔗 Autorizar: {short_act}"
+        
+        reply_markup = {
+            "inline_keyboard": [
+                [{"text": btn_text, "url": finnegans_link}]
+            ]
+        }
     
-    return send_telegram_message(chat_id, mensaje)
+    return send_telegram_message(chat_id, mensaje, reply_markup=reply_markup)
 
 
 def telegram_certificado_autorizado(chat_id: str, comprobante: str, 
                                      quien_autorizo: str) -> dict:
     """Confirma que un certificado fue autorizado."""
-    mensaje = f"""✅ <b>Certificado Autorizado</b>
-<b>Comprobante:</b> {comprobante}
+    mensaje = f"""✅ <b>[CERTIFICADO DE VENTA INTERNA]</b>
+<b>Comprobante Autorizado:</b> {comprobante}
 <b>Autorizado por:</b> {quien_autorizo}
 
 El certificado ha sido aprobado correctamente."""
@@ -81,9 +106,10 @@ El certificado ha sido aprobado correctamente."""
 
 def telegram_test(chat_id: str) -> dict:
     """Envía un mensaje de prueba para verificar conectividad."""
-    mensaje = """🔔 <b>Test de Conectividad</b>
+    mensaje = """🔔 <b>[CERTIFICADO DE VENTA INTERNA]</b>
+<b>Test de Conectividad</b>
     
 Este es un mensaje de prueba del sistema de Certificados de Ventas Internos CEE ENRIQUEZ.
-Si recibió este mensaje, la integración con Telegram funciona correctamente. ✅"""
+Si recibió este mensaje, la integración con Telegram funciona correctamente y está lista para notificar comprobantes. ✅"""
     
     return send_telegram_message(chat_id, mensaje)

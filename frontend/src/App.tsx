@@ -931,23 +931,38 @@ function Configuracion({ token }: { token: string }) {
   const [form, setForm] = useState<any>({ id: null, nombre: '', email: '', password: '', rol: 'consulta', telegram_chat_id: '', activo: 1 });
   const [editing, setEditing] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
   const [modalUser, setModalUser] = useState<any>(null);
   const [userUnidades, setUserUnidades] = useState<any[]>([]);
   const [savingUn, setSavingUn] = useState(false);
+  const [savingUn, setSavingUn] = useState(false);
   const [modalLoading, setModalLoading] = useState(false);
+  const [modalMsg, setModalMsg] = useState({ text: '', type: '' });
+  const [configTab, setConfigTab] = useState<'usuarios' | 'audit'>('usuarios');
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
     apiFetch('/api/usuarios', token).then(r => setUsuarios(r.data || [])).catch(console.error).finally(() => setLoading(false));
   }, [token]);
+  
+  const loadAudit = useCallback(() => {
+    setAuditLoading(true);
+    apiFetch('/api/audit-logs', token).then(r => setAuditLogs(r.data || [])).catch(console.error).finally(() => setAuditLoading(false));
+  }, [token]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (configTab === 'usuarios') load();
+    else if (configTab === 'audit') loadAudit();
+  }, [configTab, load, loadAudit]);
 
-  const resetForm = () => { setForm({ id: null, nombre: '', email: '', password: '', rol: 'consulta', telegram_chat_id: '', activo: 1 }); setEditing(false); };
+  const resetForm = () => { setForm({ id: null, nombre: '', email: '', password: '', rol: 'consulta', telegram_chat_id: '', activo: 1 }); setEditing(false); setErrorMsg(''); };
 
   const saveUser = async () => {
-    if (!form.email || !form.nombre) return alert('Complete Nombre y Email');
-    if (!form.id && !form.password) return alert('Contraseña requerida para nuevo usuario');
+    setErrorMsg('');
+    if (!form.email || !form.nombre) return setErrorMsg('Complete Nombre y Email');
+    if (!form.id && !form.password) return setErrorMsg('Contraseña requerida para nuevo usuario');
     try {
       if (form.id) {
         await apiFetch(`/api/usuarios/${form.id}`, token, { method: 'PUT', body: JSON.stringify(form) });
@@ -956,7 +971,7 @@ function Configuracion({ token }: { token: string }) {
       }
       setSaveMsg('✅ Usuario guardado'); setTimeout(() => setSaveMsg(''), 3000);
       load(); resetForm();
-    } catch (e: any) { alert('Error: ' + e.message); }
+    } catch (e: any) { setErrorMsg('Error: ' + e.message); }
   };
 
   const deleteUser = async (id: number) => {
@@ -968,12 +983,16 @@ function Configuracion({ token }: { token: string }) {
   const testTelegram = async (id: number) => {
     try {
       const r = await apiFetch(`/api/telegram-test/${id}`, token, { method: 'POST' });
-      alert(r.ok ? '✅ Mensaje de prueba enviado a Telegram' : '❌ Error: ' + (r.error || 'desconocido'));
-    } catch (e: any) { alert('Error: ' + e.message); }
+      if (r.ok) {
+        setSaveMsg('✅ Mensaje enviado a Telegram'); setTimeout(() => setSaveMsg(''), 3000);
+      } else {
+        setErrorMsg('❌ Error: ' + (r.error || 'desconocido')); setTimeout(() => setErrorMsg(''), 4000);
+      }
+    } catch (e: any) { setErrorMsg('Error: ' + e.message); setTimeout(() => setErrorMsg(''), 4000); }
   };
 
   const openUnidades = async (u: any) => {
-    setModalUser(u); setModalLoading(true);
+    setModalUser(u); setModalLoading(true); setModalMsg({ text: '', type: '' });
     try {
       const [baseRes, userRes] = await Promise.all([
         apiFetch('/api/unidades-negocio', token),
@@ -996,23 +1015,32 @@ function Configuracion({ token }: { token: string }) {
   };
 
   const saveUnidades = async () => {
-    setSavingUn(true);
+    setSavingUn(true); setModalMsg({ text: '', type: '' });
     try {
       const active = userUnidades.filter((u: any) => u.notifica_email || u.notifica_telegram);
       await apiFetch(`/api/usuarios/${modalUser.id}/unidades`, token, { method: 'PUT', body: JSON.stringify(active) });
-      alert('✅ Unidades y notificaciones actualizadas'); setModalUser(null);
-    } catch (e: any) { alert('Error: ' + e.message); }
+      setModalMsg({ text: '✅ Unidades y notificaciones actualizadas', type: 'success' });
+      setTimeout(() => setModalUser(null), 1500);
+    } catch (e: any) { setModalMsg({ text: '❌ Error: ' + e.message, type: 'error' }); }
     setSavingUn(false);
   };
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
-      <div className="flex items-center gap-3 mb-2">
-        <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl"><Settings size={28} /></div>
-        <div><h2 className="text-2xl font-bold text-slate-800">Configuración</h2><p className="text-sm text-slate-500">Gestión de usuarios, roles y notificaciones</p></div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
+        <div className="flex items-center gap-3">
+          <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl"><Settings size={28} /></div>
+          <div><h2 className="text-2xl font-bold text-slate-800">Configuración</h2><p className="text-sm text-slate-500">Gestión de usuarios y auditoría</p></div>
+        </div>
+        <div className="flex bg-slate-100 p-1 rounded-xl self-start sm:self-auto">
+          <button onClick={() => setConfigTab('usuarios')} className={`px-4 py-2 text-sm font-bold rounded-lg transition-colors ${configTab === 'usuarios' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Usuarios</button>
+          <button onClick={() => setConfigTab('audit')} className={`px-4 py-2 text-sm font-bold rounded-lg transition-colors ${configTab === 'audit' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Registro Auditoría</button>
+        </div>
       </div>
 
-      {/* Formulario */}
+      {configTab === 'usuarios' ? (
+        <>
+          {/* Formulario */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
         <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4"><Users size={18} /> {editing ? 'Editar Usuario' : 'Nuevo Usuario'}</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
@@ -1030,6 +1058,7 @@ function Configuracion({ token }: { token: string }) {
             <input className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50" placeholder="Ej: 123456789" value={form.telegram_chat_id || ''} onChange={e => setForm({...form, telegram_chat_id: e.target.value})} />
             <p className="text-[10px] text-slate-400 mt-1">ID numérico obtenido del Bot</p></div>
         </div>
+        {errorMsg && <div className="mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm font-medium flex items-center gap-2"><span className="text-xl">⚠️</span> {errorMsg}</div>}
         <div className="flex gap-2 mt-4 items-center">
           <button onClick={saveUser} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-5 py-2.5 rounded-lg transition-colors flex items-center gap-2"><Save size={14} /> Guardar</button>
           {editing && <button onClick={resetForm} className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold px-4 py-2.5 rounded-lg transition-colors flex items-center gap-2"><X size={14} /> Cancelar</button>}
@@ -1045,6 +1074,7 @@ function Configuracion({ token }: { token: string }) {
               <th className="text-left px-5 py-3 font-bold text-slate-600 uppercase text-xs tracking-wider">Nombre</th>
               <th className="text-left px-5 py-3 font-bold text-slate-600 uppercase text-xs tracking-wider">Email</th>
               <th className="text-left px-5 py-3 font-bold text-slate-600 uppercase text-xs tracking-wider">Perfil</th>
+              <th className="text-left px-5 py-3 font-bold text-slate-600 uppercase text-xs tracking-wider">Sucursales</th>
               <th className="text-left px-5 py-3 font-bold text-slate-600 uppercase text-xs tracking-wider">Telegram</th>
               <th className="text-left px-5 py-3 font-bold text-slate-600 uppercase text-xs tracking-wider">Estado</th>
               <th className="px-5 py-3"></th>
@@ -1055,11 +1085,16 @@ function Configuracion({ token }: { token: string }) {
                   <td className="px-5 py-3 font-semibold text-slate-800">{u.nombre}</td>
                   <td className="px-5 py-3 text-slate-500 text-xs">{u.email}</td>
                   <td className="px-5 py-3"><span className="text-xs font-bold bg-blue-50 text-blue-700 px-2.5 py-1 rounded-md border border-blue-100">{ROLES_MAP[u.rol] || u.rol}</span></td>
+                  <td className="px-5 py-3">
+                    <span className={`text-xs font-bold px-2 py-1 rounded-md border ${u.sucursales_asignadas > 0 ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                      {u.sucursales_asignadas > 0 ? `${u.sucursales_asignadas} asignadas` : 'Ninguna'}
+                    </span>
+                  </td>
                   <td className="px-5 py-3 text-xs text-slate-500 font-mono">{u.telegram_chat_id || '—'}</td>
                   <td className="px-5 py-3"><span className={`text-xs font-bold px-2.5 py-1 rounded-md border ${u.activo ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-red-50 text-red-600 border-red-100'}`}>{u.activo ? 'Activo' : 'Inactivo'}</span></td>
                   <td className="px-5 py-3">
                     <div className="flex gap-1">
-                      <button onClick={() => openUnidades(u)} className="p-2 hover:bg-blue-50 rounded-lg text-blue-600 transition-colors" title="Notificaciones"><Bell size={15} /></button>
+                      <button onClick={() => openUnidades(u)} className="p-2 hover:bg-blue-50 rounded-lg text-blue-600 transition-colors" title="Asignar Sucursales"><Bell size={15} /></button>
                       {u.telegram_chat_id && <button onClick={() => testTelegram(u.id)} className="p-2 hover:bg-emerald-50 rounded-lg text-emerald-600 transition-colors" title="Test Telegram"><Send size={15} /></button>}
                       <button onClick={() => { setForm({...u, password: ''}); setEditing(true); }} className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors" title="Editar"><Edit2 size={15} /></button>
                       <button onClick={() => deleteUser(u.id)} className="p-2 hover:bg-red-50 rounded-lg text-red-500 transition-colors" title="Eliminar"><Trash2 size={15} /></button>
@@ -1072,6 +1107,39 @@ function Configuracion({ token }: { token: string }) {
           </table>
         )}
       </div>
+      </>) : (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+            <h3 className="font-bold text-slate-800 flex items-center gap-2"><Shield size={18} className="text-slate-500" /> Registro de Actividad</h3>
+            <button onClick={loadAudit} className="text-sm text-blue-600 hover:text-blue-800 font-medium">Actualizar</button>
+          </div>
+          {auditLoading ? <div className="flex justify-center p-8"><Loader2 size={24} className="animate-spin text-blue-600" /></div> : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 border-b border-slate-200"><tr>
+                  <th className="text-left px-5 py-3 font-bold text-slate-600 uppercase text-xs tracking-wider">Fecha / Hora</th>
+                  <th className="text-left px-5 py-3 font-bold text-slate-600 uppercase text-xs tracking-wider">Usuario</th>
+                  <th className="text-left px-5 py-3 font-bold text-slate-600 uppercase text-xs tracking-wider">Acción</th>
+                  <th className="text-left px-5 py-3 font-bold text-slate-600 uppercase text-xs tracking-wider">Detalles</th>
+                </tr></thead>
+                <tbody>
+                  {auditLogs.map((log: any) => (
+                    <tr key={log.id} className="border-b border-slate-100 hover:bg-slate-50/50">
+                      <td className="px-5 py-3 text-slate-500 whitespace-nowrap">{new Date(log.fecha).toLocaleString('es-AR')}</td>
+                      <td className="px-5 py-3 font-medium text-slate-800">{log.usuario_email}</td>
+                      <td className="px-5 py-3">
+                        <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded border border-slate-200">{log.accion}</span>
+                      </td>
+                      <td className="px-5 py-3 text-slate-600 text-xs">{log.detalles}</td>
+                    </tr>
+                  ))}
+                  {auditLogs.length === 0 && <tr><td colSpan={4} className="px-5 py-8 text-center text-slate-400">No hay registros de auditoría</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Modal Unidades de Negocio */}
       {modalUser && (
@@ -1102,6 +1170,11 @@ function Configuracion({ token }: { token: string }) {
                 </table>
               )}
             </div>
+            {modalMsg.text && (
+              <div className={`px-5 py-3 border-t text-sm font-medium flex items-center gap-2 ${modalMsg.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
+                {modalMsg.type === 'success' ? <Check size={16} /> : <span className="text-xl leading-none">⚠️</span>} {modalMsg.text}
+              </div>
+            )}
             <div className="p-4 border-t border-slate-100 flex justify-end gap-3 bg-white rounded-b-2xl">
               <button onClick={() => setModalUser(null)} className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold px-5 py-2.5 rounded-lg transition-colors">Cancelar</button>
               <button onClick={saveUnidades} disabled={savingUn} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-5 py-2.5 rounded-lg transition-colors flex items-center gap-2">

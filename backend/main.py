@@ -126,6 +126,15 @@ def auto_setup_db():
             CREATE INDEX IF NOT EXISTS idx_cert_usuarios_email ON cert_usuarios(email);
             CREATE INDEX IF NOT EXISTS idx_cert_usu_unid_usuario ON cert_usuarios_unidades(usuario_id);
             CREATE INDEX IF NOT EXISTS idx_cert_notif_fecha ON cert_notificaciones_log(fecha);
+            
+            CREATE TABLE IF NOT EXISTS cert_audit_log (
+                id SERIAL PRIMARY KEY,
+                usuario_email TEXT,
+                accion TEXT,
+                detalles TEXT,
+                fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS idx_cert_audit_fecha ON cert_audit_log(fecha);
         """)
         # Crear admin por defecto si no existe
         cur.execute("SELECT COUNT(*) FROM cert_usuarios WHERE email = 'admin@ceeenriquez.com'")
@@ -136,12 +145,33 @@ def auto_setup_db():
                 VALUES ('admin@ceeenriquez.com', 'Administrador', %s, 'admin', 1)
             """, (admin_hash,))
             print("[SETUP] ✅ Usuario admin creado: admin@ceeenriquez.com / admin2026")
+            
+        # Migración: Agregar columna estado_doc si no existe
+        try:
+            cur.execute("ALTER TABLE cert_notificaciones_log ADD COLUMN IF NOT EXISTS estado_doc TEXT;")
+        except Exception as e:
+            pass
+            
         print("[SETUP] ✅ Tablas cert_* verificadas/creadas")
         cur.close()
         conn.close()
     except Exception as e:
         print(f"[SETUP] ⚠️ Error en auto-setup: {e}")
         _setup_done = False  # Reintentar en próxima llamada
+
+def log_action(email: str, accion: str, detalles: str = ""):
+    try:
+        conn = get_supabase()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO cert_audit_log (usuario_email, accion, detalles) VALUES (%s, %s, %s)",
+            (email, accion, detalles)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"[AUDIT LOG ERROR] {e}")
 
 # ─── Auth Dependency ───
 async def get_current_user(request: Request):
@@ -245,9 +275,11 @@ def login(req: LoginRequest):
             raise HTTPException(status_code=401, detail="Usuario desactivado")
         
         if not verify_password(req.password, pwd_hash):
+            log_action(req.email, "LOGIN_FAILED", "Intento de login con contraseña incorrecta")
             raise HTTPException(status_code=401, detail="Credenciales inválidas")
         
         token = create_token(user_id, email, rol, nombre)
+        log_action(email, "LOGIN", "Inicio de sesión exitoso")
         return {"token": token, "user": {"id": user_id, "email": email, "nombre": nombre, "rol": rol}}
     except HTTPException:
         raise
@@ -269,7 +301,12 @@ def list_usuarios(admin=Depends(require_admin)):
     conn = get_supabase()
     try:
         cur = conn.cursor()
-        cur.execute("SELECT id, email, nombre, rol, telegram_chat_id, activo, created_at FROM cert_usuarios ORDER BY id")
+        cur.execute("""
+            SELECT u.id, u.email, u.nombre, u.rol, u.telegram_chat_id, u.activo, u.created_at,
+                   (SELECT COUNT(*) FROM cert_usuarios_unidades cu WHERE cu.usuario_id = u.id) as sucursales_asignadas
+            FROM cert_usuarios u
+            ORDER BY u.id
+        """)
         cols = [d[0] for d in cur.description]
         rows = [dict(zip(cols, r)) for r in cur.fetchall()]
         cur.close()
@@ -290,6 +327,7 @@ def create_usuario(body: UsuarioCreate, admin=Depends(require_admin)):
         new_id = cur.fetchone()[0]
         conn.commit()
         cur.close()
+        log_action(admin["email"], "NUEVO_USUARIO", f"Creó usuario {body.email} (Rol: {body.rol})")
         return {"ok": True, "id": new_id}
     except psycopg2.errors.UniqueViolation:
         conn.rollback()
@@ -325,6 +363,7 @@ def update_usuario(user_id: int, body: UsuarioUpdate, admin=Depends(require_admi
         cur.execute(f"UPDATE cert_usuarios SET {', '.join(updates)} WHERE id = %s", params)
         conn.commit()
         cur.close()
+        log_action(admin["email"], "ACTUALIZAR_USUARIO", f"Actualizó usuario ID {user_id}")
         return {"ok": True}
     finally:
         conn.close()
@@ -337,6 +376,7 @@ def delete_usuario(user_id: int, admin=Depends(require_admin)):
         cur.execute("DELETE FROM cert_usuarios WHERE id = %s", (user_id,))
         conn.commit()
         cur.close()
+        log_action(admin["email"], "ELIMINAR_USUARIO", f"Eliminó usuario ID {user_id}")
         return {"ok": True}
     finally:
         conn.close()
@@ -377,9 +417,153 @@ def update_user_unidades(user_id: int, body: List[UnidadAsignacion], admin=Depen
                 """, (user_id, u.unidad_negocio, u.notifica_email, u.notifica_telegram))
         conn.commit()
         cur.close()
+        log_action(admin["email"], "ACTUALIZAR_SUCURSALES", f"Actualizó sucursales para usuario ID {user_id}")
         return {"ok": True}
     finally:
         conn.close()
+
+@app.get("/api/audit-logs")
+def get_audit_logs(admin=Depends(require_admin)):
+    conn = get_supabase()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT id, usuario_email, accion, detalles, fecha FROM cert_audit_log ORDER BY fecha DESC LIMIT 500")
+        cols = [d[0] for d in cur.description]
+        rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+        cur.close()
+        return {"data": rows}
+    finally:
+        conn.close()
+
+# ═══════════════════════════════════════════════════════
+# CRON & BOT
+# ═══════════════════════════════════════════════════════
+
+@app.get("/api/cron/notificar")
+def cron_notificar():
+    """Endpoint llamado periódicamente por Vercel Cron para notificar nuevos certificados."""
+    conn_supa = get_supabase()
+    conn_aurora = None
+    try:
+        cur_supa = conn_supa.cursor()
+        cur_supa.execute("SELECT comprobante, estado_doc FROM cert_notificaciones_log WHERE tipo = 'cron_telegram'")
+        ya_notificados = {row[0]: row[1] for row in cur_supa.fetchall()}
+        
+        conn_aurora = get_aurora()
+        cur_aurora = conn_aurora.cursor()
+        # Obtener los últimos 200 comprobantes con un SELECT * para obtener esquema dinámico
+        cur_aurora.execute("""
+            SELECT *
+            FROM ceesa_cee_certificados_ventas_internos
+            WHERE numerodocumento IS NOT NULL AND numerodocumento != '' AND numerodocumento != 'NULL'
+            ORDER BY numerodocumento DESC
+            LIMIT 200
+        """)
+        cols = [desc[0].lower() for desc in cur_aurora.description]
+        recientes_rows = cur_aurora.fetchall()
+        cur_aurora.close()
+        
+        a_notificar = []
+        for row in recientes_rows:
+            record = dict(zip(cols, row))
+            doc = str(record.get('numerodocumento') or '').strip()
+            if not doc or doc == 'NULL': continue
+            
+            un = str(record.get('unidaddenegocio') or '').strip()
+            desc = str(record.get('documentodescripcion') or record.get('detalledescripcion') or '').strip()
+            imp = record.get('importe', 0)
+            
+            # Buscar el estado actual y el id transaccional
+            estado_actual = str(record.get('estadoautorizacion', '')).strip()
+            # transaccionid suele ser el campo ID en Finnegans, si no id
+            trans_id = record.get('transaccionid') or record.get('id') or ''
+            
+            # Extraer actividad para botones SOLO si el estado está pendiente (lógica de Compras)
+            actividad = ""
+            estados_pendientes = ["doc. pendiente firmar", "pendiente de autorización", "autorización", "pendiente"]
+            if estado_actual.lower() in estados_pendientes:
+                for k in ['actividadworkflow', 'actividad', 'nombreactividad']:
+                    if record.get(k) and str(record.get(k)).strip() and str(record.get(k)).strip().upper() not in ('NONE', 'NULL', ''):
+                        actividad = str(record.get(k)).strip()
+                        break
+                
+                if not actividad and un:
+                    nombre_sucursal = un.replace(' CEE Enriquez', '').replace(' CEE', '').strip()
+                    actividad = f"Autoriza N1 por {nombre_sucursal}"
+            
+            estado_previo = ya_notificados.get(doc)
+            es_modificacion = False
+            
+            if doc not in ya_notificados:
+                # Es nuevo
+                a_notificar.append((doc, un, desc, imp, estado_actual, trans_id, es_modificacion, actividad))
+            elif estado_previo != estado_actual and estado_actual:
+                # Modificado (el estado cambió y no está vacío)
+                es_modificacion = True
+                a_notificar.append((doc, un, desc, imp, estado_actual, trans_id, es_modificacion, actividad))
+                
+        enviados = 0
+        for doc, un, desc, imp_raw, estado, trans_id, es_modificacion, actividad in a_notificar:
+            try:
+                imp = float(str(imp_raw or '0').replace(',', '.'))
+            except:
+                imp = 0.0
+                
+            finnegans_link = ""
+            if trans_id:
+                # Generar link al comprobante
+                finnegans_link = f"https://go.finneg.com/mas/vista?fafViewCode=DF_VIEWER&pk={trans_id}&claseVO=CasoDirectoVO&FAFCLASE_FACADE=FAFTransaccionBSuiteEJB&appitemID=50394"
+                
+            # Buscar destinatarios
+            cur_supa.execute("""
+                SELECT u.nombre, u.telegram_chat_id 
+                FROM cert_usuarios_unidades cu 
+                JOIN cert_usuarios u ON cu.usuario_id = u.id 
+                WHERE cu.unidad_negocio = %s AND cu.notifica_telegram = true AND u.activo = 1
+            """, (un,))
+            destinatarios = cur_supa.fetchall()
+            
+            if destinatarios:
+                for nombre, chat_id in destinatarios:
+                    if chat_id:
+                        telegram_nuevo_certificado(
+                            chat_id=chat_id, 
+                            comprobante=doc, 
+                            descripcion=desc, 
+                            unidad=un, 
+                            total=imp, 
+                            link=APP_URL, 
+                            estado=estado, 
+                            es_modificacion=es_modificacion, 
+                            finnegans_link=finnegans_link,
+                            actividad=actividad
+                        )
+            
+            # Marcar o actualizar como notificado
+            if not es_modificacion:
+                cur_supa.execute("""
+                    INSERT INTO cert_notificaciones_log (tipo, comprobante, mensaje, estado, estado_doc)
+                    VALUES ('cron_telegram', %s, 'Procesado por cron', 'ok', %s)
+                """, (doc, estado))
+            else:
+                cur_supa.execute("""
+                    UPDATE cert_notificaciones_log 
+                    SET estado_doc = %s, fecha = CURRENT_TIMESTAMP
+                    WHERE comprobante = %s AND tipo = 'cron_telegram'
+                """, (estado, doc))
+                
+            conn_supa.commit()
+            enviados += 1
+            
+        cur_supa.close()
+        return {"ok": True, "procesados": enviados, "total_revisados": len(recientes_rows)}
+    except Exception as e:
+        return {"error": str(e)}
+    finally:
+        if conn_supa:
+            conn_supa.close()
+        if conn_aurora:
+            conn_aurora.close()
 
 @app.get("/api/unidades-negocio")
 def list_unidades(user=Depends(get_current_user)):
