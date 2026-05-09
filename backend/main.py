@@ -631,12 +631,18 @@ def list_unidades(user=Depends(get_current_user)):
         cur.execute("SELECT * FROM ceesa_cee_certificados_ventas_internos LIMIT 1")
         columns = [desc[0].lower() for desc in cur.description]
         
+        # Estrategia de resolución de columna (Finnegans usa 'organizacion' para Unidad de Negocio)
         un_col = next((c for c in columns if 'unidad' in c and 'negocio' in c), None)
+        
         if not un_col:
-            # Fallback a un nombre probable si está vacía la tabla
-            un_col = 'unidaddenegocio'
+            # Fallbacks probables ordenados por prioridad
+            fallbacks = ['organizacion', 'empresa', 'sucursal', 'unidad']
+            un_col = next((c for c in fallbacks if c in columns), None)
             
-        # Ahora consultamos usando la columna real
+        if not un_col:
+            raise Exception(f"No se pudo determinar la columna de Unidad de Negocio. Columnas disponibles: {', '.join(columns[:10])}...")
+            
+        # Ahora consultamos usando la columna real resuelta
         query = f"""
             SELECT DISTINCT TRIM(COALESCE({un_col}, '')) as un 
             FROM ceesa_cee_certificados_ventas_internos 
