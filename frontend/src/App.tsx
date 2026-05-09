@@ -1085,15 +1085,18 @@ function Configuracion({ token }: { token: string }) {
                   <td className="px-5 py-3 text-slate-500 text-xs">{u.email}</td>
                   <td className="px-5 py-3"><span className="text-xs font-bold bg-blue-50 text-blue-700 px-2.5 py-1 rounded-md border border-blue-100">{ROLES_MAP[u.rol] || u.rol}</span></td>
                   <td className="px-5 py-3">
-                    <span className={`text-xs font-bold px-2 py-1 rounded-md border ${u.sucursales_asignadas > 0 ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
-                      {u.sucursales_asignadas > 0 ? `${u.sucursales_asignadas} asignadas` : 'Ninguna'}
-                    </span>
+                    <button 
+                      onClick={() => openUnidades(u)}
+                      title="Gestionar Sucursales"
+                      className={`text-xs font-bold px-3 py-1.5 rounded-md border transition-colors hover:shadow-sm ${u.sucursales_asignadas > 0 ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100' : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'}`}
+                    >
+                      {u.sucursales_asignadas > 0 ? `${u.sucursales_asignadas} asignadas` : 'Asignar Sucursal'}
+                    </button>
                   </td>
                   <td className="px-5 py-3 text-xs text-slate-500 font-mono">{u.telegram_chat_id || '—'}</td>
                   <td className="px-5 py-3"><span className={`text-xs font-bold px-2.5 py-1 rounded-md border ${u.activo ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-red-50 text-red-600 border-red-100'}`}>{u.activo ? 'Activo' : 'Inactivo'}</span></td>
                   <td className="px-5 py-3">
                     <div className="flex gap-1">
-                      <button onClick={() => openUnidades(u)} className="p-2 hover:bg-blue-50 rounded-lg text-blue-600 transition-colors" title="Asignar Sucursales"><Bell size={15} /></button>
                       {u.telegram_chat_id && <button onClick={() => testTelegram(u.id)} className="p-2 hover:bg-emerald-50 rounded-lg text-emerald-600 transition-colors" title="Test Telegram"><Send size={15} /></button>}
                       <button onClick={() => { setForm({...u, password: ''}); setEditing(true); }} className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors" title="Editar"><Edit2 size={15} /></button>
                       <button onClick={() => deleteUser(u.id)} className="p-2 hover:bg-red-50 rounded-lg text-red-500 transition-colors" title="Eliminar"><Trash2 size={15} /></button>
