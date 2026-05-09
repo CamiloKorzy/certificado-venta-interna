@@ -568,6 +568,57 @@ def cron_notificar():
         if conn_aurora:
             conn_aurora.close()
 
+@app.get("/api/debug-unidades")
+def debug_unidades():
+    """Endpoint PÚBLICO de diagnóstico para verificar conectividad Aurora y columnas disponibles."""
+    import traceback
+    result = {"step": "init", "aurora_host": DB_HOST[:40] + "..."}
+    try:
+        result["step"] = "connecting"
+        conn = get_aurora()
+        result["step"] = "connected"
+        cur = conn.cursor()
+        
+        # 1. Verificar que la tabla existe y obtener columnas
+        cur.execute("SELECT * FROM ceesa_cee_certificados_ventas_internos LIMIT 1")
+        columns = [desc[0].lower() for desc in cur.description]
+        result["columns_count"] = len(columns)
+        result["columns_sample"] = columns[:20]
+        
+        # 2. Buscar columna de unidad de negocio
+        un_col = next((c for c in columns if 'unidad' in c and 'negocio' in c), None)
+        result["un_column_found"] = un_col
+        
+        if not un_col:
+            result["error"] = "No se encontró columna con 'unidad' y 'negocio'"
+            cur.close(); conn.close()
+            return result
+        
+        # 3. Contar registros totales
+        cur.execute(f"SELECT COUNT(*) FROM ceesa_cee_certificados_ventas_internos")
+        result["total_rows"] = cur.fetchone()[0]
+        
+        # 4. Obtener unidades distintas
+        query = f"""
+            SELECT DISTINCT TRIM(COALESCE({un_col}, '')) as un 
+            FROM ceesa_cee_certificados_ventas_internos 
+            WHERE {un_col} IS NOT NULL AND TRIM(COALESCE({un_col}, '')) != ''
+            ORDER BY un
+        """
+        cur.execute(query)
+        unidades = [row[0] for row in cur.fetchall() if row[0]]
+        result["unidades_count"] = len(unidades)
+        result["unidades"] = unidades
+        result["status"] = "OK"
+        
+        cur.close()
+        conn.close()
+        return result
+    except Exception as e:
+        result["error"] = str(e)
+        result["trace"] = traceback.format_exc()[:500]
+        return result
+
 @app.get("/api/unidades-negocio")
 def list_unidades(user=Depends(get_current_user)):
     """Obtiene las Unidades de Negocio disponibles desde el dataset de Aurora."""
@@ -597,8 +648,10 @@ def list_unidades(user=Depends(get_current_user)):
         cur.close()
         return {"data": unidades}
     except Exception as e:
-        print(f"Error en list_unidades: {e}")
-        return {"data": [], "error": str(e)}
+        import traceback
+        tb = traceback.format_exc()
+        print(f"Error en list_unidades: {e}\n{tb}")
+        return {"data": [], "error": str(e), "trace": tb[:300]}
     finally:
         if conn:
             conn.close()
