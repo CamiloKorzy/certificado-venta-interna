@@ -1019,9 +1019,15 @@ function Configuracion({ token }: { token: string }) {
         setModalMsg({ text: '⚠️ Aurora no devolvió unidades de negocio. Verificar tabla ceesa_cee_certificados_ventas_internos en producción.', type: 'error' });
       }
       
-      setUserUnidades(base.map((un: string) => {
-        const existing = userInfo.find((e: any) => String(e.unidad_negocio).trim() === String(un).trim());
-        return existing || { unidad_negocio: un, notifica_email: false, notifica_telegram: false };
+      setUserUnidades(base.map((un: any) => {
+        const sucursalName = typeof un === 'string' ? un : un.sucursal;
+        const empresaPadre = typeof un === 'string' ? '' : un.empresa_padre;
+        const display = empresaPadre ? `${sucursalName} (${empresaPadre})` : sucursalName;
+        
+        const existing = userInfo.find((e: any) => String(e.unidad_negocio).trim() === String(sucursalName).trim());
+        return existing 
+          ? { ...existing, unidad_negocio: sucursalName, display_name: display } 
+          : { unidad_negocio: sucursalName, display_name: display, notifica_email: false, notifica_telegram: false };
       }));
     } catch (e: any) { 
       console.error(e); 
@@ -1186,7 +1192,7 @@ function Configuracion({ token }: { token: string }) {
                   <tbody>
                     {userUnidades.map((u: any, idx: number) => (
                       <tr key={u.unidad_negocio} className="border-b border-slate-100 hover:bg-slate-50/50">
-                        <td className="px-4 py-2.5 font-medium text-slate-700">{u.unidad_negocio}</td>
+                        <td className="px-4 py-2.5 font-medium text-slate-700">{u.display_name || u.unidad_negocio}</td>
                         <td className="px-4 py-2.5 text-center"><input type="checkbox" className="w-4 h-4 text-blue-600 rounded cursor-pointer" checked={u.notifica_email} onChange={() => toggleUn(idx, 'notifica_email')} /></td>
                         <td className="px-4 py-2.5 text-center"><input type="checkbox" className="w-4 h-4 text-blue-600 rounded cursor-pointer" checked={u.notifica_telegram} onChange={() => toggleUn(idx, 'notifica_telegram')} /></td>
                       </tr>

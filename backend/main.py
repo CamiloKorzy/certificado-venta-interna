@@ -642,15 +642,19 @@ def list_unidades(user=Depends(get_current_user)):
         if not un_col:
             raise Exception(f"No se pudo determinar la columna de Unidad de Negocio. Columnas disponibles: {', '.join(columns[:10])}...")
             
-        # Ahora consultamos usando la columna real resuelta
+        # Ahora consultamos usando la columna real resuelta, haciendo JOIN con ceesa_cee_sucursales
+        # para obtener la empresa padre
         query = f"""
-            SELECT DISTINCT TRIM(COALESCE({un_col}, '')) as un 
-            FROM ceesa_cee_certificados_ventas_internos 
-            WHERE {un_col} IS NOT NULL AND TRIM(COALESCE({un_col}, '')) != ''
-            ORDER BY un
+            SELECT DISTINCT 
+                TRIM(COALESCE(c.{un_col}, '')) as sucursal,
+                TRIM(COALESCE(s.nombreempresapadre, '')) as empresa_padre
+            FROM ceesa_cee_certificados_ventas_internos c
+            LEFT JOIN ceesa_cee_sucursales s ON s.nombreempresa = c.{un_col}
+            WHERE c.{un_col} IS NOT NULL AND TRIM(COALESCE(c.{un_col}, '')) != ''
+            ORDER BY sucursal
         """
         cur.execute(query)
-        unidades = [row[0] for row in cur.fetchall() if row[0]]
+        unidades = [{"sucursal": row[0], "empresa_padre": row[1]} for row in cur.fetchall() if row[0]]
         cur.close()
         return {"data": unidades}
     except Exception as e:
