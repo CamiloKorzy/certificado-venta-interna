@@ -453,7 +453,7 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="bg-white p-2 rounded-xl h-14 w-14 flex items-center justify-center shadow-sm">
-              <img src="/Negro Fondo Blanco_Logo_CEE ENRIQUEZ.png" alt="CEE ENRIQUEZ" className="h-full w-full object-contain" />
+              <img src="/logo_cee.png" alt="CEE ENRIQUEZ" className="h-full w-full object-contain" />
             </div>
             <div>
               <h1 className="text-xl font-bold tracking-tight">Certificados de Ventas Internos</h1>
@@ -767,7 +767,7 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
                   <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50">Unidad de Negocio</th>
                   <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50">Prestador</th>
                   <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50">Estado</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50 text-right">Total Consolidado</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50 text-right pl-12">Total Consolidado</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -785,10 +785,10 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
                         <td className="px-6 py-4 text-sm text-slate-600">{comp.fecha}</td>
                         <td className="px-6 py-4 text-sm"><span className="text-slate-900 font-bold bg-slate-100 px-2 py-1 rounded text-xs border border-slate-200">{comp.id}</span></td>
                         <td className="px-6 py-4 text-sm text-slate-600 truncate max-w-[200px]" title={comp.descripcion}>{comp.descripcion}</td>
-                        <td className="px-6 py-4 text-sm text-slate-700 max-w-[150px] font-bold truncate" title={comp.unidad}>{comp.unidad}</td>
+                        <td className="px-6 py-4 text-sm text-slate-700 font-bold" title={comp.unidad}>{comp.unidad}</td>
                         <td className="px-6 py-4 text-sm text-slate-700 font-medium truncate max-w-xs">{comp.cliente}</td>
                         <td className="px-6 py-4 text-sm"><span className={`px-2 py-1 rounded text-xs font-bold border ${comp.estado === 'Autorizado' ? 'text-emerald-700 bg-emerald-50 border-emerald-100' : 'text-amber-700 bg-amber-50 border-amber-100'}`}>{comp.estado}</span></td>
-                        <td className="px-6 py-4 text-sm font-bold text-slate-800 text-right">${comp.total.toLocaleString('es-AR', {minimumFractionDigits: 2})}</td>
+                        <td className="px-6 py-4 text-sm font-bold text-slate-800 text-right pl-12 whitespace-nowrap">${comp.total.toLocaleString('es-AR', {minimumFractionDigits: 2})}</td>
                       </tr>
                       
                       {/* Fila Expandible con Detalle */}
@@ -1146,7 +1146,7 @@ export default function App() {
         <div className="max-w-[1600px] mx-auto px-6 flex items-center justify-between h-14">
           <div className="flex items-center gap-6">
             <h1 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-              <img src="/logo_cee.png" alt="CEE" className="h-8 w-8 rounded-md object-contain bg-slate-800" />
+              <img src="/logo_cee.png" alt="CEE" className="h-8 w-8 rounded-md object-contain" />
               Certificados de Ventas Internos
             </h1>
             <nav className="flex gap-1">
@@ -1154,12 +1154,10 @@ export default function App() {
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'dashboard' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
                 <span className="flex items-center gap-1.5"><LayoutDashboard size={15} /> Dashboard</span>
               </button>
-              {user?.rol === 'admin' && (
-                <button onClick={() => setView('config')}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'config' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
-                  <span className="flex items-center gap-1.5"><Settings size={15} /> Configuración</span>
-                </button>
-              )}
+              <button onClick={() => setView('config')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'config' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
+                <span className="flex items-center gap-1.5"><Settings size={15} /> Configuración</span>
+              </button>
             </nav>
           </div>
           <div className="flex items-center gap-4">
