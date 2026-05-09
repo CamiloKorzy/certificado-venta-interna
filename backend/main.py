@@ -385,21 +385,6 @@ def delete_usuario(user_id: int, admin=Depends(require_admin)):
 # GESTIÓN DE UNIDADES DE NEGOCIO POR USUARIO
 # ═══════════════════════════════════════════════════════
 
-@app.get("/api/unidades-negocio")
-def get_unidades_negocio():
-    try:
-        conn = get_aurora()
-        cur = conn.cursor()
-        cur.execute("SELECT DISTINCT unidadnegocio FROM ceesa_cee_certificados_ventas_internos WHERE unidadnegocio IS NOT NULL ORDER BY unidadnegocio")
-        # Limpiar y filtrar vacíos
-        unidades = sorted(list(set([row[0].strip() for row in cur.fetchall() if row[0] and str(row[0]).strip()])))
-        cur.close()
-        conn.close()
-        return {"data": unidades}
-    except Exception as e:
-        print(f"Error fetching unidades de negocio: {e}")
-        return {"data": []}
-
 @app.get("/api/usuarios/{user_id}/unidades")
 def get_user_unidades(user_id: int, user=Depends(get_current_user)):
     conn = get_supabase()
