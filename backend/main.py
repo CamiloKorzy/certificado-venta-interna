@@ -478,10 +478,12 @@ def cron_notificar():
             import re
             solicitante = str(record.get('solicitante') or record.get('dim. valor') or '').strip()
             solicitante = re.sub(r'(?i)Certificados?\s+de\s+Ventas?\s+Intern[oa]s?\s+para\s+', '', solicitante)
-            un = solicitante.strip()
+            equipo_solicitante = solicitante.strip()
             
-            if not un:
-                un = str(record.get('unidaddenegocio') or record.get('organizacion') or record.get('empresa') or '').strip()
+            sucursal_emisora = str(record.get('unidaddenegocio') or record.get('organizacion') or record.get('empresa') or '').strip()
+            
+            # Unidad representativa para el mensaje
+            un_principal = equipo_solicitante if equipo_solicitante else sucursal_emisora
                 
             desc = str(record.get('documentodescripcion') or record.get('detalledescripcion') or '').strip()
             imp = record.get('importe', 0)
@@ -500,8 +502,8 @@ def cron_notificar():
                         actividad = str(record.get(k)).strip()
                         break
                 
-                if not actividad and un:
-                    nombre_sucursal = un.replace(' CEE Enriquez', '').replace(' CEE', '').strip()
+                if not actividad and un_principal:
+                    nombre_sucursal = un_principal.replace(' CEE Enriquez', '').replace(' CEE', '').strip()
                     actividad = f"Autoriza N1 por {nombre_sucursal}"
             
             estado_previo = ya_notificados.get(doc)
@@ -509,14 +511,14 @@ def cron_notificar():
             
             if doc not in ya_notificados:
                 # Es nuevo
-                a_notificar.append((doc, un, desc, imp, estado_actual, trans_id, es_modificacion, actividad))
+                a_notificar.append((doc, un_principal, equipo_solicitante, sucursal_emisora, desc, imp, estado_actual, trans_id, es_modificacion, actividad))
             elif estado_previo != estado_actual and estado_actual:
                 # Modificado (el estado cambió y no está vacío)
                 es_modificacion = True
-                a_notificar.append((doc, un, desc, imp, estado_actual, trans_id, es_modificacion, actividad))
+                a_notificar.append((doc, un_principal, equipo_solicitante, sucursal_emisora, desc, imp, estado_actual, trans_id, es_modificacion, actividad))
                 
         enviados = 0
-        for doc, un, desc, imp_raw, estado, trans_id, es_modificacion, actividad in a_notificar:
+        for doc, un_principal, equipo_solicitante, sucursal_emisora, desc, imp_raw, estado, trans_id, es_modificacion, actividad in a_notificar:
             try:
                 imp = float(str(imp_raw or '0').replace(',', '.'))
             except:
@@ -527,13 +529,17 @@ def cron_notificar():
                 # Generar link al comprobante
                 finnegans_link = f"https://go.finneg.com/mas/vista?fafViewCode=DF_VIEWER&pk={trans_id}&claseVO=CasoDirectoVO&FAFCLASE_FACADE=FAFTransaccionBSuiteEJB&appitemID=50394"
                 
-            # Buscar destinatarios
+            # Buscar destinatarios (match con Equipo Solicitante o con Sucursal)
+            unidades_match = tuple(u for u in [equipo_solicitante, sucursal_emisora] if u)
+            if not unidades_match:
+                continue
+                
             cur_supa.execute("""
-                SELECT u.nombre, u.telegram_chat_id 
+                SELECT DISTINCT u.nombre, u.telegram_chat_id 
                 FROM cert_usuarios_unidades cu 
                 JOIN cert_usuarios u ON cu.usuario_id = u.id 
-                WHERE cu.unidad_negocio = %s AND cu.notifica_telegram = true AND u.activo = 1
-            """, (un,))
+                WHERE cu.unidad_negocio IN %s AND cu.notifica_telegram = true AND u.activo = 1
+            """, (unidades_match,))
             destinatarios = cur_supa.fetchall()
             
             if destinatarios:
@@ -707,27 +713,38 @@ def notificar_certificado(comprobante: str, user=Depends(get_current_user)):
             raise HTTPException(status_code=404, detail="Certificado no encontrado")
             
         record = dict(zip(columns, row))
+        import re
+        solicitante = str(record.get('solicitante') or record.get('dim. valor') or '').strip()
+        solicitante = re.sub(r'(?i)Certificados?\s+de\s+Ventas?\s+Intern[oa]s?\s+para\s+', '', solicitante)
+        equipo_solicitante = solicitante.strip()
         
-        unidad = str(record.get('unidaddenegocio') or record.get('organizacion') or record.get('empresa') or '').strip()
+        sucursal_emisora = str(record.get('unidaddenegocio') or record.get('organizacion') or record.get('empresa') or '').strip()
+        
+        un_principal = equipo_solicitante if equipo_solicitante else sucursal_emisora
+        
         descripcion = str(record.get('documentodescripcion') or record.get('detalledescripcion') or '').strip()
         try:
             total = float(record.get('importe') or 0)
         except:
             total = 0.0
         
+        unidades_match = tuple(u for u in [equipo_solicitante, sucursal_emisora] if u)
+        if not unidades_match:
+            return {"ok": False, "error": "No se determinó unidad destino ni sucursal"}
+            
         # 2. Buscar responsables de esa UN con Telegram activo
         conn_supa = get_supabase()
         cur2 = conn_supa.cursor()
         cur2.execute("""
-            SELECT u.nombre, u.telegram_chat_id 
+            SELECT DISTINCT u.nombre, u.telegram_chat_id 
             FROM cert_usuarios u
             JOIN cert_usuarios_unidades uu ON u.id = uu.usuario_id
-            WHERE uu.unidad_negocio = %s 
+            WHERE uu.unidad_negocio IN %s 
               AND uu.notifica_telegram = true 
               AND u.telegram_chat_id IS NOT NULL 
               AND u.telegram_chat_id != ''
               AND u.activo = 1
-        """, (unidad,))
+        """, (unidades_match,))
         destinatarios = cur2.fetchall()
         
         resultados = []
@@ -736,7 +753,7 @@ def notificar_certificado(comprobante: str, user=Depends(get_current_user)):
                 chat_id=chat_id,
                 comprobante=comprobante,
                 descripcion=descripcion,
-                unidad=unidad,
+                unidad=un_principal,
                 total=total,
                 link=APP_URL
             )
