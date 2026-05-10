@@ -475,7 +475,14 @@ def cron_notificar():
             doc = str(record.get('numerodocumento') or '').strip()
             if not doc or doc == 'NULL': continue
             
-            un = str(record.get('unidaddenegocio') or record.get('organizacion') or record.get('empresa') or '').strip()
+            import re
+            solicitante = str(record.get('solicitante') or record.get('dim. valor') or '').strip()
+            solicitante = re.sub(r'(?i)Certificados?\s+de\s+Ventas?\s+Intern[oa]s?\s+para\s+', '', solicitante)
+            un = solicitante.strip()
+            
+            if not un:
+                un = str(record.get('unidaddenegocio') or record.get('organizacion') or record.get('empresa') or '').strip()
+                
             desc = str(record.get('documentodescripcion') or record.get('detalledescripcion') or '').strip()
             imp = record.get('importe', 0)
             
@@ -630,23 +637,39 @@ def list_unidades(user=Depends(get_current_user)):
         conn = get_aurora()
         cur = conn.cursor()
         
-        # Leemos TODAS las sucursales directamente del dataset CEESA_CEE_SUCURSALES,
-        # tal como se hace en el Proyecto de Compras_OC, e incluimos la Empresa Padre.
-        # Vinculación directa: El campo 'Empresa' en Certificados_Ventas_Internos
-        # coincide con 'nombreempresa' en Sucursales.
-        query = """
+        # 1. Obtenemos Sucursales de la tabla maestra
+        cur.execute("""
             SELECT 
                 TRIM(COALESCE(nombreempresa, '')) as sucursal,
                 MAX(TRIM(COALESCE(nombreempresapadre, ''))) as empresa_padre
             FROM ceesa_cee_sucursales
             WHERE nombreempresa IS NOT NULL AND TRIM(COALESCE(nombreempresa, '')) != ''
             GROUP BY TRIM(COALESCE(nombreempresa, ''))
-            ORDER BY sucursal ASC
-        """
-        cur.execute(query)
-        unidades = [{"sucursal": row[0], "empresa_padre": row[1]} for row in cur.fetchall() if row[0]]
+        """)
+        unidades_lista = [{"sucursal": r[0], "empresa_padre": r[1]} for r in cur.fetchall() if r[0]]
+        
+        # 2. Obtenemos Equipos Solicitantes (Unidades de Negocio)
+        try:
+            cur.execute("""
+                SELECT DISTINCT TRIM(COALESCE("dim. valor", solicitante, ''))
+                FROM ceesa_cee_certificados_ventas_internos
+                WHERE COALESCE("dim. valor", solicitante) IS NOT NULL AND TRIM(COALESCE("dim. valor", solicitante)) != ''
+            """)
+            import re
+            vistos = {u["sucursal"].lower() for u in unidades_lista}
+            
+            for row in cur.fetchall():
+                val = row[0]
+                val = re.sub(r'(?i)Certificados?\s+de\s+Ventas?\s+Intern[oa]s?\s+para\s+', '', val).strip()
+                if val and val.lower() not in vistos:
+                    unidades_lista.append({"sucursal": val, "empresa_padre": "Equipos Solicitantes"})
+                    vistos.add(val.lower())
+        except Exception as e:
+            print(f"Error extrayendo Equipos Solicitantes: {e}")
+            
+        unidades_lista.sort(key=lambda x: x["sucursal"].lower())
         cur.close()
-        return {"data": unidades}
+        return {"data": unidades_lista}
     except Exception as e:
         import traceback
         tb = traceback.format_exc()
