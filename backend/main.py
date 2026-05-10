@@ -411,13 +411,16 @@ def update_user_unidades(user_id: int, body: List[UnidadAsignacion], admin=Depen
         cur = conn.cursor()
         # Borrar asignaciones previas
         cur.execute("DELETE FROM cert_usuarios_unidades WHERE usuario_id = %s", (user_id,))
-        # Insertar nuevas
+        # Insertar nuevas asegurando que no haya duplicados si el frontend los envía
+        vistos = set()
         for u in body:
-            if u.notifica_email or u.notifica_telegram:
+            un_limpio = u.unidad_negocio.strip()
+            if un_limpio not in vistos:
                 cur.execute("""
                     INSERT INTO cert_usuarios_unidades (usuario_id, unidad_negocio, notifica_email, notifica_telegram)
                     VALUES (%s, %s, %s, %s)
-                """, (user_id, u.unidad_negocio, u.notifica_email, u.notifica_telegram))
+                """, (user_id, un_limpio, u.notifica_email, u.notifica_telegram))
+                vistos.add(un_limpio)
         conn.commit()
         cur.close()
         log_action(admin["email"], "ACTUALIZAR_SUCURSALES", f"Actualizó sucursales para usuario ID {user_id}")
@@ -632,11 +635,12 @@ def list_unidades(user=Depends(get_current_user)):
         # Vinculación directa: El campo 'Empresa' en Certificados_Ventas_Internos
         # coincide con 'nombreempresa' en Sucursales.
         query = """
-            SELECT DISTINCT 
+            SELECT 
                 TRIM(COALESCE(nombreempresa, '')) as sucursal,
-                TRIM(COALESCE(nombreempresapadre, '')) as empresa_padre
+                MAX(TRIM(COALESCE(nombreempresapadre, ''))) as empresa_padre
             FROM ceesa_cee_sucursales
             WHERE nombreempresa IS NOT NULL AND TRIM(COALESCE(nombreempresa, '')) != ''
+            GROUP BY TRIM(COALESCE(nombreempresa, ''))
             ORDER BY sucursal ASC
         """
         cur.execute(query)
