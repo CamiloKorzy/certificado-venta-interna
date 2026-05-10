@@ -621,37 +621,23 @@ def debug_unidades():
 
 @app.get("/api/unidades-negocio")
 def list_unidades(user=Depends(get_current_user)):
-    """Obtiene las Unidades de Negocio disponibles desde el dataset de Aurora."""
+    """Obtiene las Sucursales y su Empresa Padre desde Aurora."""
     conn = None
     try:
         conn = get_aurora()
         cur = conn.cursor()
         
-        # Primero buscamos dinámicamente cómo se llama la columna
-        cur.execute("SELECT * FROM ceesa_cee_certificados_ventas_internos LIMIT 1")
-        columns = [desc[0].lower() for desc in cur.description]
-        
-        # Estrategia de resolución de columna (Finnegans usa 'organizacion' para Unidad de Negocio)
-        un_col = next((c for c in columns if 'unidad' in c and 'negocio' in c), None)
-        
-        if not un_col:
-            # Fallbacks probables ordenados por prioridad
-            fallbacks = ['organizacion', 'empresa', 'sucursal', 'unidad']
-            un_col = next((c for c in fallbacks if c in columns), None)
-            
-        if not un_col:
-            raise Exception(f"No se pudo determinar la columna de Unidad de Negocio. Columnas disponibles: {', '.join(columns[:10])}...")
-            
-        # Ahora consultamos usando la columna real resuelta, haciendo JOIN con ceesa_cee_sucursales
-        # para obtener la empresa padre
-        query = f"""
+        # Leemos TODAS las sucursales directamente del dataset CEESA_CEE_SUCURSALES,
+        # tal como se hace en el Proyecto de Compras_OC, e incluimos la Empresa Padre.
+        # Vinculación directa: El campo 'Empresa' en Certificados_Ventas_Internos
+        # coincide con 'nombreempresa' en Sucursales.
+        query = """
             SELECT DISTINCT 
-                TRIM(COALESCE(c.{un_col}, '')) as sucursal,
-                TRIM(COALESCE(s.nombreempresapadre, '')) as empresa_padre
-            FROM ceesa_cee_certificados_ventas_internos c
-            LEFT JOIN ceesa_cee_sucursales s ON s.nombreempresa = c.{un_col}
-            WHERE c.{un_col} IS NOT NULL AND TRIM(COALESCE(c.{un_col}, '')) != ''
-            ORDER BY sucursal
+                TRIM(COALESCE(nombreempresa, '')) as sucursal,
+                TRIM(COALESCE(nombreempresapadre, '')) as empresa_padre
+            FROM ceesa_cee_sucursales
+            WHERE nombreempresa IS NOT NULL AND TRIM(COALESCE(nombreempresa, '')) != ''
+            ORDER BY sucursal ASC
         """
         cur.execute(query)
         unidades = [{"sucursal": row[0], "empresa_padre": row[1]} for row in cur.fetchall() if row[0]]

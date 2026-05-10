@@ -1016,7 +1016,7 @@ function Configuracion({ token }: { token: string }) {
       const userInfo: any[] = userRes.data || [];
       
       if (base.length === 0) {
-        setModalMsg({ text: '⚠️ Aurora no devolvió unidades de negocio. Verificar tabla ceesa_cee_certificados_ventas_internos en producción.', type: 'error' });
+        setModalMsg({ text: '⚠️ Aurora no devolvió unidades de negocio. Verificar tabla ceesa_cee_sucursales en producción.', type: 'error' });
       }
       
       setUserUnidades(base.map((un: any) => {
