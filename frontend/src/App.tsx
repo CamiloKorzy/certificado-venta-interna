@@ -1043,6 +1043,13 @@ function Configuracion({ token }: { token: string }) {
     setUserUnidades(copy);
   };
 
+  const toggleAll = (field: string) => {
+    if (userUnidades.length === 0) return;
+    const allChecked = userUnidades.every((u: any) => u[field]);
+    const copy = userUnidades.map((u: any) => ({ ...u, [field]: !allChecked }));
+    setUserUnidades(copy);
+  };
+
   const saveUnidades = async () => {
     setSavingUn(true); setModalMsg({ text: '', type: '' });
     try {
@@ -1186,8 +1193,32 @@ function Configuracion({ token }: { token: string }) {
                 <table className="w-full text-sm bg-white rounded-lg border border-slate-200 overflow-hidden">
                   <thead className="bg-slate-50 border-b border-slate-200"><tr>
                     <th className="text-left px-4 py-3 font-bold text-slate-600 text-xs uppercase">Unidad de Negocio</th>
-                    <th className="px-4 py-3 text-center font-bold text-slate-600 text-xs uppercase">Email</th>
-                    <th className="px-4 py-3 text-center font-bold text-slate-600 text-xs uppercase">Telegram</th>
+                    <th className="px-4 py-3 text-center font-bold text-slate-600 text-xs uppercase">
+                      <label className="flex items-center justify-center gap-1.5 cursor-pointer hover:text-blue-600 transition-colors" title="Seleccionar/Deseleccionar todos">
+                        <span>Email</span>
+                        {userUnidades.length > 0 && (
+                          <input 
+                            type="checkbox" 
+                            className="w-3.5 h-3.5 text-blue-600 rounded cursor-pointer mt-0.5" 
+                            checked={userUnidades.every((u: any) => u.notifica_email)}
+                            onChange={() => toggleAll('notifica_email')}
+                          />
+                        )}
+                      </label>
+                    </th>
+                    <th className="px-4 py-3 text-center font-bold text-slate-600 text-xs uppercase">
+                      <label className="flex items-center justify-center gap-1.5 cursor-pointer hover:text-blue-600 transition-colors" title="Seleccionar/Deseleccionar todos">
+                        <span>Telegram</span>
+                        {userUnidades.length > 0 && (
+                          <input 
+                            type="checkbox" 
+                            className="w-3.5 h-3.5 text-blue-600 rounded cursor-pointer mt-0.5" 
+                            checked={userUnidades.every((u: any) => u.notifica_telegram)}
+                            onChange={() => toggleAll('notifica_telegram')}
+                          />
+                        )}
+                      </label>
+                    </th>
                   </tr></thead>
                   <tbody>
                     {userUnidades.map((u: any, idx: number) => (
