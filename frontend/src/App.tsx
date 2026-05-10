@@ -1213,6 +1213,20 @@ function Configuracion({ token }: { token: string }) {
               <button onClick={() => setModalUser(null)} className="text-slate-400 hover:bg-slate-100 p-2 rounded-lg"><X size={20} /></button>
             </div>
             <div className="p-5 overflow-y-auto flex-1 bg-slate-50">
+              
+              <div className="mb-5 bg-blue-50 border border-blue-100 rounded-xl p-4 shadow-sm">
+                <h4 className="font-bold text-blue-800 text-xs uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <Shield size={14} className="text-blue-600" /> ¿Cómo funciona la asignación?
+                </h4>
+                <p className="text-xs text-blue-700/80 leading-relaxed">
+                  El sistema notifica evaluando ambas puntas de un comprobante: <strong>La Sucursal Emisora</strong> y <strong>El Equipo Solicitante</strong> (destino).
+                  <br className="mb-1" />
+                  • Si tildas una <strong>Sucursal Emisora</strong> (ej. Carlos E. Enriquez S.A.), el usuario recibirá alertas de <b>TODOS</b> los comprobantes emitidos por esa sucursal, sin importar a qué equipo vayan dirigidos. <i>(Recomendado para Gerentes de Sucursal)</i>.
+                  <br className="mb-1" />
+                  • Si tildas un <strong>Equipo Solicitante</strong> (ej. Oficina Central, C105garage), el usuario solo recibirá alertas de comprobantes dirigidos a su equipo, ignorando los demás. <i>(Recomendado para Responsables Operativos)</i>.
+                </p>
+              </div>
+
               {modalLoading ? <div className="flex justify-center p-8"><Loader2 size={24} className="animate-spin text-blue-600" /></div> : (
                 <table className="w-full text-sm bg-white rounded-lg border border-slate-200 overflow-hidden">
                   <thead className="bg-slate-50 border-b border-slate-200"><tr>
