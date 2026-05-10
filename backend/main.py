@@ -472,7 +472,7 @@ def cron_notificar():
             doc = str(record.get('numerodocumento') or '').strip()
             if not doc or doc == 'NULL': continue
             
-            un = str(record.get('unidaddenegocio') or '').strip()
+            un = str(record.get('unidaddenegocio') or record.get('organizacion') or record.get('empresa') or '').strip()
             desc = str(record.get('documentodescripcion') or record.get('detalledescripcion') or '').strip()
             imp = record.get('importe', 0)
             
@@ -680,22 +680,25 @@ def notificar_certificado(comprobante: str, user=Depends(get_current_user)):
         conn_aurora = get_aurora()
         cur = conn_aurora.cursor()
         cur.execute("""
-            SELECT DISTINCT unidaddenegocio, documentodescripcion, importe
+            SELECT *
             FROM ceesa_cee_certificados_ventas_internos 
             WHERE numerodocumento = %s
             ORDER BY CAST(NULLIF(importe,'0') AS DECIMAL) DESC NULLS LAST
             LIMIT 1
         """, (comprobante,))
+        columns = [desc[0].lower() for desc in cur.description]
         row = cur.fetchone()
         cur.close()
         
         if not row:
             raise HTTPException(status_code=404, detail="Certificado no encontrado")
+            
+        record = dict(zip(columns, row))
         
-        unidad = (row[0] or '').strip()
-        descripcion = (row[1] or '').strip()
+        unidad = str(record.get('unidaddenegocio') or record.get('organizacion') or record.get('empresa') or '').strip()
+        descripcion = str(record.get('documentodescripcion') or record.get('detalledescripcion') or '').strip()
         try:
-            total = float(row[2] or 0)
+            total = float(record.get('importe') or 0)
         except:
             total = 0.0
         
@@ -894,7 +897,7 @@ def get_indicadores(user=Depends(get_current_user)):
                 'Total Bruto': str(total_val),
                 'Neto Gravado': str(gravado_val),
                 'IVA': str(iva_val),
-                'UnidadNegocio': clean(meta.get('unidaddenegocio', '')),
+                'UnidadNegocio': clean(meta.get('unidaddenegocio', meta.get('organizacion', meta.get('empresa', '')))),
                 'items': items_list,
             }
             records.append(record)
