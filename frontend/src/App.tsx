@@ -1022,12 +1022,13 @@ function Configuracion({ token }: { token: string }) {
       setUserUnidades(base.map((un: any) => {
         const sucursalName = typeof un === 'string' ? un : un.sucursal;
         const empresaPadre = typeof un === 'string' ? '' : un.empresa_padre;
-        const display = empresaPadre ? `${sucursalName} (${empresaPadre})` : sucursalName;
+        const isEquipo = empresaPadre === 'Equipos Solicitantes';
+        const display = sucursalName;
         
         const existing = userInfo.find((e: any) => String(e.unidad_negocio).trim() === String(sucursalName).trim());
         return existing 
-          ? { ...existing, unidad_negocio: sucursalName, display_name: display, acceso: true } 
-          : { unidad_negocio: sucursalName, display_name: display, notifica_email: false, notifica_telegram: false, acceso: false };
+          ? { ...existing, unidad_negocio: sucursalName, display_name: display, is_equipo: isEquipo, empresa_padre: empresaPadre, acceso: true } 
+          : { unidad_negocio: sucursalName, display_name: display, is_equipo: isEquipo, empresa_padre: empresaPadre, notifica_email: false, notifica_telegram: false, acceso: false };
       }));
     } catch (e: any) { 
       console.error(e); 
@@ -1273,8 +1274,24 @@ function Configuracion({ token }: { token: string }) {
                   </tr></thead>
                   <tbody>
                     {userUnidades.map((u: any, idx: number) => (
-                      <tr key={u.unidad_negocio} className="border-b border-slate-100 hover:bg-slate-50/50">
-                        <td className="px-4 py-2.5 font-medium text-slate-700">{u.display_name || u.unidad_negocio}</td>
+                      <tr key={u.unidad_negocio} className={`border-b border-slate-100 transition-colors ${u.is_equipo ? 'bg-indigo-50/40 hover:bg-indigo-100/50' : 'hover:bg-slate-50/50'}`}>
+                        <td className="px-4 py-3 font-medium text-slate-700">
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2">
+                              {u.is_equipo ? (
+                                <span className="text-[9px] uppercase font-bold bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-200 tracking-wider">Equipo</span>
+                              ) : (
+                                <span className="text-[9px] uppercase font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 tracking-wider">Sucursal</span>
+                              )}
+                              <span className={u.is_equipo ? 'text-indigo-900 font-bold' : 'text-slate-800'}>{u.display_name || u.unidad_negocio}</span>
+                            </div>
+                            {!u.is_equipo && u.empresa_padre && (
+                              <span className="text-[10px] text-slate-400 font-normal ml-10 flex items-center gap-1">
+                                <Building2 size={10} /> {u.empresa_padre}
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-4 py-2.5 text-center"><input type="checkbox" className="w-4 h-4 text-blue-600 rounded cursor-pointer" checked={u.acceso} onChange={() => toggleUn(idx, 'acceso')} /></td>
                         <td className="px-4 py-2.5 text-center"><input type="checkbox" className="w-4 h-4 text-blue-600 rounded cursor-pointer" checked={u.notifica_email} onChange={() => toggleUn(idx, 'notifica_email')} /></td>
                         <td className="px-4 py-2.5 text-center"><input type="checkbox" className="w-4 h-4 text-blue-600 rounded cursor-pointer" checked={u.notifica_telegram} onChange={() => toggleUn(idx, 'notifica_telegram')} /></td>
