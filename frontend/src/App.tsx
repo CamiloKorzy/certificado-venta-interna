@@ -1026,8 +1026,8 @@ function Configuracion({ token }: { token: string }) {
         
         const existing = userInfo.find((e: any) => String(e.unidad_negocio).trim() === String(sucursalName).trim());
         return existing 
-          ? { ...existing, unidad_negocio: sucursalName, display_name: display } 
-          : { unidad_negocio: sucursalName, display_name: display, notifica_email: false, notifica_telegram: false };
+          ? { ...existing, unidad_negocio: sucursalName, display_name: display, acceso: true } 
+          : { unidad_negocio: sucursalName, display_name: display, notifica_email: false, notifica_telegram: false, acceso: false };
       }));
     } catch (e: any) { 
       console.error(e); 
@@ -1039,21 +1039,45 @@ function Configuracion({ token }: { token: string }) {
 
   const toggleUn = (idx: number, field: string) => {
     const copy = [...userUnidades];
-    copy[idx] = { ...copy[idx], [field]: !copy[idx][field] };
+    const item = { ...copy[idx] };
+    const newValue = !item[field];
+    item[field] = newValue;
+    
+    if ((field === 'notifica_email' || field === 'notifica_telegram') && newValue) {
+      item.acceso = true;
+    }
+    if (field === 'acceso' && !newValue) {
+      item.notifica_email = false;
+      item.notifica_telegram = false;
+    }
+    
+    copy[idx] = item;
     setUserUnidades(copy);
   };
 
   const toggleAll = (field: string) => {
     if (userUnidades.length === 0) return;
     const allChecked = userUnidades.every((u: any) => u[field]);
-    const copy = userUnidades.map((u: any) => ({ ...u, [field]: !allChecked }));
+    const newValue = !allChecked;
+    
+    const copy = userUnidades.map((u: any) => {
+      const item = { ...u, [field]: newValue };
+      if ((field === 'notifica_email' || field === 'notifica_telegram') && newValue) {
+        item.acceso = true;
+      }
+      if (field === 'acceso' && !newValue) {
+        item.notifica_email = false;
+        item.notifica_telegram = false;
+      }
+      return item;
+    });
     setUserUnidades(copy);
   };
 
   const saveUnidades = async () => {
     setSavingUn(true); setModalMsg({ text: '', type: '' });
     try {
-      const active = userUnidades.filter((u: any) => u.notifica_email || u.notifica_telegram);
+      const active = userUnidades.filter((u: any) => u.acceso || u.notifica_email || u.notifica_telegram);
       await apiFetch(`/api/usuarios/${modalUser.id}/unidades`, token, { method: 'PUT', body: JSON.stringify(active) });
       setModalMsg({ text: '✅ Unidades y notificaciones actualizadas', type: 'success' });
       setTimeout(() => setModalUser(null), 1500);
@@ -1195,6 +1219,19 @@ function Configuracion({ token }: { token: string }) {
                     <th className="text-left px-4 py-3 font-bold text-slate-600 text-xs uppercase">Unidad de Negocio</th>
                     <th className="px-4 py-3 text-center font-bold text-slate-600 text-xs uppercase">
                       <label className="flex items-center justify-center gap-1.5 cursor-pointer hover:text-blue-600 transition-colors" title="Seleccionar/Deseleccionar todos">
+                        <span>Acceso</span>
+                        {userUnidades.length > 0 && (
+                          <input 
+                            type="checkbox" 
+                            className="w-3.5 h-3.5 text-blue-600 rounded cursor-pointer mt-0.5" 
+                            checked={userUnidades.every((u: any) => u.acceso)}
+                            onChange={() => toggleAll('acceso')}
+                          />
+                        )}
+                      </label>
+                    </th>
+                    <th className="px-4 py-3 text-center font-bold text-slate-600 text-xs uppercase">
+                      <label className="flex items-center justify-center gap-1.5 cursor-pointer hover:text-blue-600 transition-colors" title="Seleccionar/Deseleccionar todos">
                         <span>Email</span>
                         {userUnidades.length > 0 && (
                           <input 
@@ -1224,11 +1261,12 @@ function Configuracion({ token }: { token: string }) {
                     {userUnidades.map((u: any, idx: number) => (
                       <tr key={u.unidad_negocio} className="border-b border-slate-100 hover:bg-slate-50/50">
                         <td className="px-4 py-2.5 font-medium text-slate-700">{u.display_name || u.unidad_negocio}</td>
+                        <td className="px-4 py-2.5 text-center"><input type="checkbox" className="w-4 h-4 text-blue-600 rounded cursor-pointer" checked={u.acceso} onChange={() => toggleUn(idx, 'acceso')} /></td>
                         <td className="px-4 py-2.5 text-center"><input type="checkbox" className="w-4 h-4 text-blue-600 rounded cursor-pointer" checked={u.notifica_email} onChange={() => toggleUn(idx, 'notifica_email')} /></td>
                         <td className="px-4 py-2.5 text-center"><input type="checkbox" className="w-4 h-4 text-blue-600 rounded cursor-pointer" checked={u.notifica_telegram} onChange={() => toggleUn(idx, 'notifica_telegram')} /></td>
                       </tr>
                     ))}
-                    {userUnidades.length === 0 && <tr><td colSpan={3} className="px-4 py-6 text-center text-slate-400">No hay unidades disponibles</td></tr>}
+                    {userUnidades.length === 0 && <tr><td colSpan={4} className="px-4 py-6 text-center text-slate-400">No hay unidades disponibles</td></tr>}
                   </tbody>
                 </table>
               )}
