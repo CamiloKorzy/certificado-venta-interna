@@ -83,6 +83,7 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
   const [filters, setFilters] = useState({
     periodo: currentPeriod,
     empresa: 'Todas',
+    cliente: 'Todos',
     unidad: 'Todas',
     concepto: 'Todos',
     estado: 'Todos',
@@ -95,6 +96,7 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
     search: '',
     unidad: 'Todas',
     empresa: 'Todas',
+    cliente: 'Todos',
     estado: 'Todos'
   });
 
@@ -202,6 +204,7 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
         ...row,
         _original: row,
         _empresa: empresa,
+        _cliente_empresa: lowerRow['cliente'] || 'Sin Cliente',
         _unidad: unidad,
         _concepto: concepto,
         _estado: estadoLabel,
@@ -217,6 +220,7 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
   // 2. Extraer opciones únicas para los filtros
   const options = useMemo(() => {
     const empresas = new Set<string>();
+    const clientes = new Set<string>();
     const unidades = new Set<string>();
     const conceptos = new Set<string>();
     const estados = new Set<string>();
@@ -225,6 +229,7 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
 
     normalizedData.forEach(d => {
       if (d._empresa) empresas.add(d._empresa);
+      if (d._cliente_empresa) clientes.add(d._cliente_empresa);
       if (d._unidad) unidades.add(d._unidad);
       if (d._concepto) conceptos.add(d._concepto);
       if (d._estado) estados.add(d._estado);
@@ -245,6 +250,7 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
     return {
       periodos: ['Todos', ...sortedPeriodos],
       empresas: ['Todas', ...Array.from(empresas).sort()],
+      clientes: ['Todos', ...Array.from(clientes).sort()],
       unidades: ['Todas', ...Array.from(unidades).sort()],
       conceptos: ['Todos', ...Array.from(conceptos).sort()],
       estados: ['Todos', ...Array.from(estados).sort()]
@@ -255,6 +261,7 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
   const filteredData = useMemo(() => {
     const rawFiltered = normalizedData.filter(d => {
       const matchEmpresa = filters.empresa === 'Todas' || d._empresa === filters.empresa;
+      const matchCliente = filters.cliente === 'Todos' || d._cliente_empresa === filters.cliente;
       const matchUnidad = filters.unidad === 'Todas' || d._unidad === filters.unidad;
       const matchConcepto = filters.concepto === 'Todos' || d._concepto === filters.concepto;
       const matchEstado = filters.estado === 'Todos' || d._estado === filters.estado;
@@ -275,7 +282,7 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
         }
       }
 
-      return matchEmpresa && matchUnidad && matchConcepto && matchEstado && matchPeriodo && matchFecha;
+      return matchEmpresa && matchCliente && matchUnidad && matchConcepto && matchEstado && matchPeriodo && matchFecha;
     });
     
     // Ya no deduplicamos por Comprobante aquí, porque backend entrega ítems únicos. 
@@ -288,7 +295,8 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
     return filteredData.map(d => ({
       id: d._original['Comprobante'] || d._original['comprobante'] || 'Sin ID',
       fecha: d._fecha,
-      cliente: d._original['Empresa'] || d._empresa || '-',
+      prestador: d._original['Empresa'] || d._empresa || '-',
+      clienteEmpresa: d._cliente_empresa || '-',
       descripcion: d._descripcion,
       unidad: d._unidad,
       estado: d._estado,
@@ -334,6 +342,7 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
     type GroupStats = { ids: Set<string>, authIds: Set<string>, pendIds: Set<string>, total: number, qty?: number };
     const byUnidad: Record<string, GroupStats> = {};
     const byEmpresa: Record<string, GroupStats> = {};
+    const byCliente: Record<string, GroupStats> = {};
     const byConcepto: Record<string, GroupStats> = {};
     const byEstado: Record<string, GroupStats> = {};
 
@@ -352,7 +361,8 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
       };
 
       addStat(byUnidad, comp.unidad);
-      addStat(byEmpresa, comp.cliente);
+      addStat(byEmpresa, comp.prestador);
+      addStat(byCliente, comp.clienteEmpresa);
       
       // Por concepto: usar los ítems embebidos con su importe individual
       const items = comp.items || [];
@@ -392,6 +402,7 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
     return {
       unidad: formatGroup(byUnidad),
       empresa: formatGroup(byEmpresa),
+      cliente: formatGroup(byCliente),
       concepto: formatGroup(byConcepto),
       estado: formatGroup(byEstado)
     };
@@ -401,15 +412,18 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
   const gridOptions = useMemo(() => {
     const unidades = new Set<string>();
     const empresas = new Set<string>();
+    const clientes = new Set<string>();
     const estados = new Set<string>();
     comprobantesData.forEach((c: any) => {
       if (c.unidad) unidades.add(c.unidad);
-      if (c.cliente) empresas.add(c.cliente);
+      if (c.prestador) empresas.add(c.prestador);
+      if (c.clienteEmpresa) clientes.add(c.clienteEmpresa);
       if (c.estado) estados.add(c.estado);
     });
     return {
       unidades: ['Todas', ...Array.from(unidades).sort()],
       empresas: ['Todas', ...Array.from(empresas).sort()],
+      clientes: ['Todos', ...Array.from(clientes).sort()],
       estados: ['Todos', ...Array.from(estados).sort()]
     };
   }, [comprobantesData]);
@@ -421,10 +435,11 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
         comp.id.toLowerCase().includes(q) || 
         comp.descripcion.toLowerCase().includes(q);
       const matchUnidad = gridFilters.unidad === 'Todas' || comp.unidad === gridFilters.unidad;
-      const matchEmpresa = gridFilters.empresa === 'Todas' || comp.cliente === gridFilters.empresa;
+      const matchEmpresa = gridFilters.empresa === 'Todas' || comp.prestador === gridFilters.empresa;
+      const matchCliente = gridFilters.cliente === 'Todos' || comp.clienteEmpresa === gridFilters.cliente;
       const matchEstado = gridFilters.estado === 'Todos' || comp.estado === gridFilters.estado;
       
-      return matchSearch && matchUnidad && matchEmpresa && matchEstado;
+      return matchSearch && matchUnidad && matchEmpresa && matchCliente && matchEstado;
     });
   }, [comprobantesData, gridFilters]);
 
@@ -479,7 +494,7 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
             <h2 className="text-lg font-bold text-slate-800">Criterios de Análisis</h2>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-7 gap-5">
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Periodo</label>
               <select 
@@ -501,7 +516,17 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
               </select>
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Unidad de Negocio</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Cliente Empresa</label>
+              <select 
+                className="w-full border border-slate-300 rounded-lg text-sm bg-slate-50 p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all font-medium text-slate-700 cursor-pointer"
+                value={filters.cliente}
+                onChange={e => setFilters({...filters, cliente: e.target.value})}
+              >
+                {options.clientes.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Cliente UN</label>
               <select 
                 className="w-full border border-slate-300 rounded-lg text-sm bg-slate-50 p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all font-medium text-slate-700 cursor-pointer"
                 value={filters.unidad}
@@ -511,7 +536,7 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
               </select>
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Tipo de Concepto</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Producto</label>
               <select 
                 className="w-full border border-slate-300 rounded-lg text-sm bg-slate-50 p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all font-medium text-slate-700 cursor-pointer"
                 value={filters.concepto}
@@ -530,24 +555,27 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
                 {options.estados.map((o: string) => <option key={o} value={o}>{o}</option>)}
               </select>
             </div>
-            <div className="lg:col-span-2 grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Desde</label>
-                <input 
-                  type="date" 
-                  className="w-full border border-slate-300 rounded-lg text-sm bg-slate-50 p-2.5 outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700"
-                  value={filters.fechaDesde}
-                  onChange={e => setFilters({...filters, fechaDesde: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Hasta</label>
-                <input 
-                  type="date" 
-                  className="w-full border border-slate-300 rounded-lg text-sm bg-slate-50 p-2.5 outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700"
-                  value={filters.fechaHasta}
-                  onChange={e => setFilters({...filters, fechaHasta: e.target.value})}
-                />
+            <div className="lg:col-span-2 bg-slate-50 p-3 rounded-lg border border-slate-200">
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 text-center border-b border-slate-200 pb-1">Rango de Fechas</label>
+              <div className="grid grid-cols-2 gap-3 mt-2">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Desde</label>
+                  <input 
+                    type="date" 
+                    className="w-full border border-slate-300 rounded-lg text-sm bg-white p-2 outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700"
+                    value={filters.fechaDesde}
+                    onChange={e => setFilters({...filters, fechaDesde: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Hasta</label>
+                  <input 
+                    type="date" 
+                    className="w-full border border-slate-300 rounded-lg text-sm bg-white p-2 outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700"
+                    value={filters.fechaHasta}
+                    onChange={e => setFilters({...filters, fechaHasta: e.target.value})}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -619,9 +647,10 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
         {/* Gráficos de Distribución */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
           <HorizontalBarChart title="Estado Autorización" data={agrupaciones.estado} icon={Filter} colorTheme="amber" />
-          <HorizontalBarChart title="Por Concepto" data={agrupaciones.concepto} icon={PackageCheck} colorTheme="indigo" />
+          <HorizontalBarChart title="Por Producto" data={agrupaciones.concepto} icon={PackageCheck} colorTheme="indigo" />
           <HorizontalBarChart title="Por Prestador" data={agrupaciones.empresa} icon={Building2} colorTheme="slate" />
-          <HorizontalBarChart title="Por Unidad de Negocio" data={agrupaciones.unidad} icon={BarChart3} colorTheme="teal" showAuthSplit={true} />
+          <HorizontalBarChart title="Por Cliente Empresa" data={agrupaciones.cliente} icon={Building2} colorTheme="blue" />
+          <HorizontalBarChart title="Por Cliente UN" data={agrupaciones.unidad} icon={BarChart3} colorTheme="teal" showAuthSplit={true} />
         </div>
 
         {/* Data Table - Grilla Detalle */}
@@ -640,8 +669,9 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
                     'Fecha': comp.fecha,
                     'Comprobante': comp.id,
                     'Descripción': comp.descripcion,
-                    'Unidad de Negocio': comp.unidad,
-                    'Prestador': comp.cliente,
+                    'Cliente UN': comp.unidad,
+                    'Prestador': comp.prestador,
+                    'Cliente Empresa': comp.clienteEmpresa,
                     'Estado': comp.estado,
                     'Neto Gravado': (comp.total / 1.21),
                     'IVA 21%': comp.total - (comp.total / 1.21),
@@ -656,7 +686,7 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
                   xml += '<Style ss:ID="def"><Font ss:Size="10"/></Style></Styles>\n';
                   xml += '<Worksheet ss:Name="Comprobantes Emitidos"><Table>\n';
                   // Column widths
-                  [100, 180, 300, 200, 280, 140, 150, 150, 150].forEach(w => { xml += `<Column ss:Width="${w}"/>\n`; });
+                  [100, 180, 300, 200, 280, 280, 140, 150, 150, 150].forEach(w => { xml += `<Column ss:Width="${w}"/>\n`; });
                   // Header row
                   xml += '<Row ss:Height="30">';
                   headers.forEach(h => { xml += `<Cell ss:StyleID="hdr"><Data ss:Type="String">${escXml(h)}</Data></Cell>`; });
@@ -692,7 +722,7 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
           </div>
           
           {/* Filtros Locales de la Grilla */}
-          <div className="p-4 border-b border-slate-100 bg-white grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="p-4 border-b border-slate-100 bg-white grid grid-cols-1 md:grid-cols-5 gap-4">
             <div className="relative">
               <Search size={16} className="absolute left-3 top-3 text-slate-400" />
               <input 
@@ -709,7 +739,7 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
                 value={gridFilters.unidad}
                 onChange={e => setGridFilters({...gridFilters, unidad: e.target.value})}
               >
-                <option value="Todas">Unidad: Todas</option>
+                <option value="Todas">Cliente UN: Todos</option>
                 {gridOptions.unidades.filter(o => o !== 'Todas').map(o => <option key={o} value={o}>{o}</option>)}
               </select>
             </div>
@@ -721,6 +751,16 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
               >
                 <option value="Todas">Prestador: Todos</option>
                 {gridOptions.empresas.filter(o => o !== 'Todas').map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+            <div>
+              <select 
+                className="w-full border border-slate-200 rounded-lg text-sm bg-slate-50 p-2.5 outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700 cursor-pointer"
+                value={gridFilters.cliente}
+                onChange={e => setGridFilters({...gridFilters, cliente: e.target.value})}
+              >
+                <option value="Todos">Cliente Empresa: Todos</option>
+                {gridOptions.clientes.filter((o: string) => o !== 'Todos').map((o: string) => <option key={o} value={o}>{o}</option>)}
               </select>
             </div>
             <div>

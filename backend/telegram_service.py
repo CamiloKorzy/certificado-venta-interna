@@ -19,6 +19,7 @@ def send_telegram_message(chat_id: str, text: str, reply_markup: dict = None) ->
     if not TELEGRAM_BOT_TOKEN or not chat_id:
         return {"ok": False, "error": "Falta token o chat_id"}
         
+    chat_id = str(chat_id).strip()
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": chat_id,
@@ -62,9 +63,9 @@ def telegram_nuevo_certificado(chat_id: str, comprobante: str, descripcion: str,
     titulo = "NUEVO COMPROBANTE" if not es_modificacion else "COMPROBANTE MODIFICADO"
     
     mensaje = f"""📋 <b>[CERTIFICADO DE VENTA INTERNA]</b>
-<b>{titulo}:</b> {comprobante}
-<b>Unidad de Negocio:</b> {unidad}
-<b>Descripción:</b> {descripcion}
+<b>{titulo}:</b> {html.escape(str(comprobante))}
+<b>Unidad de Negocio:</b> {html.escape(str(unidad))}
+<b>Descripción:</b> {html.escape(str(descripcion))}
 <b>Total:</b> ${total:,.2f}"""
 
     if estado:

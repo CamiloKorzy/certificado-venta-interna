@@ -13,6 +13,6 @@ conn = psycopg2.connect(
     sslmode="require"
 )
 cur = conn.cursor()
-cur.execute("SELECT DISTINCT solicitante FROM ceesa_cee_certificados_ventas_internos WHERE solicitante IS NOT NULL LIMIT 5;")
+cur.execute("SELECT DISTINCT solicitante FROM ceesa_cee_certificados_ventas_internas WHERE solicitante IS NOT NULL LIMIT 5;")
 print("Solicitantes DB:", [x[0] for x in cur.fetchall()])
 conn.close()

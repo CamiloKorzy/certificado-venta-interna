@@ -46,7 +46,7 @@ async def catch_exceptions_middleware(request: Request, call_next):
         return JSONResponse(status_code=500, content={"error": str(e), "trace": tb[:500]})
 
 # ─── Credenciales ───
-DB_HOST = os.environ.get("DB_HOST", "infraestructura-aurora-datawarehouse-instance-zxhlvevffc1c.cijt7auhxunw.us-east-1.rds.amazonaws.com")
+DB_HOST = os.environ.get("DB_HOST", "ceesa.dw.finneg.com")
 DB_PORT = os.environ.get("DB_PORT", "5432")
 DB_NAME = os.environ.get("DB_NAME", "finnegansbi")
 DB_USER = os.environ.get("DB_USER", "ceesauser")
@@ -460,7 +460,7 @@ def cron_notificar():
         # Obtener los últimos 200 comprobantes con un SELECT * para obtener esquema dinámico
         cur_aurora.execute("""
             SELECT *
-            FROM ceesa_cee_certificados_ventas_internos
+            FROM ceesa_cee_certificados_ventas_internas
             WHERE numerodocumento IS NOT NULL AND numerodocumento != '' AND numerodocumento != 'NULL'
             ORDER BY numerodocumento DESC
             LIMIT 200
@@ -476,11 +476,15 @@ def cron_notificar():
             if not doc or doc == 'NULL': continue
             
             import re
+            def clean_un(val):
+                if not val: return ''
+                return re.sub(r'(?i)Certificados?\s+de\s+Ventas?\s+Intern[oa]s?\s+para\s+', '', str(val)).strip()
+
             solicitante = str(record.get('solicitante') or record.get('dim. valor') or '').strip()
-            solicitante = re.sub(r'(?i)Certificados?\s+de\s+Ventas?\s+Intern[oa]s?\s+para\s+', '', solicitante)
-            equipo_solicitante = solicitante.strip()
+            equipo_solicitante = clean_un(solicitante)
             
             sucursal_emisora = str(record.get('unidaddenegocio') or record.get('organizacion') or record.get('empresa') or '').strip()
+            sucursal_emisora = clean_un(sucursal_emisora)
             
             # Unidad representativa para el mensaje
             un_principal = equipo_solicitante if equipo_solicitante else sucursal_emisora
@@ -529,8 +533,8 @@ def cron_notificar():
                 # Generar link al comprobante
                 finnegans_link = f"https://go.finneg.com/mas/vista?fafViewCode=DF_VIEWER&pk={trans_id}&claseVO=CasoDirectoVO&FAFCLASE_FACADE=FAFTransaccionBSuiteEJB&appitemID=50394"
                 
-            # Buscar destinatarios (match con Equipo Solicitante o con Sucursal)
-            unidades_match = tuple(u for u in [equipo_solicitante, sucursal_emisora] if u)
+            # Buscar destinatarios (match con Equipo Solicitante o con Sucursal) de forma case-insensitive
+            unidades_match = tuple(u.lower() for u in [equipo_solicitante, sucursal_emisora] if u)
             if not unidades_match:
                 continue
                 
@@ -538,7 +542,7 @@ def cron_notificar():
                 SELECT DISTINCT u.nombre, u.telegram_chat_id 
                 FROM cert_usuarios_unidades cu 
                 JOIN cert_usuarios u ON cu.usuario_id = u.id 
-                WHERE cu.unidad_negocio IN %s AND cu.notifica_telegram = true AND u.activo = 1
+                WHERE LOWER(TRIM(cu.unidad_negocio)) IN %s AND cu.notifica_telegram = true AND u.activo = 1
             """, (unidades_match,))
             destinatarios = cur_supa.fetchall()
             
@@ -549,7 +553,7 @@ def cron_notificar():
                             chat_id=chat_id, 
                             comprobante=doc, 
                             descripcion=desc, 
-                            unidad=un, 
+                            unidad=un_principal, 
                             total=imp, 
                             link=APP_URL, 
                             estado=estado, 
@@ -596,7 +600,7 @@ def debug_unidades():
         cur = conn.cursor()
         
         # 1. Verificar que la tabla existe y obtener columnas
-        cur.execute("SELECT * FROM ceesa_cee_certificados_ventas_internos LIMIT 1")
+        cur.execute("SELECT * FROM ceesa_cee_certificados_ventas_internas LIMIT 1")
         columns = [desc[0].lower() for desc in cur.description]
         result["columns_count"] = len(columns)
         result["columns_sample"] = columns[:20]
@@ -611,13 +615,13 @@ def debug_unidades():
             return result
         
         # 3. Contar registros totales
-        cur.execute(f"SELECT COUNT(*) FROM ceesa_cee_certificados_ventas_internos")
+        cur.execute(f"SELECT COUNT(*) FROM ceesa_cee_certificados_ventas_internas")
         result["total_rows"] = cur.fetchone()[0]
         
         # 4. Obtener unidades distintas
         query = f"""
             SELECT DISTINCT TRIM(COALESCE({un_col}, '')) as un 
-            FROM ceesa_cee_certificados_ventas_internos 
+            FROM ceesa_cee_certificados_ventas_internas 
             WHERE {un_col} IS NOT NULL AND TRIM(COALESCE({un_col}, '')) != ''
             ORDER BY un
         """
@@ -658,7 +662,7 @@ def list_unidades(user=Depends(get_current_user)):
         try:
             cur.execute("""
                 SELECT DISTINCT TRIM(COALESCE("dim. valor", solicitante, ''))
-                FROM ceesa_cee_certificados_ventas_internos
+                FROM ceesa_cee_certificados_ventas_internas
                 WHERE COALESCE("dim. valor", solicitante) IS NOT NULL AND TRIM(COALESCE("dim. valor", solicitante)) != ''
             """)
             import re
@@ -700,7 +704,7 @@ def notificar_certificado(comprobante: str, user=Depends(get_current_user)):
         cur = conn_aurora.cursor()
         cur.execute("""
             SELECT *
-            FROM ceesa_cee_certificados_ventas_internos 
+            FROM ceesa_cee_certificados_ventas_internas 
             WHERE numerodocumento = %s
             ORDER BY CAST(NULLIF(importe,'0') AS DECIMAL) DESC NULLS LAST
             LIMIT 1
@@ -714,11 +718,15 @@ def notificar_certificado(comprobante: str, user=Depends(get_current_user)):
             
         record = dict(zip(columns, row))
         import re
+        def clean_un(val):
+            if not val: return ''
+            return re.sub(r'(?i)Certificados?\s+de\s+Ventas?\s+Intern[oa]s?\s+para\s+', '', str(val)).strip()
+
         solicitante = str(record.get('solicitante') or record.get('dim. valor') or '').strip()
-        solicitante = re.sub(r'(?i)Certificados?\s+de\s+Ventas?\s+Intern[oa]s?\s+para\s+', '', solicitante)
-        equipo_solicitante = solicitante.strip()
+        equipo_solicitante = clean_un(solicitante)
         
         sucursal_emisora = str(record.get('unidaddenegocio') or record.get('organizacion') or record.get('empresa') or '').strip()
+        sucursal_emisora = clean_un(sucursal_emisora)
         
         un_principal = equipo_solicitante if equipo_solicitante else sucursal_emisora
         
@@ -728,18 +736,18 @@ def notificar_certificado(comprobante: str, user=Depends(get_current_user)):
         except:
             total = 0.0
         
-        unidades_match = tuple(u for u in [equipo_solicitante, sucursal_emisora] if u)
+        unidades_match = tuple(u.lower() for u in [equipo_solicitante, sucursal_emisora] if u)
         if not unidades_match:
             return {"ok": False, "error": "No se determinó unidad destino ni sucursal"}
             
-        # 2. Buscar responsables de esa UN con Telegram activo
+        # 2. Buscar responsables de esa UN con Telegram activo de forma case-insensitive
         conn_supa = get_supabase()
         cur2 = conn_supa.cursor()
         cur2.execute("""
             SELECT DISTINCT u.nombre, u.telegram_chat_id 
             FROM cert_usuarios u
             JOIN cert_usuarios_unidades uu ON u.id = uu.usuario_id
-            WHERE uu.unidad_negocio IN %s 
+            WHERE LOWER(TRIM(uu.unidad_negocio)) IN %s 
               AND uu.notifica_telegram = true 
               AND u.telegram_chat_id IS NOT NULL 
               AND u.telegram_chat_id != ''
@@ -802,7 +810,7 @@ def debug_endpoint():
     cur = conn.cursor()
     cur.execute("""
         SELECT numerodocumento, importe, producto, detalledescripcion, precio, cantidadworkflow
-        FROM ceesa_cee_certificados_ventas_internos 
+        FROM ceesa_cee_certificados_ventas_internas 
         WHERE numerodocumento = 'CI-0001-00000003'
         ORDER BY importe DESC NULLS LAST
     """)
@@ -818,7 +826,7 @@ def get_indicadores(user=Depends(get_current_user)):
     try:
         conn = get_aurora()
         
-        query = "SELECT * FROM ceesa_cee_certificados_ventas_internos ORDER BY 1 DESC LIMIT 50000"
+        query = "SELECT * FROM ceesa_cee_certificados_ventas_internas ORDER BY 1 DESC LIMIT 50000"
         
         cursor = conn.cursor()
         cursor.execute(query)

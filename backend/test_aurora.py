@@ -17,7 +17,7 @@ def main():
         cur = conn.cursor()
         cur.execute("""
             SELECT *
-            FROM ceesa_cee_certificados_ventas_internos 
+            FROM ceesa_cee_certificados_ventas_internas 
             WHERE numerodocumento IN ('CERTIFICADO_VENTA_INTERNO - 16', 'CERTIFICADO_VENTA_INTERNO - 22', 'CERTIFICADO_VENTA_INTERNO - 24', 'CERTIFICADO_VENTA_INTERNO - 26')
         """)
         cols = [desc[0] for desc in cur.description]
