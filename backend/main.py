@@ -902,7 +902,10 @@ def get_indicadores(user=Depends(get_current_user)):
         for num_doc, data in comprobantes.items():
             meta = data['metadata']
             
-            fecha_raw = meta.get('fechaalta', meta.get('fecha', ''))
+            fecha_val = meta.get('fecha', '')
+            if not fecha_val or fecha_val == 'NULL':
+                fecha_val = meta.get('fechaalta', '')
+            fecha_raw = fecha_val
             fecha_fmt = ''
             if fecha_raw:
                 try:
