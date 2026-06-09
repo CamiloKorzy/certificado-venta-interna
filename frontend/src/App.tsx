@@ -18,6 +18,75 @@ function apiFetch(path: string, token: string, options: any = {}) {
   });
 }
 
+const MultiSelect = ({ label, options, selected, onChange }: { label: string, options: string[], selected: string[], onChange: (v: string[]) => void }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const toggleOption = (option: string) => {
+    if (option === 'Todos' || option === 'Todas') {
+      onChange([option]);
+      return;
+    }
+    
+    let newSelected = selected.filter(s => s !== 'Todos' && s !== 'Todas');
+    if (newSelected.includes(option)) {
+      newSelected = newSelected.filter(s => s !== option);
+    } else {
+      newSelected.push(option);
+    }
+    
+    if (newSelected.length === 0) {
+      newSelected = [options[0]]; // fallback to Todos/Todas
+    }
+    
+    onChange(newSelected);
+  };
+
+  const displayText = (selected.includes('Todos') || selected.includes('Todas')) 
+    ? options[0] 
+    : (selected.length === 1 ? selected[0] : `${selected.length} seleccionados`);
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{label}</label>
+      <div 
+        className="w-full flex items-center justify-between border border-slate-300 rounded-lg text-sm bg-slate-50 p-2.5 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-all font-medium text-slate-700 cursor-pointer"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <span className="truncate pr-2">{displayText}</span>
+        {isOpen ? <ChevronUp size={16} className="text-slate-400 shrink-0" /> : <ChevronDown size={16} className="text-slate-400 shrink-0" />}
+      </div>
+      
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+          {options.map((option, idx) => (
+            <div 
+              key={idx} 
+              className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer transition-colors"
+              onClick={() => toggleOption(option)}
+            >
+              <div className={`w-4 h-4 rounded flex items-center justify-center border ${selected.includes(option) ? 'bg-blue-600 border-blue-600' : 'border-slate-300'}`}>
+                {selected.includes(option) && <Check size={12} className="text-white" />}
+              </div>
+              <span className="text-sm text-slate-700 truncate">{option}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const HorizontalBarChart = ({ title, data, icon: Icon, colorTheme = "blue", showAuthSplit = false, countLabel = "certif." }: any) => {
   const themes: any = {
     blue: { bg: "bg-blue-500", text: "text-blue-600", light: "bg-blue-50", icon: "text-blue-600" },
@@ -79,17 +148,24 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
   const currentYear = new Date().getFullYear();
   const currentPeriod = `${currentMonth}/${currentYear}`;
 
-  // Filters state
-  const [filters, setFilters] = useState({
-    periodo: currentPeriod,
-    empresa: 'Todas',
-    cliente: 'Todos',
-    unidad: 'Todas',
-    concepto: 'Todos',
-    estado: 'Todos',
+  // Filters state (Pending - modified by UI)
+  const [pendingFilters, setPendingFilters] = useState({
+    periodo: [currentPeriod],
+    empresa: ['Todas'],
+    cliente: ['Todos'],
+    unidad: ['Todas'],
+    concepto: ['Todos'],
+    estado: ['Todos'],
     fechaDesde: '',
     fechaHasta: ''
   });
+
+  // Filters state (Applied - used for data filtering)
+  const [appliedFilters, setAppliedFilters] = useState(pendingFilters);
+
+  const applyFilters = () => {
+    setAppliedFilters(pendingFilters);
+  };
 
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [gridFilters, setGridFilters] = useState({
@@ -259,24 +335,25 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
 
   // 3. Aplicar filtros a los datos
   const filteredData = useMemo(() => {
+    const f = appliedFilters;
     const rawFiltered = normalizedData.filter(d => {
-      const matchEmpresa = filters.empresa === 'Todas' || d._empresa === filters.empresa;
-      const matchCliente = filters.cliente === 'Todos' || d._cliente_empresa === filters.cliente;
-      const matchUnidad = filters.unidad === 'Todas' || d._unidad === filters.unidad;
-      const matchConcepto = filters.concepto === 'Todos' || d._concepto === filters.concepto;
-      const matchEstado = filters.estado === 'Todos' || d._estado === filters.estado;
-      const matchPeriodo = filters.periodo === 'Todos' || d._periodo === filters.periodo;
+      const matchEmpresa = f.empresa.includes('Todas') || f.empresa.includes(d._empresa);
+      const matchCliente = f.cliente.includes('Todos') || f.cliente.includes(d._cliente_empresa);
+      const matchUnidad = f.unidad.includes('Todas') || f.unidad.includes(d._unidad);
+      const matchConcepto = f.concepto.includes('Todos') || f.concepto.includes(d._concepto);
+      const matchEstado = f.estado.includes('Todos') || f.estado.includes(d._estado);
+      const matchPeriodo = f.periodo.includes('Todos') || f.periodo.includes(d._periodo);
       
       let matchFecha = true;
-      if (filters.fechaDesde || filters.fechaHasta) {
-        if (filters.fechaDesde && d._fecha && typeof d._fecha === 'string') {
+      if (f.fechaDesde || f.fechaHasta) {
+        if (f.fechaDesde && d._fecha && typeof d._fecha === 'string') {
            const dFecha = new Date(d._fecha);
-           const fDesde = new Date(filters.fechaDesde);
+           const fDesde = new Date(f.fechaDesde);
            if (!isNaN(dFecha.getTime()) && dFecha < fDesde) matchFecha = false;
         }
-        if (filters.fechaHasta && d._fecha && typeof d._fecha === 'string') {
+        if (f.fechaHasta && d._fecha && typeof d._fecha === 'string') {
            const dFecha = new Date(d._fecha);
-           const fHasta = new Date(filters.fechaHasta);
+           const fHasta = new Date(f.fechaHasta);
            fHasta.setDate(fHasta.getDate() + 1);
            if (!isNaN(dFecha.getTime()) && dFecha >= fHasta) matchFecha = false;
         }
@@ -285,10 +362,8 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
       return matchEmpresa && matchCliente && matchUnidad && matchConcepto && matchEstado && matchPeriodo && matchFecha;
     });
     
-    // Ya no deduplicamos por Comprobante aquí, porque backend entrega ítems únicos. 
-    // Todos los ítems deben sumarse para el total del Comprobante.
     return rawFiltered;
-  }, [normalizedData, filters]);
+  }, [normalizedData, appliedFilters]);
 
   // 5. Datos de Comprobantes - El backend ya entrega 1 registro = 1 comprobante
   const comprobantesData = useMemo(() => {
@@ -494,90 +569,77 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
             <h2 className="text-lg font-bold text-slate-800">Criterios de Análisis</h2>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-7 gap-5">
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Periodo</label>
-              <select 
-                className="w-full border border-slate-300 rounded-lg text-sm bg-slate-50 p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all font-medium text-slate-700 cursor-pointer"
-                value={filters.periodo}
-                onChange={e => setFilters({...filters, periodo: e.target.value})}
-              >
-                {options.periodos.map((o: string) => <option key={o} value={o}>{o}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Prestador</label>
-              <select 
-                className="w-full border border-slate-300 rounded-lg text-sm bg-slate-50 p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all font-medium text-slate-700 cursor-pointer"
-                value={filters.empresa}
-                onChange={e => setFilters({...filters, empresa: e.target.value})}
-              >
-                {options.empresas.map(o => <option key={o} value={o}>{o}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Cliente Empresa</label>
-              <select 
-                className="w-full border border-slate-300 rounded-lg text-sm bg-slate-50 p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all font-medium text-slate-700 cursor-pointer"
-                value={filters.cliente}
-                onChange={e => setFilters({...filters, cliente: e.target.value})}
-              >
-                {options.clientes.map(o => <option key={o} value={o}>{o}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Cliente UN</label>
-              <select 
-                className="w-full border border-slate-300 rounded-lg text-sm bg-slate-50 p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all font-medium text-slate-700 cursor-pointer"
-                value={filters.unidad}
-                onChange={e => setFilters({...filters, unidad: e.target.value})}
-              >
-                {options.unidades.map(o => <option key={o} value={o}>{o}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Producto</label>
-              <select 
-                className="w-full border border-slate-300 rounded-lg text-sm bg-slate-50 p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all font-medium text-slate-700 cursor-pointer"
-                value={filters.concepto}
-                onChange={e => setFilters({...filters, concepto: e.target.value})}
-              >
-                {options.conceptos.map(o => <option key={o} value={o}>{o}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Estado de Autorización</label>
-              <select 
-                className="w-full border border-slate-300 rounded-lg text-sm bg-slate-50 p-2.5 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition-all font-medium text-slate-700 cursor-pointer"
-                value={filters.estado}
-                onChange={e => setFilters({...filters, estado: e.target.value})}
-              >
-                {options.estados.map((o: string) => <option key={o} value={o}>{o}</option>)}
-              </select>
-            </div>
-            <div className="lg:col-span-2 bg-slate-50 p-3 rounded-lg border border-slate-200">
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 text-center border-b border-slate-200 pb-1">Rango de Fechas</label>
-              <div className="grid grid-cols-2 gap-3 mt-2">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Desde</label>
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
+            <MultiSelect 
+              label="Periodo" 
+              options={options.periodos} 
+              selected={pendingFilters.periodo} 
+              onChange={v => setPendingFilters({...pendingFilters, periodo: v})} 
+            />
+            <MultiSelect 
+              label="Prestador" 
+              options={options.empresas} 
+              selected={pendingFilters.empresa} 
+              onChange={v => setPendingFilters({...pendingFilters, empresa: v})} 
+            />
+            <MultiSelect 
+              label="Cliente Empresa" 
+              options={options.clientes} 
+              selected={pendingFilters.cliente} 
+              onChange={v => setPendingFilters({...pendingFilters, cliente: v})} 
+            />
+            <MultiSelect 
+              label="Cliente UN" 
+              options={options.unidades} 
+              selected={pendingFilters.unidad} 
+              onChange={v => setPendingFilters({...pendingFilters, unidad: v})} 
+            />
+            <MultiSelect 
+              label="Producto" 
+              options={options.conceptos} 
+              selected={pendingFilters.concepto} 
+              onChange={v => setPendingFilters({...pendingFilters, concepto: v})} 
+            />
+            <MultiSelect 
+              label="Estado de Autorización" 
+              options={options.estados} 
+              selected={pendingFilters.estado} 
+              onChange={v => setPendingFilters({...pendingFilters, estado: v})} 
+            />
+          </div>
+          
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mt-5">
+            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 flex-1 max-w-lg flex items-center gap-4">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider shrink-0 w-24 border-r border-slate-200 pr-3">Fechas</label>
+              <div className="flex items-center gap-3 w-full">
+                <div className="flex items-center gap-2 flex-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Desde</label>
                   <input 
                     type="date" 
                     className="w-full border border-slate-300 rounded-lg text-sm bg-white p-2 outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700"
-                    value={filters.fechaDesde}
-                    onChange={e => setFilters({...filters, fechaDesde: e.target.value})}
+                    value={pendingFilters.fechaDesde}
+                    onChange={e => setPendingFilters({...pendingFilters, fechaDesde: e.target.value})}
                   />
                 </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Hasta</label>
+                <div className="flex items-center gap-2 flex-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Hasta</label>
                   <input 
                     type="date" 
                     className="w-full border border-slate-300 rounded-lg text-sm bg-white p-2 outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700"
-                    value={filters.fechaHasta}
-                    onChange={e => setFilters({...filters, fechaHasta: e.target.value})}
+                    value={pendingFilters.fechaHasta}
+                    onChange={e => setPendingFilters({...pendingFilters, fechaHasta: e.target.value})}
                   />
                 </div>
               </div>
             </div>
+            
+            <button 
+              onClick={applyFilters}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-sm shrink-0"
+            >
+              <Search size={18} />
+              Actualizar Resultados
+            </button>
           </div>
         </div>
 
