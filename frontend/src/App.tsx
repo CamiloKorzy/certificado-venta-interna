@@ -230,10 +230,22 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
       else if (lowerRow['importe'] !== undefined && parseAmount(lowerRow['importe']) !== 0) total = parseAmount(lowerRow['importe']);
 
 
-      // Extraer concepto (Producto)
+      // Extraer concepto (Producto principal)
       let concepto = lowerRow['producto'] || lowerRow['concepto'];
       if (!concepto) {
         concepto = 'Sin Detalle de Concepto';
+      }
+
+      // Extraer items para poder filtrar por múltiples productos dentro de un mismo certificado
+      let items = lowerRow['items'] || {};
+      let todosLosConceptos = new Set<string>();
+      if (typeof items === 'object' && items !== null) {
+        Object.values(items).forEach((it: any) => {
+           if (it.Producto) todosLosConceptos.add(it.Producto);
+        });
+      }
+      if (todosLosConceptos.size === 0) {
+        todosLosConceptos.add(concepto);
       }
 
       // Empresa
@@ -283,6 +295,7 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
         _cliente_empresa: lowerRow['cliente'] || 'Sin Cliente',
         _unidad: unidad,
         _concepto: concepto,
+        _todosLosConceptos: Array.from(todosLosConceptos),
         _estado: estadoLabel,
         _descripcion: String(lowerRow['documentodescripcion'] || lowerRow['descripción'] || lowerRow['descripcion'] || ''),
         _solicitante: solicitante,
@@ -307,7 +320,9 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
       if (d._empresa) empresas.add(d._empresa);
       if (d._cliente_empresa) clientes.add(d._cliente_empresa);
       if (d._unidad) unidades.add(d._unidad);
-      if (d._concepto) conceptos.add(d._concepto);
+      if (d._todosLosConceptos) {
+        d._todosLosConceptos.forEach((c: string) => conceptos.add(c));
+      } else if (d._concepto) conceptos.add(d._concepto);
       if (d._estado) estados.add(d._estado);
       if (d._periodo && d._periodo !== 'Desconocido') periodos.add(d._periodo);
     });
@@ -340,7 +355,11 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
       const matchEmpresa = f.empresa.includes('Todas') || f.empresa.includes(d._empresa);
       const matchCliente = f.cliente.includes('Todos') || f.cliente.includes(d._cliente_empresa);
       const matchUnidad = f.unidad.includes('Todas') || f.unidad.includes(d._unidad);
-      const matchConcepto = f.concepto.includes('Todos') || f.concepto.includes(d._concepto);
+      
+      const matchConcepto = f.concepto.includes('Todos') || 
+        (d._todosLosConceptos && d._todosLosConceptos.some((c: string) => f.concepto.includes(c))) || 
+        f.concepto.includes(d._concepto);
+
       const matchEstado = f.estado.includes('Todos') || f.estado.includes(d._estado);
       const matchPeriodo = f.periodo.includes('Todos') || f.periodo.includes(d._periodo);
       

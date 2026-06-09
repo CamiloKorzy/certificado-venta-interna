@@ -836,11 +836,13 @@ def get_indicadores(user=Depends(get_current_user)):
         
         # ─── PASO 1: Agrupar por comprobante ───
         comprobantes = {}
-        for row in data_rows:
+        for i, row in enumerate(data_rows):
             record = dict(zip(columns_db, row))
             num_doc = record.get('comprobante', '')
             if not num_doc or num_doc == 'NULL':
-                continue
+                num_doc = record.get('documento', '')
+                if not num_doc or num_doc == 'NULL':
+                    num_doc = f"ROW-{i}"
                 
             imp_raw = record.get('total', '0') or '0'
             try:
