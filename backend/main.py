@@ -834,47 +834,46 @@ def get_indicadores(user=Depends(get_current_user)):
         data_rows = cursor.fetchall()
         cursor.close()
         
-        # ─── PASO 1: Agrupar por numerodocumento ───
-        states_priority = {'Autorizado': 4, 'Rechazado': 3, 'Anulado': 3, 'Pendiente': 2, 'Sin Estado': 1, '': 0}
-        
+        # ─── PASO 1: Agrupar por comprobante ───
         comprobantes = {}
         for row in data_rows:
             record = dict(zip(columns_db, row))
-            num_doc = record.get('numerodocumento', '')
+            num_doc = record.get('comprobante', '')
             if not num_doc or num_doc == 'NULL':
                 continue
                 
-            imp_raw = record.get('importe', '0') or '0'
+            imp_raw = record.get('total', '0') or '0'
             try:
                 imp = float(str(imp_raw).replace(',', '.'))
             except:
                 imp = 0.0
+                
+            gravado_raw = record.get('gravado', '0') or '0'
+            try:
+                gravado = float(str(gravado_raw).replace(',', '.'))
+            except:
+                gravado = 0.0
             
-            state = str(record.get('estadoautorizacion', '') or '').strip()
-            producto = str(record.get('producto', '') or '').strip()
+            producto = str(record.get('productonombre', '') or '').strip()
             
             if num_doc not in comprobantes:
                 comprobantes[num_doc] = {
                     'metadata': record,
                     'max_importe': imp,
-                    'best_state': state,
+                    'max_gravado': gravado,
                     'items': {},
-                    'distinct_importes': set(),
                 }
             
             if imp > comprobantes[num_doc]['max_importe']:
                 comprobantes[num_doc]['max_importe'] = imp
-            
-            if imp > 0:
-                comprobantes[num_doc]['distinct_importes'].add(round(imp, 2))
-            
-            if states_priority.get(state, 0) > states_priority.get(comprobantes[num_doc]['best_state'], 0):
-                comprobantes[num_doc]['best_state'] = state
+            if gravado > comprobantes[num_doc]['max_gravado']:
+                comprobantes[num_doc]['max_gravado'] = gravado
             
             if producto and producto != 'NULL':
                 if producto not in comprobantes[num_doc]['items']:
-                    cant_raw = record.get('cantidadworkflow', '0') or '0'
-                    precio_raw = record.get('precio', '0') or '0'
+                    cant_raw = record.get('itemcantidad', '0') or '0'
+                    precio_raw = record.get('itemprecio', '0') or '0'
+                    itemimp_raw = record.get('itemimporte', '0') or '0'
                     try:
                         cant = float(str(cant_raw).replace(',', '.'))
                     except:
@@ -883,13 +882,17 @@ def get_indicadores(user=Depends(get_current_user)):
                         precio = float(str(precio_raw).replace(',', '.'))
                     except:
                         precio = 0.0
+                    try:
+                        itemimp = float(str(itemimp_raw).replace(',', '.'))
+                    except:
+                        itemimp = 0.0
                     
                     comprobantes[num_doc]['items'][producto] = {
                         'Producto': producto,
                         'Cantidad': cant,
                         'Precio': precio,
-                        'Importe': imp,
-                        'Unidad': record.get('unidad', '')
+                        'Importe': itemimp,
+                        'Unidad': record.get('unidadnombre', '')
                     }
         
         # ─── PASO 2: Construir registros finales ───
@@ -897,7 +900,7 @@ def get_indicadores(user=Depends(get_current_user)):
         for num_doc, data in comprobantes.items():
             meta = data['metadata']
             
-            fecha_raw = meta.get('fecha', '')
+            fecha_raw = meta.get('fechaalta', meta.get('fecha', ''))
             fecha_fmt = ''
             if fecha_raw:
                 try:
@@ -915,27 +918,26 @@ def get_indicadores(user=Depends(get_current_user)):
                     return ''
                 return str(val).strip()
             
-            desc = clean(meta.get('documentodescripcion', ''))
-            if not desc:
-                desc = clean(meta.get('detalledescripcion', ''))
-            
+            desc = clean(meta.get('descripcion', ''))
             items_list = list(data['items'].values())
             
             total_val = data['max_importe']
-            gravado_val = round(total_val / 1.21, 2)
+            gravado_val = data['max_gravado']
             iva_val = round(total_val - gravado_val, 2)
             
             record = {
                 'Fecha': fecha_fmt,
                 'Comprobante': num_doc,
                 'Empresa': clean(meta.get('empresa', '')),
+                'Cliente': clean(meta.get('cliente', '')),
                 'Descripción': desc,
-                'Solicitante': clean(meta.get('solicitante', '')),
-                'EstadoAutorizacion': data['best_state'] if data['best_state'] else 'Sin Estado',
+                'Solicitante': clean(meta.get('equiposolicitantenombre', '')),
+                'EstadoAutorizacion': 'Autorizado',
                 'Total Bruto': str(total_val),
                 'Neto Gravado': str(gravado_val),
                 'IVA': str(iva_val),
-                'UnidadNegocio': clean(meta.get('unidaddenegocio', meta.get('organizacion', meta.get('empresa', '')))),
+                'UnidadNegocio': clean(meta.get('unidadnombre', '')),
+                'Concepto': clean(meta.get('productonombre', '')),
                 'items': items_list,
             }
             records.append(record)
@@ -943,7 +945,7 @@ def get_indicadores(user=Depends(get_current_user)):
         if not records:
             raise Exception("No data found en Aurora")
             
-        final_columns = ['Fecha', 'Comprobante', 'Empresa', 'Descripción', 'Solicitante', 'EstadoAutorizacion', 'Neto Gravado', 'IVA', 'Total Bruto', 'UnidadNegocio']
+        final_columns = ['Fecha', 'Comprobante', 'Empresa', 'Cliente', 'Descripción', 'Solicitante', 'EstadoAutorizacion', 'Neto Gravado', 'IVA', 'Total Bruto', 'UnidadNegocio', 'Concepto']
         
     except Exception as e:
         print(f"Error consultando BD: {e}")
