@@ -135,6 +135,94 @@ def auto_setup_db():
                 fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
             CREATE INDEX IF NOT EXISTS idx_cert_audit_fecha ON cert_audit_log(fecha);
+            
+            CREATE TABLE IF NOT EXISTS cert_config_gastos_cuentas (
+                id SERIAL PRIMARY KEY,
+                categoria TEXT NOT NULL,
+                cuenta_codigo TEXT NOT NULL,
+                cuenta_nombre TEXT NOT NULL,
+                UNIQUE(categoria, cuenta_codigo)
+            );
+            CREATE INDEX IF NOT EXISTS idx_cert_config_gastos_cat ON cert_config_gastos_cuentas(categoria);
+            
+            CREATE TABLE IF NOT EXISTS cert_config_ingresos_comprobantes (
+                id SERIAL PRIMARY KEY,
+                subtipo_id TEXT NOT NULL,
+                codigo TEXT NOT NULL,
+                nombre TEXT NOT NULL,
+                UNIQUE(subtipo_id)
+            );
+            
+            CREATE TABLE IF NOT EXISTS cert_config_gastos_asientos (
+                id SERIAL PRIMARY KEY,
+                tipo_asiento_id TEXT NOT NULL,
+                codigo TEXT NOT NULL,
+                nombre TEXT NOT NULL,
+                UNIQUE(tipo_asiento_id)
+            );
+            
+            CREATE TABLE IF NOT EXISTS cert_config_gastos_compras (
+                id SERIAL PRIMARY KEY,
+                subtipo_id TEXT NOT NULL,
+                codigo TEXT NOT NULL,
+                nombre TEXT NOT NULL,
+                UNIQUE(subtipo_id)
+            );
+            
+            CREATE TABLE IF NOT EXISTS cert_config_unidades_negocio (
+                id SERIAL PRIMARY KEY,
+                nombre TEXT UNIQUE NOT NULL
+            );
+            
+            CREATE TABLE IF NOT EXISTS cert_config_unidades_detalle (
+                id SERIAL PRIMARY KEY,
+                unidad_id INTEGER REFERENCES cert_config_unidades_negocio(id) ON DELETE CASCADE,
+                tipo TEXT NOT NULL,
+                valor_id TEXT NOT NULL,
+                valor_codigo TEXT,
+                valor_nombre TEXT,
+                UNIQUE(unidad_id, tipo, valor_id)
+            );
+            
+            CREATE TABLE IF NOT EXISTS cert_excel_uploads (
+                id SERIAL PRIMARY KEY,
+                nombre_archivo TEXT NOT NULL,
+                usuario TEXT NOT NULL,
+                periodo TEXT,
+                fecha_subida TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            
+            CREATE TABLE IF NOT EXISTS cert_excel_items (
+                id SERIAL PRIMARY KEY,
+                upload_id INTEGER REFERENCES cert_excel_uploads(id) ON DELETE CASCADE,
+                unidad_negocio TEXT NOT NULL,
+                fecha DATE NOT NULL,
+                concepto TEXT NOT NULL,
+                tipo TEXT NOT NULL,
+                importe NUMERIC(15,2) NOT NULL
+            );
+            
+            CREATE TABLE IF NOT EXISTS cert_cierres_mensuales (
+                id SERIAL PRIMARY KEY,
+                unidad_negocio TEXT NOT NULL,
+                periodo TEXT NOT NULL,
+                usuario_cierre TEXT NOT NULL,
+                fecha_cierre TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(unidad_negocio, periodo)
+            );
+            
+            CREATE TABLE IF NOT EXISTS cert_cierres_detalle (
+                id SERIAL PRIMARY KEY,
+                cierre_id INTEGER REFERENCES cert_cierres_mensuales(id) ON DELETE CASCADE,
+                origen TEXT NOT NULL,
+                tipo_movimiento TEXT NOT NULL,
+                categoria TEXT,
+                fecha DATE,
+                concepto TEXT,
+                comprobante TEXT,
+                importe NUMERIC(15,2) NOT NULL
+            );
+
         """)
         # Crear admin por defecto si no existe
         cur.execute("SELECT COUNT(*) FROM cert_usuarios WHERE email = 'admin@ceeenriquez.com'")
@@ -247,14 +335,378 @@ def health_check():
 
 @app.get("/api/setup")
 def run_setup():
-    import traceback
+    auto_setup_db()
+    return {"status": "ok", "message": "Base de datos (Supabase) inicializada correctamente."}
+
+# ═══════════════════════════════════════════════════════
+# ENDPOINTS CONFIGURACIÓN GASTOS
+# ═══════════════════════════════════════════════════════
+
+@app.get("/api/config/cuentas")
+def get_config_cuentas():
+    """Obtiene el listado de cuentas de resultado de FinnegansBI para configurar gastos."""
     try:
-        global _setup_done
-        _setup_done = False
-        auto_setup_db()
-        return {"status": "setup ejecutado", "done": _setup_done}
+        conn = get_aurora()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT CuentaID, Codigo, Nombre
+            FROM BSCuenta
+            WHERE ImpactaResultados = 1
+            ORDER BY Nombre;
+        """)
+        cuentas = []
+        for row in cur.fetchall():
+            cuentas.append({
+                "cuenta_id": row[0],
+                "codigo": row[1],
+                "nombre": row[2]
+            })
+        cur.close()
+        conn.close()
+        return cuentas
     except Exception as e:
-        return {"error": str(e), "trace": traceback.format_exc()[:500]}
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/config/gastos")
+def get_config_gastos():
+    """Obtiene el mapeo actual de cuentas a categorías de gastos."""
+    try:
+        conn = get_supabase()
+        cur = conn.cursor()
+        cur.execute("SELECT categoria, cuenta_codigo, cuenta_nombre FROM cert_config_gastos_cuentas")
+        mapeos = cur.fetchall()
+        
+        config = {}
+        for row in mapeos:
+            cat = row[0]
+            if cat not in config:
+                config[cat] = []
+            config[cat].append({
+                "cuenta_codigo": row[1],
+                "cuenta_nombre": row[2]
+            })
+        
+        cur.close()
+        conn.close()
+        return config
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ═══════════════════════════════════════════════════════
+# MAESTROS FINNEGANS (Para Configuración Avanzada)
+# ═══════════════════════════════════════════════════════
+
+@app.get("/api/finnegans/subtipos")
+def get_finnegans_subtipos():
+    try:
+        conn = get_aurora()
+        cur = conn.cursor()
+        cur.execute("SELECT TransaccionSubtipoID, Codigo, Nombre FROM FAFTransaccionSubtipo ORDER BY Nombre")
+        data = [{"id": r[0], "codigo": r[1], "nombre": r[2]} for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/finnegans/centros-costo")
+def get_finnegans_centros_costo():
+    try:
+        conn = get_aurora()
+        cur = conn.cursor()
+        cur.execute("SELECT CentroCostoID, Codigo, Nombre FROM BSCentroCosto ORDER BY Nombre")
+        data = [{"id": r[0], "codigo": r[1], "nombre": r[2]} for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/finnegans/empresas")
+def get_finnegans_empresas():
+    try:
+        conn = get_aurora()
+        cur = conn.cursor()
+        cur.execute("SELECT EmpresaID, Codigo, Nombre FROM FAFEmpresa WHERE EmpresaIDPadre = 1 ORDER BY Nombre")
+        data = [{"id": r[0], "codigo": r[1], "nombre": r[2]} for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/finnegans/categorias-asiento")
+def get_finnegans_categorias_asiento():
+    try:
+        conn = get_aurora()
+        cur = conn.cursor()
+        cur.execute("SELECT TransaccionCategoriaID, Codigo, Nombre FROM FAFTransaccionCategoria ORDER BY Nombre")
+        data = [{"id": r[0], "codigo": r[1], "nombre": r[2]} for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ═══════════════════════════════════════════════════════
+# CRUD CONFIGURACIÓN AVANZADA
+# ═══════════════════════════════════════════════════════
+
+class ConfigItem(BaseModel):
+    id_ref: str
+    codigo: str
+    nombre: str
+
+@app.get("/api/config/avanzada/{tipo}")
+def get_config_avanzada(tipo: str):
+    try:
+        conn = get_supabase()
+        cur = conn.cursor()
+        
+        if tipo == "ingresos-comprobantes":
+            cur.execute("SELECT subtipo_id, codigo, nombre FROM cert_config_ingresos_comprobantes")
+        elif tipo == "gastos-asientos":
+            cur.execute("SELECT tipo_asiento_id, codigo, nombre FROM cert_config_gastos_asientos")
+        elif tipo == "gastos-compras":
+            cur.execute("SELECT subtipo_id, codigo, nombre FROM cert_config_gastos_compras")
+        else:
+            raise HTTPException(status_code=400, detail="Tipo de configuración inválido")
+            
+        data = [{"id_ref": r[0], "codigo": r[1], "nombre": r[2]} for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/config/avanzada/{tipo}")
+def save_config_avanzada(tipo: str, items: List[ConfigItem]):
+    try:
+        conn = get_supabase()
+        cur = conn.cursor()
+        
+        if tipo == "ingresos-comprobantes":
+            cur.execute("TRUNCATE TABLE cert_config_ingresos_comprobantes")
+            for item in items:
+                cur.execute("INSERT INTO cert_config_ingresos_comprobantes (subtipo_id, codigo, nombre) VALUES (%s, %s, %s)",
+                            (item.id_ref, item.codigo, item.nombre))
+        elif tipo == "gastos-asientos":
+            cur.execute("TRUNCATE TABLE cert_config_gastos_asientos")
+            for item in items:
+                cur.execute("INSERT INTO cert_config_gastos_asientos (tipo_asiento_id, codigo, nombre) VALUES (%s, %s, %s)",
+                            (item.id_ref, item.codigo, item.nombre))
+        elif tipo == "gastos-compras":
+            cur.execute("TRUNCATE TABLE cert_config_gastos_compras")
+            for item in items:
+                cur.execute("INSERT INTO cert_config_gastos_compras (subtipo_id, codigo, nombre) VALUES (%s, %s, %s)",
+                            (item.id_ref, item.codigo, item.nombre))
+        else:
+            raise HTTPException(status_code=400, detail="Tipo de configuración inválido")
+            
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class UnidadDetalle(BaseModel):
+    tipo: str
+    valor_id: str
+    valor_codigo: str
+    valor_nombre: str
+
+class UnidadNegocioConfig(BaseModel):
+    nombre: str
+    detalles: List[UnidadDetalle]
+
+@app.get("/api/config/unidades-negocio")
+def get_config_unidades_negocio():
+    try:
+        conn = get_supabase()
+        cur = conn.cursor()
+        cur.execute("SELECT id, nombre FROM cert_config_unidades_negocio ORDER BY nombre")
+        unidades = cur.fetchall()
+        
+        result = []
+        for u in unidades:
+            uid = u[0]
+            unombre = u[1]
+            cur.execute("SELECT tipo, valor_id, valor_codigo, valor_nombre FROM cert_config_unidades_detalle WHERE unidad_id = %s", (uid,))
+            detalles = [{"tipo": d[0], "valor_id": d[1], "valor_codigo": d[2], "valor_nombre": d[3]} for d in cur.fetchall()]
+            result.append({
+                "id": uid,
+                "nombre": unombre,
+                "detalles": detalles
+            })
+            
+        cur.close()
+        conn.close()
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/config/unidades-negocio")
+def save_config_unidades_negocio(unidades: List[UnidadNegocioConfig]):
+    try:
+        conn = get_supabase()
+        cur = conn.cursor()
+        cur.execute("TRUNCATE TABLE cert_config_unidades_negocio CASCADE")
+        
+        for u in unidades:
+            cur.execute("INSERT INTO cert_config_unidades_negocio (nombre) VALUES (%s) RETURNING id", (u.nombre,))
+            uid = cur.fetchone()[0]
+            for d in u.detalles:
+                cur.execute("""
+                    INSERT INTO cert_config_unidades_detalle (unidad_id, tipo, valor_id, valor_codigo, valor_nombre)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (uid, d.tipo, d.valor_id, d.valor_codigo, d.valor_nombre))
+                
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+class GastoConfigUpdate(BaseModel):
+    categoria: str
+    cuentas: List[dict]
+
+@app.post("/api/config/gastos")
+def update_config_gastos(data: GastoConfigUpdate):
+    """Actualiza las cuentas asociadas a una categoría de gasto específica."""
+    try:
+        conn = get_supabase()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM cert_config_gastos_cuentas WHERE categoria = %s", (data.categoria,))
+        
+        for c in data.cuentas:
+            cur.execute("""
+                INSERT INTO cert_config_gastos_cuentas (categoria, cuenta_codigo, cuenta_nombre)
+                VALUES (%s, %s, %s)
+            """, (data.categoria, c.get("cuenta_codigo"), c.get("cuenta_nombre")))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/gastos")
+def get_gastos(
+    empresa: Optional[str] = None,
+    fecha_desde: Optional[str] = None,
+    fecha_hasta: Optional[str] = None
+):
+    try:
+        conn_supa = get_supabase()
+        cur_supa = conn_supa.cursor()
+        cur_supa.execute("SELECT categoria, cuenta_codigo FROM cert_config_gastos_cuentas")
+        config_rows = cur_supa.fetchall()
+        cur_supa.close()
+        conn_supa.close()
+        
+        cat_map = {}
+        for r in config_rows:
+            cat_map[r[1]] = r[0]
+
+        conn = get_aurora()
+        cur = conn.cursor()
+
+        sql = """
+        SELECT
+            FAFEmpresa.Nombre AS Sucursal,
+            BSCentroCosto.Nombre AS CentroCosto,
+            BSCuenta.Codigo AS CuentaCodigo,
+            BSCuenta.Nombre AS Cuenta,
+            EXTRACT(YEAR FROM BSAsientoItem.Fecha) AS Anio,
+            EXTRACT(MONTH FROM BSAsientoItem.Fecha) AS Mes,
+            SUM(COALESCE(BSTransaccionDimension.ImporteMonPrincipal, BSAsientoItem.ImporteMonPrincipal) * BSAsientoItem.DebeHaber) AS Importe
+        FROM BSAsientoItem
+        INNER JOIN BSCuenta ON BSAsientoItem.CuentaID = BSCuenta.CuentaID
+        LEFT JOIN BSTransaccionDimension ON BSAsientoItem.AsientoItemID = BSTransaccionDimension.AsientoItemID AND BSTransaccionDimension.DimensionID = 999999
+        INNER JOIN BSTransaccion ON COALESCE(BSTransaccionDimension.TransaccionID, BSAsientoItem.TransaccionID) = BSTransaccion.TransaccionID
+        INNER JOIN FAFTransaccionSubtipo ON BSTransaccion.TransaccionSubtipoID = FAFTransaccionSubtipo.TransaccionSubtipoID
+        INNER JOIN FAFTransaccionCategoria ON FAFTransaccionSubtipo.TransaccionCategoriaID = FAFTransaccionCategoria.TransaccionCategoriaID
+        INNER JOIN FAFEmpresa ON BSTransaccion.EmpresaID = FAFEmpresa.EmpresaID
+        LEFT JOIN BSCentroCosto ON BSTransaccionDimension.RegistroID = BSCentroCosto.CentroCostoID
+        WHERE FAFEmpresa.EmpresaIDPadre = 1
+          AND BSCuenta.ImpactaResultados = 1
+        """
+        
+        params = []
+        if fecha_desde:
+            sql += " AND BSAsientoItem.Fecha >= %s"
+            params.append(fecha_desde)
+        if fecha_hasta:
+            sql += " AND BSAsientoItem.Fecha <= %s"
+            params.append(fecha_hasta)
+            
+        sql += """
+        GROUP BY 
+            FAFEmpresa.Nombre,
+            BSCentroCosto.Nombre,
+            BSCuenta.Codigo,
+            BSCuenta.Nombre,
+            EXTRACT(YEAR FROM BSAsientoItem.Fecha),
+            EXTRACT(MONTH FROM BSAsientoItem.Fecha)
+        """
+        
+        cur.execute(sql, tuple(params))
+        results = cur.fetchall()
+        
+        gastos = []
+        for row in results:
+            sucursal = row[0]
+            if empresa and sucursal != empresa and empresa != "Todas":
+                continue 
+                
+            cc = row[1]
+            cod = row[2]
+            cta = row[3]
+            anio = int(row[4])
+            mes = int(row[5])
+            importe = float(row[6] or 0)
+            
+            if importe == 0:
+                continue
+                
+            categoria = cat_map.get(cod)
+            if not categoria:
+                n = (cta or "").upper()
+                if "SUELDO" in n or "SALARIO" in n or "REMUNERACION" in n:
+                    categoria = "Sueldos"
+                elif "COMBUSTIBLE" in n or "GASOIL" in n or "NAFTA" in n:
+                    categoria = "Combustible"
+                elif "INSUMO" in n or "MATERIAL" in n:
+                    categoria = "Insumos"
+                elif "COMEDOR" in n or "VIANDA" in n:
+                    categoria = "Comedor"
+                elif "ALQUILER" in n or "LOCACION" in n or "OFICINA" in n:
+                    categoria = "Oficina Central"
+                else:
+                    categoria = "Otros Gastos"
+                    
+            gastos.append({
+                "sucursal": sucursal,
+                "centro_costo": cc,
+                "categoria": categoria,
+                "cuenta_codigo": cod,
+                "cuenta_nombre": cta,
+                "periodo": f"{mes:02d}/{anio}",
+                "importe": importe
+            })
+            
+        cur.close()
+        conn.close()
+        return {"gastos": gastos}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/login")
 def login(req: LoginRequest):
