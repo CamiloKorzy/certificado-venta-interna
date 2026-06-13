@@ -1421,6 +1421,29 @@ function Configuracion({ token }: { token: string }) {
 }
 
 // ═══════════════════════════════════════════════════════
+// NEW EMPTY TABS (Dashboard & Gastos)
+// ═══════════════════════════════════════════════════════
+function MainDashboard() {
+  return (
+    <div className="p-8 flex flex-col items-center justify-center text-slate-500 h-[60vh]">
+      <LayoutDashboard size={48} className="mb-4 text-slate-300" />
+      <h2 className="text-2xl font-bold text-slate-700 mb-2">Dashboard Principal</h2>
+      <p>Vista general próximamente disponible.</p>
+    </div>
+  );
+}
+
+function Gastos() {
+  return (
+    <div className="p-8 flex flex-col items-center justify-center text-slate-500 h-[60vh]">
+      <Wallet size={48} className="mb-4 text-slate-300" />
+      <h2 className="text-2xl font-bold text-slate-700 mb-2">Reporte de Gastos</h2>
+      <p>Módulo de gastos próximamente disponible.</p>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
 // APP WRAPPER — Login + Navigation
 // ═══════════════════════════════════════════════════════
 export default function App() {
@@ -1428,7 +1451,7 @@ export default function App() {
   const [user, setUser] = useState<any>(() => {
     try { return JSON.parse(localStorage.getItem('cert_user') || 'null'); } catch { return null; }
   });
-  const [view, setView] = useState<'dashboard' | 'config'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'ingresos' | 'gastos' | 'config'>('ingresos');
 
   const handleLogin = (t: string, u: any) => {
     setToken(t); setUser(u);
@@ -1452,17 +1475,27 @@ export default function App() {
           <div className="flex items-center gap-6">
             <h1 className="font-bold text-slate-800 text-sm flex items-center gap-2">
               <img src="/logo_cee.png" alt="CEE" className="h-8 w-8 rounded-md object-contain" />
-              Certificados de Ventas Internos
+              Reporte de Resultados
             </h1>
             <nav className="flex gap-1">
               <button onClick={() => setView('dashboard')}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'dashboard' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
                 <span className="flex items-center gap-1.5"><LayoutDashboard size={15} /> Dashboard</span>
               </button>
-              <button onClick={() => setView('config')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'config' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
-                <span className="flex items-center gap-1.5"><Settings size={15} /> Configuración</span>
+              <button onClick={() => setView('ingresos')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'ingresos' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
+                <span className="flex items-center gap-1.5"><TrendingUp size={15} /> Ingresos</span>
               </button>
+              <button onClick={() => setView('gastos')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'gastos' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
+                <span className="flex items-center gap-1.5"><Wallet size={15} /> Gastos</span>
+              </button>
+              {user?.rol === 'admin' && (
+                <button onClick={() => setView('config')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'config' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
+                  <span className="flex items-center gap-1.5"><Settings size={15} /> Configuración</span>
+                </button>
+              )}
             </nav>
           </div>
           <div className="flex items-center gap-4">
@@ -1473,7 +1506,9 @@ export default function App() {
       </div>
 
       {/* Content */}
-      {view === 'dashboard' && <Dashboard token={token} onLogout={handleLogout} />}
+      {view === 'dashboard' && <MainDashboard />}
+      {view === 'ingresos' && <Dashboard token={token} onLogout={handleLogout} />}
+      {view === 'gastos' && <Gastos />}
       {view === 'config' && user?.rol === 'admin' && <Configuracion token={token} />}
     </div>
   );
