@@ -681,6 +681,7 @@ def delete_excel_upload(id: int):
         return {"status": "ok"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+class GastoConfigUpdate(BaseModel):
     categoria: str
     cuentas: List[dict]
 
