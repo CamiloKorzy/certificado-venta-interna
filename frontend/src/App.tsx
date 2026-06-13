@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Building2, PackageCheck, TrendingUp, FileText, Filter, Calendar, LayoutDashboard, Search, ChevronDown, ChevronUp, ChevronRight, BarChart3, Presentation, Download, LogOut, Settings, Users, Save, X, Trash2, Edit2, Send, Check, Loader2, Shield, Bell, Wallet } from 'lucide-react';
-
-// ─── API Helper ───
+import ConfiguracionAvanzada from './components/ConfiguracionAvanzada';// ─── API Helper ───
 const API_URL = '';
 function apiFetch(path: string, token: string, options: any = {}) {
   return fetch(API_URL + path, {
@@ -1037,7 +1036,7 @@ function Configuracion({ token }: { token: string }) {
   const [savingUn, setSavingUn] = useState(false);
   const [modalLoading, setModalLoading] = useState(false);
   const [modalMsg, setModalMsg] = useState({ text: '', type: '' });
-  const [configTab, setConfigTab] = useState<'usuarios' | 'audit'>('usuarios');
+  const [configTab, setConfigTab] = useState<'usuarios' | 'audit' | 'ingresos' | 'gastos-asientos' | 'gastos-compras' | 'unidades'>('usuarios');
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
 
@@ -1193,9 +1192,13 @@ function Configuracion({ token }: { token: string }) {
           <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl"><Settings size={28} /></div>
           <div><h2 className="text-2xl font-bold text-slate-800">Configuración</h2><p className="text-sm text-slate-500">Gestión de usuarios y auditoría</p></div>
         </div>
-        <div className="flex bg-slate-100 p-1 rounded-xl self-start sm:self-auto">
-          <button onClick={() => setConfigTab('usuarios')} className={`px-4 py-2 text-sm font-bold rounded-lg transition-colors ${configTab === 'usuarios' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Usuarios</button>
-          <button onClick={() => setConfigTab('audit')} className={`px-4 py-2 text-sm font-bold rounded-lg transition-colors ${configTab === 'audit' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Registro Auditoría</button>
+        <div className="flex bg-slate-100 p-1 rounded-xl self-start sm:self-auto overflow-x-auto max-w-full">
+          <button onClick={() => setConfigTab('usuarios')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'usuarios' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Usuarios</button>
+          <button onClick={() => setConfigTab('audit')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'audit' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Auditoría</button>
+          <button onClick={() => setConfigTab('unidades')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'unidades' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Unidades de Negocio</button>
+          <button onClick={() => setConfigTab('ingresos')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'ingresos' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Conf. Ingresos</button>
+          <button onClick={() => setConfigTab('gastos-asientos')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'gastos-asientos' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Conf. Gastos Asientos</button>
+          <button onClick={() => setConfigTab('gastos-compras')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'gastos-compras' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Conf. Gastos Compras</button>
         </div>
       </div>
 
@@ -1271,7 +1274,7 @@ function Configuracion({ token }: { token: string }) {
           </table>
         )}
       </div>
-      </>) : (
+      </>) : configTab === 'audit' ? (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
             <h3 className="font-bold text-slate-800 flex items-center gap-2"><Shield size={18} className="text-slate-500" /> Registro de Actividad</h3>
@@ -1303,6 +1306,8 @@ function Configuracion({ token }: { token: string }) {
             </div>
           )}
         </div>
+      ) : (
+        <ConfiguracionAvanzada token={token} tipo={configTab as any} />
       )}
 
       {/* Modal Unidades de Negocio */}
