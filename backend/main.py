@@ -582,16 +582,25 @@ class ExcelItem(BaseModel):
 
 @app.post("/api/excel/upload")
 async def upload_excel(file: UploadFile = File(...)):
-    import pandas as pd
+    import openpyxl
     try:
         contents = await file.read()
-        df = pd.read_excel(io.BytesIO(contents))
+        wb = openpyxl.load_workbook(filename=io.BytesIO(contents), data_only=True)
+        sheet = wb.active
+        
+        headers = [str(cell.value).strip() if cell.value else "" for cell in sheet[1]]
         
         # Validar columnas
         expected_cols = ["Unidad de Negocio", "Fecha", "Concepto", "Tipo", "Importe"]
         for col in expected_cols:
-            if col not in df.columns:
-                raise HTTPException(status_code=400, detail=f"Falta la columna '{col}' en el Excel")
+            if col not in headers:
+                raise HTTPException(status_code=400, detail=f"Falta la columna '{col}' en el Excel. Encontradas: {headers}")
+                
+        col_idx = {col: headers.index(col) for col in expected_cols}
+        rows = list(sheet.iter_rows(min_row=2, values_only=True))
+        
+        # Filtrar filas vacías
+        valid_rows = [r for r in rows if any(x is not None for x in r)]
                 
         # Insertar cabecera
         conn = get_supabase()
@@ -599,38 +608,42 @@ async def upload_excel(file: UploadFile = File(...)):
         
         cur.execute(
             "INSERT INTO cert_excel_uploads (filename, estado, total_registros) VALUES (%s, %s, %s) RETURNING id",
-            (file.filename, 'PROCESADO', len(df))
+            (file.filename, 'PROCESADO', len(valid_rows))
         )
         upload_id = cur.fetchone()[0]
         
         # Insertar items
-        for _, row in df.iterrows():
-            # Limpiar importes (puede venir como string o nan)
+        for row in valid_rows:
+            raw_importe = row[col_idx['Importe']]
             importe = 0
-            if pd.notnull(row['Importe']):
+            if raw_importe is not None:
                 try:
-                    importe = float(str(row['Importe']).replace(',', '.'))
+                    importe = float(str(raw_importe).replace(',', '.'))
                 except:
                     importe = 0
                     
-            fecha_val = row['Fecha']
-            if pd.isnull(fecha_val):
-                fecha_str = datetime.now().strftime('%Y-%m-%d')
-            else:
-                try:
-                    fecha_str = pd.to_datetime(fecha_val).strftime('%Y-%m-%d')
-                except:
-                    fecha_str = datetime.now().strftime('%Y-%m-%d')
-                    
+            raw_fecha = row[col_idx['Fecha']]
+            fecha_str = datetime.now().strftime('%Y-%m-%d')
+            if raw_fecha is not None:
+                if isinstance(raw_fecha, datetime):
+                    fecha_str = raw_fecha.strftime('%Y-%m-%d')
+                else:
+                    try:
+                        # Attempt to parse common string formats if it's a string
+                        from dateutil import parser
+                        fecha_str = parser.parse(str(raw_fecha)).strftime('%Y-%m-%d')
+                    except:
+                        pass
+                        
             cur.execute("""
                 INSERT INTO cert_excel_items (upload_id, unidad_negocio_codigo, fecha, concepto, tipo, importe)
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (
                 upload_id,
-                str(row['Unidad de Negocio']) if pd.notnull(row['Unidad de Negocio']) else 'DESCONOCIDO',
+                str(row[col_idx['Unidad de Negocio']]) if row[col_idx['Unidad de Negocio']] is not None else 'DESCONOCIDO',
                 fecha_str,
-                str(row['Concepto']) if pd.notnull(row['Concepto']) else '',
-                str(row['Tipo']).upper() if pd.notnull(row['Tipo']) else 'INGRESO',
+                str(row[col_idx['Concepto']]) if row[col_idx['Concepto']] is not None else '',
+                str(row[col_idx['Tipo']]).upper() if row[col_idx['Tipo']] is not None else 'INGRESO',
                 importe
             ))
             
