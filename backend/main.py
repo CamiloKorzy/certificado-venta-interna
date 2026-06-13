@@ -1,4 +1,6 @@
-from fastapi import FastAPI, HTTPException, Request, Depends
+from fastapi import FastAPI, HTTPException, Request, Depends, UploadFile, File
+import pandas as pd
+import io
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
@@ -572,7 +574,100 @@ def save_config_unidades_negocio(unidades: List[UnidadNegocioConfig]):
 
 
 
-class GastoConfigUpdate(BaseModel):
+class ExcelItem(BaseModel):
+    unidad_negocio: str
+    fecha: str
+    concepto: str
+    tipo: str
+    importe: float
+
+@app.post("/api/excel/upload")
+async def upload_excel(file: UploadFile = File(...)):
+    try:
+        contents = await file.read()
+        df = pd.read_excel(io.BytesIO(contents))
+        
+        # Validar columnas
+        expected_cols = ["Unidad de Negocio", "Fecha", "Concepto", "Tipo", "Importe"]
+        for col in expected_cols:
+            if col not in df.columns:
+                raise HTTPException(status_code=400, detail=f"Falta la columna '{col}' en el Excel")
+                
+        # Insertar cabecera
+        conn = get_supabase()
+        cur = conn.cursor()
+        
+        cur.execute(
+            "INSERT INTO cert_excel_uploads (filename, estado, total_registros) VALUES (%s, %s, %s) RETURNING id",
+            (file.filename, 'PROCESADO', len(df))
+        )
+        upload_id = cur.fetchone()[0]
+        
+        # Insertar items
+        for _, row in df.iterrows():
+            # Limpiar importes (puede venir como string o nan)
+            importe = 0
+            if pd.notnull(row['Importe']):
+                try:
+                    importe = float(str(row['Importe']).replace(',', '.'))
+                except:
+                    importe = 0
+                    
+            fecha_val = row['Fecha']
+            if pd.isnull(fecha_val):
+                fecha_str = datetime.now().strftime('%Y-%m-%d')
+            else:
+                try:
+                    fecha_str = pd.to_datetime(fecha_val).strftime('%Y-%m-%d')
+                except:
+                    fecha_str = datetime.now().strftime('%Y-%m-%d')
+                    
+            cur.execute("""
+                INSERT INTO cert_excel_items (upload_id, unidad_negocio_codigo, fecha, concepto, tipo, importe)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (
+                upload_id,
+                str(row['Unidad de Negocio']) if pd.notnull(row['Unidad de Negocio']) else 'DESCONOCIDO',
+                fecha_str,
+                str(row['Concepto']) if pd.notnull(row['Concepto']) else '',
+                str(row['Tipo']).upper() if pd.notnull(row['Tipo']) else 'INGRESO',
+                importe
+            ))
+            
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return {"status": "ok", "id": upload_id, "registros": len(df)}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/excel/uploads")
+def get_excel_uploads():
+    try:
+        conn = get_supabase()
+        cur = conn.cursor()
+        cur.execute("SELECT id, filename, uploaded_at, estado, total_registros FROM cert_excel_uploads ORDER BY uploaded_at DESC")
+        data = [{"id": r[0], "filename": r[1], "uploaded_at": str(r[2]), "estado": r[3], "total_registros": r[4]} for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/excel/uploads/{id}")
+def delete_excel_upload(id: int):
+    try:
+        conn = get_supabase()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM cert_excel_uploads WHERE id = %s", (id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
     categoria: str
     cuentas: List[dict]
 
@@ -1447,3 +1542,297 @@ def get_indicadores(user=Depends(get_current_user)):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+
+
+class PresentarPeriodoReq(BaseModel):
+    unidad_negocio: str
+    periodo: str
+
+@app.post("/api/cierre/presentar")
+def presentar_periodo(req: PresentarPeriodoReq, current_user = Depends(get_current_user)):
+    """Toma la info en vivo y la guarda en las tablas de snapshot."""
+    try:
+        # Calcular en vivo usando la misma logica (reutilizamos la que usaremos para get_informe_mensual)
+        informe = get_informe_mensual_calculo_vivo(req.unidad_negocio, req.periodo)
+        
+        conn_supa = get_supabase()
+        cur_supa = conn_supa.cursor()
+        
+        # Verificar si ya existe
+        cur_supa.execute("SELECT id FROM cert_cierres_mensuales WHERE unidad_negocio = %s AND periodo = %s", (req.unidad_negocio, req.periodo))
+        if cur_supa.fetchone():
+            cur_supa.close()
+            conn_supa.close()
+            raise HTTPException(status_code=400, detail="El periodo ya se encuentra presentado.")
+            
+        cur_supa.execute(
+            "INSERT INTO cert_cierres_mensuales (unidad_negocio, periodo, usuario_cierre, fecha_cierre) VALUES (%s, %s, %s, NOW()) RETURNING id",
+            (req.unidad_negocio, req.periodo, current_user.get("sub", current_user.get("email", "admin")))
+        )
+        cierre_id = cur_supa.fetchone()[0]
+        
+        for item in informe["ingresos"] + informe["gastos"]:
+            cur_supa.execute(
+                "INSERT INTO cert_cierres_detalle (cierre_id, origen, tipo_movimiento, categoria, fecha, concepto, comprobante, importe) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                (cierre_id, item["origen"], item["tipo_movimiento"], item["categoria"], item["fecha"] if item["fecha"] else None, item["concepto"], item["comprobante"], item["importe"])
+            )
+            
+        conn_supa.commit()
+        cur_supa.close()
+        conn_supa.close()
+        return {"status": "ok", "cierre_id": cierre_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class ReabrirPeriodoReq(BaseModel):
+    unidad_negocio: str
+    periodo: str
+
+@app.post("/api/cierre/reabrir")
+def reabrir_periodo(req: ReabrirPeriodoReq, current_user = Depends(get_current_user)):
+    """Solo permite reabrir al administrador, borrando el snapshot."""
+    if current_user.get("role", "admin") != "admin":
+         raise HTTPException(status_code=403, detail="Solo un administrador puede reabrir periodos presentados.")
+    try:
+        conn_supa = get_supabase()
+        cur_supa = conn_supa.cursor()
+        
+        cur_supa.execute("SELECT id FROM cert_cierres_mensuales WHERE unidad_negocio = %s AND periodo = %s", (req.unidad_negocio, req.periodo))
+        row = cur_supa.fetchone()
+        if not row:
+            cur_supa.close()
+            conn_supa.close()
+            raise HTTPException(status_code=400, detail="El periodo no se encuentra presentado.")
+            
+        cierre_id = row[0]
+        cur_supa.execute("DELETE FROM cert_cierres_detalle WHERE cierre_id = %s", (cierre_id,))
+        cur_supa.execute("DELETE FROM cert_cierres_mensuales WHERE id = %s", (cierre_id,))
+        
+        conn_supa.commit()
+        cur_supa.close()
+        conn_supa.close()
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
+    conn_supa = get_supabase()
+    cur_supa = conn_supa.cursor()
+    
+    # 1. Config Unidades
+    cur_supa.execute("SELECT id FROM cert_config_unidades_negocio WHERE nombre = %s", (unidad_negocio,))
+    un_row = cur_supa.fetchone()
+    if not un_row:
+        # Default behavior: fallback to name matching (for existing logic compatibility)
+        sucursales = [unidad_negocio]
+        centros = [unidad_negocio]
+    else:
+        un_id = un_row[0]
+        cur_supa.execute("SELECT tipo, valor_id FROM cert_config_unidades_detalle WHERE unidad_id = %s", (un_id,))
+        detalles = cur_supa.fetchall()
+        sucursales = [d[1] for d in detalles if d[0] == 'sucursal']
+        centros = [d[1] for d in detalles if d[0] == 'centro_costo']
+        
+    if not sucursales and not centros:
+        sucursales = [unidad_negocio]
+
+    # 2. Config Categorías Gastos
+    cur_supa.execute("SELECT categoria, cuenta_codigo FROM cert_config_gastos_cuentas")
+    cat_rows = cur_supa.fetchall()
+    cat_map = {r[1]: r[0] for r in cat_rows}
+
+    # 3. Excel Items
+    y, m = periodo.split('-')
+    cur_supa.execute(
+        "SELECT tipo, fecha, concepto, importe FROM cert_excel_items WHERE unidad_negocio_codigo = %s AND EXTRACT(YEAR FROM fecha) = %s AND EXTRACT(MONTH FROM fecha) = %s",
+        (unidad_negocio, int(y), int(m))
+    )
+    excel_items = cur_supa.fetchall()
+    
+    cur_supa.close()
+    conn_supa.close()
+
+    ingresos = []
+    gastos = []
+    
+    for ex in excel_items:
+        item = {
+            "origen": "EXCEL",
+            "tipo_movimiento": ex[0],
+            "categoria": "Ajuste Excel",
+            "fecha": str(ex[1]),
+            "concepto": ex[2],
+            "comprobante": "EXCEL",
+            "importe": float(ex[3])
+        }
+        if ex[0].upper() == 'INGRESO':
+            ingresos.append(item)
+        else:
+            gastos.append(item)
+
+    # 4. Aurora Finnegans
+    conn = get_aurora()
+    cur = conn.cursor()
+    
+    # -- INGRESOS (usando la vista que ya existe para compatibilidad) --
+    sql_ingresos = """
+    SELECT fecha, documento, producto, solicitante, total
+    FROM ceesa_cee_certificados_ventas_internas
+    WHERE EXTRACT(YEAR FROM CAST(fecha AS TIMESTAMP)) = %s 
+      AND EXTRACT(MONTH FROM CAST(fecha AS TIMESTAMP)) = %s
+    """
+    params_ingresos = [int(y), int(m)]
+    
+    # Aplicar filtro de unidad
+    if sucursales:
+        sucs_str = ",".join(f"'{s}'" for s in sucursales)
+        sql_ingresos += f" AND cliente IN ({sucs_str})" # 'cliente' is used as branch in the view
+    
+    try:
+        cur.execute(sql_ingresos, params_ingresos)
+        rows_ingresos = cur.fetchall()
+        for r in rows_ingresos:
+            ingresos.append({
+                "origen": "FINNEGANS",
+                "tipo_movimiento": "INGRESO",
+                "categoria": "Ventas Internas",
+                "fecha": str(r[0]) if r[0] else None,
+                "concepto": r[2] or "Sin Detalle",
+                "comprobante": r[1] or "N/A",
+                "importe": float(r[4] or 0)
+            })
+    except Exception as e:
+        print("Error Ingresos:", e)
+
+    # -- GASTOS (Usando ceesa_bsasientoitem casted properly) --
+    where_gastos = []
+    if sucursales:
+        sucs_str = ",".join(f"'{s}'" for s in sucursales)
+        where_gastos.append(f"FAFEmpresa.nombre IN ({sucs_str})")
+    if centros:
+        ccs_str = ",".join(f"'{c}'" for c in centros)
+        where_gastos.append(f"BSCentroCosto.nombre IN ({ccs_str})")
+        
+    cond_gastos = " OR ".join(where_gastos) if where_gastos else "1=1"
+    
+    sql_gastos = f"""
+    SELECT
+        BSCuenta.codigo AS CuentaCodigo,
+        BSCuenta.nombre AS Cuenta,
+        CAST(BSAsientoItem.fecha AS TIMESTAMP) AS Fecha,
+        FAFEmpresa.nombre AS Sucursal,
+        SUM(COALESCE(CAST(BSTransaccionDimension.importemonprincipal AS NUMERIC), CAST(BSAsientoItem.importemonprincipal AS NUMERIC)) * CAST(BSAsientoItem.debehaber AS NUMERIC)) AS Importe
+    FROM ceesa_bsasientoitem AS BSAsientoItem
+    INNER JOIN ceesa_bscuenta AS BSCuenta ON BSAsientoItem.cuentaid = BSCuenta.cuentaid
+    LEFT JOIN ceesa_bstransacciondimension AS BSTransaccionDimension ON BSAsientoItem.asientoitemid = BSTransaccionDimension.asientoitemid AND BSTransaccionDimension.dimensionid = '999999'
+    INNER JOIN ceesa_bstransaccion AS BSTransaccion ON COALESCE(BSTransaccionDimension.transaccionid, BSAsientoItem.transaccionid) = BSTransaccion.transaccionid
+    INNER JOIN ceesa_fafempresa AS FAFEmpresa ON BSTransaccion.empresaid = FAFEmpresa.empresaid
+    LEFT JOIN ceesa_bscentrocosto AS BSCentroCosto ON BSTransaccionDimension.registroid = BSCentroCosto.centrocostoid
+    WHERE FAFEmpresa.empresaidpadre = '1'
+      AND BSCuenta.impactaresultados = '1'
+      AND EXTRACT(YEAR FROM CAST(BSAsientoItem.fecha AS TIMESTAMP)) = %s
+      AND EXTRACT(MONTH FROM CAST(BSAsientoItem.fecha AS TIMESTAMP)) = %s
+      AND ({cond_gastos})
+    GROUP BY
+        BSCuenta.codigo,
+        BSCuenta.nombre,
+        CAST(BSAsientoItem.fecha AS TIMESTAMP),
+        FAFEmpresa.nombre
+    """
+    
+    try:
+        cur.execute(sql_gastos, [int(y), int(m)])
+        rows_gastos = cur.fetchall()
+        for r in rows_gastos:
+            cat = cat_map.get(r[0], r[1])
+            gastos.append({
+                "origen": "FINNEGANS",
+                "tipo_movimiento": "EGRESO",
+                "categoria": cat,
+                "fecha": str(r[2]) if r[2] else None,
+                "concepto": f"{r[0]} - {r[1]}",
+                "comprobante": "Asiento Contable",
+                "importe": float(r[4] or 0)
+            })
+    except Exception as e:
+        print("Error Gastos:", e)
+        
+    cur.close()
+    conn.close()
+    
+    return {
+        "ingresos": ingresos,
+        "gastos": gastos
+    }
+
+@app.get("/api/informes/mensual")
+def get_informe_mensual(unidad_negocio: str, periodo: str, current_user = Depends(get_current_user)):
+    try:
+        conn_supa = get_supabase()
+        cur_supa = conn_supa.cursor()
+        
+        cur_supa.execute(
+            "SELECT id, usuario_cierre, fecha_cierre FROM cert_cierres_mensuales WHERE unidad_negocio = %s AND periodo = %s",
+            (unidad_negocio, periodo)
+        )
+        cierre = cur_supa.fetchone()
+        
+        if cierre:
+            cierre_id = cierre[0]
+            cur_supa.execute(
+                "SELECT origen, tipo_movimiento, categoria, fecha, concepto, comprobante, importe FROM cert_cierres_detalle WHERE cierre_id = %s",
+                (cierre_id,)
+            )
+            rows = cur_supa.fetchall()
+            
+            ingresos = []
+            gastos = []
+            for r in rows:
+                item = {
+                    "origen": r[0],
+                    "tipo_movimiento": r[1],
+                    "categoria": r[2],
+                    "fecha": str(r[3]) if r[3] else None,
+                    "concepto": r[4],
+                    "comprobante": r[5],
+                    "importe": float(r[6])
+                }
+                if r[1] == "INGRESO":
+                    ingresos.append(item)
+                else:
+                    gastos.append(item)
+                    
+            cur_supa.close()
+            conn_supa.close()
+            
+            return {
+                "estado_cierre": "CERRADO",
+                "usuario_cierre": cierre[1],
+                "fecha_cierre": str(cierre[2]),
+                "ingresos": ingresos,
+                "gastos": gastos,
+                "totales": {
+                    "ingresos": sum(i["importe"] for i in ingresos),
+                    "gastos": sum(g["importe"] for g in gastos)
+                }
+            }
+            
+        cur_supa.close()
+        conn_supa.close()
+        
+        # En vivo
+        data = get_informe_mensual_calculo_vivo(unidad_negocio, periodo)
+        return {
+            "estado_cierre": "ABIERTO",
+            "usuario_cierre": None,
+            "fecha_cierre": None,
+            "ingresos": data["ingresos"],
+            "gastos": data["gastos"],
+            "totales": {
+                "ingresos": sum(i["importe"] for i in data["ingresos"]),
+                "gastos": sum(g["importe"] for g in data["gastos"])
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+

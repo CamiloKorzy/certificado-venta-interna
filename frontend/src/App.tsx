@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Building2, PackageCheck, TrendingUp, FileText, Filter, Calendar, LayoutDashboard, Search, ChevronDown, ChevronUp, ChevronRight, BarChart3, Presentation, Download, LogOut, Settings, Users, Save, X, Trash2, Edit2, Send, Check, Loader2, Shield, Bell, Wallet } from 'lucide-react';
-import ConfiguracionAvanzada from './components/ConfiguracionAvanzada';// ─── API Helper ───
+import ConfiguracionAvanzada from './components/ConfiguracionAvanzada';
+import InformeGestion from './components/InformeGestion';
+// ─── API Helper ───
 const API_URL = '';
 function apiFetch(path: string, token: string, options: any = {}) {
   return fetch(API_URL + path, {
@@ -1036,7 +1038,7 @@ function Configuracion({ token }: { token: string }) {
   const [savingUn, setSavingUn] = useState(false);
   const [modalLoading, setModalLoading] = useState(false);
   const [modalMsg, setModalMsg] = useState({ text: '', type: '' });
-  const [configTab, setConfigTab] = useState<'usuarios' | 'audit' | 'ingresos' | 'gastos-asientos' | 'gastos-compras' | 'unidades'>('usuarios');
+  const [configTab, setConfigTab] = useState<'usuarios' | 'audit' | 'ingresos' | 'gastos-asientos' | 'gastos-compras' | 'unidades' | 'ajustes-excel'>('usuarios');
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
 
@@ -1199,6 +1201,7 @@ function Configuracion({ token }: { token: string }) {
           <button onClick={() => setConfigTab('ingresos')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'ingresos' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Conf. Ingresos</button>
           <button onClick={() => setConfigTab('gastos-asientos')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'gastos-asientos' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Conf. Gastos Asientos</button>
           <button onClick={() => setConfigTab('gastos-compras')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'gastos-compras' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Conf. Gastos Compras</button>
+          <button onClick={() => setConfigTab('ajustes-excel')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'ajustes-excel' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Ajustes Excel</button>
         </div>
       </div>
 
@@ -1428,22 +1431,18 @@ function Configuracion({ token }: { token: string }) {
 // ═══════════════════════════════════════════════════════
 // NEW EMPTY TABS (Dashboard & Gastos)
 // ═══════════════════════════════════════════════════════
-function MainDashboard() {
+function MainDashboard({ token }: { token: string }) {
   return (
-    <div className="p-8 flex flex-col items-center justify-center text-slate-500 h-[60vh]">
-      <LayoutDashboard size={48} className="mb-4 text-slate-300" />
-      <h2 className="text-2xl font-bold text-slate-700 mb-2">Dashboard Principal</h2>
-      <p>Vista general próximamente disponible.</p>
+    <div className="bg-slate-50 min-h-[80vh]">
+      <InformeGestion token={token} />
     </div>
   );
 }
 
-function Gastos() {
+function Gastos({ token }: { token: string }) {
   return (
-    <div className="p-8 flex flex-col items-center justify-center text-slate-500 h-[60vh]">
-      <Wallet size={48} className="mb-4 text-slate-300" />
-      <h2 className="text-2xl font-bold text-slate-700 mb-2">Reporte de Gastos</h2>
-      <p>Módulo de gastos próximamente disponible.</p>
+    <div className="bg-slate-50 min-h-[80vh]">
+      <InformeGestion token={token} />
     </div>
   );
 }
@@ -1511,9 +1510,9 @@ export default function App() {
       </div>
 
       {/* Content */}
-      {view === 'dashboard' && <MainDashboard />}
+      {view === 'dashboard' && <MainDashboard token={token} />}
       {view === 'ingresos' && <Dashboard token={token} onLogout={handleLogout} />}
-      {view === 'gastos' && <Gastos />}
+      {view === 'gastos' && <Gastos token={token} />}
       {view === 'config' && user?.rol === 'admin' && <Configuracion token={token} />}
     </div>
   );
