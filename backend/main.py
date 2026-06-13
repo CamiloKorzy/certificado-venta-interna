@@ -1,5 +1,4 @@
 from fastapi import FastAPI, HTTPException, Request, Depends, UploadFile, File
-import pandas as pd
 import io
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -583,6 +582,7 @@ class ExcelItem(BaseModel):
 
 @app.post("/api/excel/upload")
 async def upload_excel(file: UploadFile = File(...)):
+    import pandas as pd
     try:
         contents = await file.read()
         df = pd.read_excel(io.BytesIO(contents))
