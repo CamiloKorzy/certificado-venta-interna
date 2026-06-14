@@ -1338,10 +1338,24 @@ def get_indicadores(user=Depends(get_current_user)):
         for i, row in enumerate(data_rows):
             record = dict(zip(columns_db, row))
             
+            import re
+            def normalize_match(s):
+                if not s: return ""
+                return re.sub(r'[^a-zA-Z0-9]', '', str(s)).upper()
+
             # Filtro estricto por Sucursal/Prestador
-            sucursal_val = str(record.get('unidadnombre', '') or '').strip()
-            if user.get("rol") != "admin" and sucursal_val not in unidades_permitidas:
-                continue
+            # Usamos 'empresa' porque allí Finnegans guarda la Sucursal (ej: Informática y Tecnología CEE ENRIQUEZ)
+            empresa_val = str(record.get('empresa', '') or '').strip()
+            
+            if user.get("rol") != "admin":
+                match_found = False
+                norm_empresa = normalize_match(empresa_val)
+                for u in unidades_permitidas:
+                    if norm_empresa == normalize_match(u):
+                        match_found = True
+                        break
+                if not match_found:
+                    continue
 
             num_doc = record.get('comprobante', '')
             if not num_doc or num_doc == 'NULL':
