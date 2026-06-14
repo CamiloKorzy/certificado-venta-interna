@@ -136,17 +136,7 @@ export default function ConfiguracionCentrosCosto({ token }: { token: string }) 
           />
         </div>
 
-        <div>
-          <button 
-            onClick={handleSave} 
-            disabled={saving || !selectedSucursal}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg text-sm font-semibold flex items-center gap-2 transition-colors disabled:opacity-50"
-          >
-            {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-            Guardar Configuración
-          </button>
-          {saveMsg && <span className="text-sm font-medium ml-3 text-emerald-600">{saveMsg}</span>}
-        </div>
+        <div className="flex-1" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -219,6 +209,17 @@ export default function ConfiguracionCentrosCosto({ token }: { token: string }) 
           </div>
         </div>
         </div>
+      </div>
+
+      <div className="flex gap-2 items-center pt-4 mt-6 border-t border-slate-100">
+        <button 
+          onClick={handleSave} 
+          disabled={saving || !selectedSucursal}
+          className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-bold px-5 py-2.5 rounded-lg transition-colors flex items-center gap-2"
+        >
+          {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Guardar Configuración
+        </button>
+        {saveMsg && <span className={`text-sm font-medium ${saveMsg.includes('✅') ? 'text-emerald-600' : 'text-red-600'}`}>{saveMsg}</span>}
       </div>
 
       {Object.keys(allSelections).length > 0 && (
