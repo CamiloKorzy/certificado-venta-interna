@@ -114,19 +114,6 @@ export default function ConfiguracionCentrosCosto({ token }: { token: string }) 
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden p-6">
       <div className="mb-6 flex flex-col md:flex-row gap-4 justify-between items-start md:items-end">
         <div className="w-full md:w-1/3">
-          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Seleccionar Sucursal</label>
-          <select 
-            value={selectedSucursal}
-            onChange={(e) => setSelectedSucursal(e.target.value)}
-            className="w-full p-2.5 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:bg-white transition-colors"
-          >
-            {(sucursales || []).map((s, idx) => (
-              <option key={s?.sucursal || idx} value={s?.sucursal || ''}>{s?.sucursal || 'Sin nombre'}</option>
-            ))}
-          </select>
-        </div>
-        
-        <div className="w-full md:w-1/3">
           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Buscar Centro de Costo</label>
           <input 
             type="text"
@@ -174,12 +161,26 @@ export default function ConfiguracionCentrosCosto({ token }: { token: string }) 
           </div>
         </div>
 
-        <div className="border border-slate-200 rounded-xl flex flex-col h-[500px] bg-slate-50/50">
-          <div className="p-3 border-b border-slate-200 bg-white rounded-t-xl">
-            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex justify-between">
-              <span>ÍTEMS SELECCIONADOS ({items.length})</span>
-            </h4>
+        <div className="flex flex-col gap-6">
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Seleccionar Sucursal</label>
+            <select 
+              value={selectedSucursal}
+              onChange={(e) => setSelectedSucursal(e.target.value)}
+              className="w-full p-2.5 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:bg-white transition-colors"
+            >
+              {(sucursales || []).map((s, idx) => (
+                <option key={s?.sucursal || idx} value={s?.sucursal || ''}>{s?.sucursal || 'Sin nombre'}</option>
+              ))}
+            </select>
           </div>
+          
+          <div className="border border-slate-200 rounded-xl flex flex-col h-[500px] bg-slate-50/50">
+            <div className="p-3 border-b border-slate-200 bg-white rounded-t-xl">
+              <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex justify-between">
+                <span>ÍTEMS SELECCIONADOS ({items.length})</span>
+              </h4>
+            </div>
           <div className="overflow-y-auto flex-1 p-4">
             {loadingItems ? <div className="p-8 text-center text-slate-400 flex justify-center"><Loader2 size={24} className="animate-spin" /></div> : (
               items.length === 0 ? (
@@ -204,6 +205,7 @@ export default function ConfiguracionCentrosCosto({ token }: { token: string }) 
               )
             )}
           </div>
+        </div>
         </div>
       </div>
     </div>

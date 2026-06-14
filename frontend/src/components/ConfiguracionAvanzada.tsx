@@ -243,28 +243,15 @@ export default function ConfiguracionAvanzada({ token, tipo }: { token: string, 
 
   // Ingresos / Gastos Compras / Gastos Asientos
   const titleMap = {
-    'ingresos': 'Subtipos de Comprobante para Ingresos',
-    'gastos-asientos': 'Tipos de Asiento Contable para Gastos',
-    'gastos-compras': 'Subtipos de Comprobante para Compras/Gastos'
+    'ingresos': 'Conf. Ingresos',
+    'gastos-asientos': 'Conf. Asientos',
+    'gastos-compras': 'Conf. Gastos Compras'
   };
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-100 pb-4">
         <h3 className="font-bold text-slate-800 text-lg">{titleMap[tipo]}</h3>
-        
-        <div className="w-full md:w-64">
-          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Seleccionar Sucursal</label>
-          <select 
-            value={selectedSucursal}
-              onChange={(e) => setSelectedSucursal(e.target.value)}
-              className="w-full p-2 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:bg-white transition-colors"
-            >
-              {(sucursales || []).map((s, idx) => (
-                <option key={s?.sucursal || idx} value={s?.sucursal || ''}>{s?.sucursal || 'Sin nombre'}</option>
-              ))}
-            </select>
-          </div>
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -289,9 +276,22 @@ export default function ConfiguracionAvanzada({ token, tipo }: { token: string, 
           </div>
         </div>
         
-        <div>
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Ítems Seleccionados ({items.length})</p>
-          <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 min-h-[400px]">
+        <div className="flex flex-col gap-6">
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Seleccionar Sucursal</label>
+            <select 
+              value={selectedSucursal}
+              onChange={(e) => setSelectedSucursal(e.target.value)}
+              className="w-full p-2 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:bg-white transition-colors"
+            >
+              {(sucursales || []).map((s, idx) => (
+                <option key={s?.sucursal || idx} value={s?.sucursal || ''}>{s?.sucursal || 'Sin nombre'}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Ítems Seleccionados ({items.length})</p>
+            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 min-h-[400px]">
             {items.length === 0 && <p className="text-sm text-slate-400 text-center mt-10">Ningún ítem seleccionado</p>}
             <ul className="space-y-2">
               {items.map((i, idx) => (
@@ -309,6 +309,7 @@ export default function ConfiguracionAvanzada({ token, tipo }: { token: string, 
           </div>
         </div>
       </div>
+    </div>
 
       <div className="flex gap-2 items-center pt-4 border-t border-slate-100">
         <button onClick={handleSaveSimples} disabled={saving} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-bold px-5 py-2.5 rounded-lg transition-colors flex items-center gap-2">

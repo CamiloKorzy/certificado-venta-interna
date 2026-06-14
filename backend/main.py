@@ -1835,7 +1835,7 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
     # 1. Config Unidades
     # La unidad_negocio que llega ya es la sucursal de Finnegans
     sucursales = [unidad_negocio]
-    cur_supa.execute("SELECT id_ref FROM cert_config_centros_costo WHERE sucursal = %s", (unidad_negocio,))
+    cur_supa.execute("SELECT centro_id FROM cert_config_centros_costo WHERE sucursal = %s", (unidad_negocio,))
     centros = [r[0] for r in cur_supa.fetchall()]
 
     # 1b. Configuración Avanzada para esta Sucursal
