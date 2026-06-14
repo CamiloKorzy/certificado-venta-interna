@@ -37,7 +37,7 @@ export default function ConfiguracionAvanzada({ token, tipo }: { token: string, 
     setLoading(true);
     try {
       if (tipo === 'ajustes-excel') {
-        const upRes = await apiFetch('/api/excel/uploads', token);
+        const upRes = await apiFetch('/api/config/ajustes-excel', token);
         setUploads(upRes || []);
       } else {
         const [configRes, maestroRes] = await Promise.all([
@@ -82,7 +82,7 @@ export default function ConfiguracionAvanzada({ token, tipo }: { token: string, 
     formData.append("file", file);
     
     try {
-      const res = await fetch(API_URL + '/api/excel/upload', {
+      const res = await fetch(API_URL + '/api/config/ajustes-excel', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
         body: formData
@@ -93,8 +93,24 @@ export default function ConfiguracionAvanzada({ token, tipo }: { token: string, 
         throw new Error(err);
       }
       
-      setSaveMsg('✅ Archivo subido y procesado');
-      setTimeout(() => setSaveMsg(''), 3000);
+      const data = await res.json();
+      
+      if (data.status === 'ok') {
+        setSaveMsg('✅ Archivo procesado correctamente.');
+      } else {
+        setSaveMsg(`⚠️ Importado con errores. ${data.inserted} filas creadas.`);
+        console.error("Errores:", data.errors);
+      }
+      
+      if (data.suggestions && Object.keys(data.suggestions).length > 0) {
+        alert("Se aplicaron correcciones automáticas de nombres de Unidades de Negocio:\n\n" + 
+              Object.entries(data.suggestions).map(([k, v]) => `'${k}' -> '${v}'`).join("\n"));
+      }
+      if (data.errors && data.errors.length > 0) {
+        alert("Se encontraron errores al importar algunas filas:\n\n" + data.errors.join("\n"));
+      }
+
+      setTimeout(() => setSaveMsg(''), 5000);
       loadData(); // reload list
     } catch (err: any) {
       console.error(err);
@@ -105,9 +121,9 @@ export default function ConfiguracionAvanzada({ token, tipo }: { token: string, 
   };
 
   const deleteUpload = async (id: number) => {
-    if (!confirm('¿Eliminar esta subida y todos sus registros asociados?')) return;
+    if (!confirm('¿Eliminar este ajuste?')) return;
     try {
-      await apiFetch(`/api/excel/uploads/${id}`, token, { method: 'DELETE' });
+      await apiFetch(`/api/config/ajustes-excel/${id}`, token, { method: 'DELETE' });
       loadData();
     } catch (e) {
       console.error(e);
@@ -129,7 +145,7 @@ export default function ConfiguracionAvanzada({ token, tipo }: { token: string, 
           <UploadCloud size={48} className="text-blue-500 mb-3" />
           <h4 className="font-bold text-slate-800">Importar Ajustes</h4>
           <p className="text-sm text-slate-500 mb-4 max-w-md">
-            Sube un archivo Excel (.xlsx) con las columnas: <strong>Unidad de Negocio, Fecha, Concepto, Tipo, Importe</strong>.
+            Sube un archivo Excel (.xlsx) con las columnas en este orden: <strong>Unidad de Negocio, Periodo (MM/AAAA), Concepto, Tipo (INGRESO/GASTO), Categoría, Importe, Observaciones</strong>.
           </p>
           <label className={`cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-lg transition-colors flex items-center gap-2 ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
             {uploading ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} 
@@ -140,28 +156,34 @@ export default function ConfiguracionAvanzada({ token, tipo }: { token: string, 
         </div>
 
         <div>
-          <h4 className="font-bold text-slate-800 mb-4">Archivos Subidos</h4>
-          <div className="border border-slate-200 rounded-xl overflow-hidden">
+          <h4 className="font-bold text-slate-800 mb-4">Últimos Registros Importados</h4>
+          <div className="border border-slate-200 rounded-xl overflow-hidden overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
-                  <th className="text-left px-5 py-3 font-bold text-slate-600">Archivo</th>
-                  <th className="text-left px-5 py-3 font-bold text-slate-600">Fecha de Subida</th>
-                  <th className="text-left px-5 py-3 font-bold text-slate-600">Registros</th>
-                  <th className="text-left px-5 py-3 font-bold text-slate-600">Estado</th>
+                  <th className="text-left px-5 py-3 font-bold text-slate-600">Fecha Carga</th>
+                  <th className="text-left px-5 py-3 font-bold text-slate-600">Unidad de Negocio</th>
+                  <th className="text-left px-5 py-3 font-bold text-slate-600">Periodo</th>
+                  <th className="text-left px-5 py-3 font-bold text-slate-600">Tipo</th>
+                  <th className="text-left px-5 py-3 font-bold text-slate-600">Concepto</th>
+                  <th className="text-right px-5 py-3 font-bold text-slate-600">Importe</th>
                   <th className="px-5 py-3"></th>
                 </tr>
               </thead>
               <tbody>
                 {uploads.map(u => (
                   <tr key={u.id} className="border-b border-slate-100 hover:bg-slate-50/50">
-                    <td className="px-5 py-3 font-medium text-slate-800">{u.filename}</td>
-                    <td className="px-5 py-3 text-slate-500">{new Date(u.uploaded_at).toLocaleString('es-AR')}</td>
-                    <td className="px-5 py-3 font-mono text-slate-600">{u.total_registros}</td>
-                    <td className="px-5 py-3">
-                      <span className="text-xs font-bold bg-emerald-100 text-emerald-700 px-2 py-1 rounded">
-                        {u.estado}
+                    <td className="px-5 py-3 text-slate-500">{new Date(u.fecha_carga).toLocaleString('es-AR')}</td>
+                    <td className="px-5 py-3 font-medium text-slate-800">{u.unidad_negocio}</td>
+                    <td className="px-5 py-3 text-slate-600">{u.periodo}</td>
+                    <td className="px-5 py-3 text-slate-600">
+                      <span className={`text-xs font-bold px-2 py-1 rounded ${u.tipo_movimiento === 'INGRESO' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                        {u.tipo_movimiento}
                       </span>
+                    </td>
+                    <td className="px-5 py-3 text-slate-600 truncate max-w-[200px]" title={u.concepto}>{u.concepto}</td>
+                    <td className="px-5 py-3 text-right font-mono font-bold text-slate-800">
+                      ${u.importe.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                     </td>
                     <td className="px-5 py-3 text-right">
                       <button onClick={() => deleteUpload(u.id)} className="text-slate-400 hover:text-red-500 p-2 rounded-lg hover:bg-red-50 transition-colors">
@@ -171,7 +193,7 @@ export default function ConfiguracionAvanzada({ token, tipo }: { token: string, 
                   </tr>
                 ))}
                 {uploads.length === 0 && (
-                  <tr><td colSpan={5} className="px-5 py-8 text-center text-slate-400">No hay archivos importados.</td></tr>
+                  <tr><td colSpan={7} className="px-5 py-8 text-center text-slate-400">No hay ajustes importados.</td></tr>
                 )}
               </tbody>
             </table>

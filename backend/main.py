@@ -6,6 +6,8 @@ from typing import Optional, List
 import psycopg2
 from datetime import datetime
 import os
+import openpyxl
+import difflib
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -136,6 +138,19 @@ def auto_setup_db():
                 fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
             CREATE INDEX IF NOT EXISTS idx_cert_audit_fecha ON cert_audit_log(fecha);
+
+            CREATE TABLE IF NOT EXISTS cert_ajustes_excel (
+                id SERIAL PRIMARY KEY,
+                unidad_negocio VARCHAR(255) NOT NULL,
+                periodo VARCHAR(7) NOT NULL,
+                concepto VARCHAR(255) NOT NULL,
+                tipo_movimiento VARCHAR(50) NOT NULL,
+                categoria VARCHAR(255),
+                importe NUMERIC(15, 2) NOT NULL,
+                observaciones TEXT,
+                fecha_carga TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                usuario_carga VARCHAR(255)
+            );
             
             CREATE TABLE IF NOT EXISTS cert_config_gastos_cuentas (
                 id SERIAL PRIMARY KEY,
@@ -415,6 +430,110 @@ def get_finnegans_centros_costo():
         return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/config/ajustes-excel")
+async def upload_ajustes_excel(file: UploadFile = File(...), current_user = Depends(get_current_user)):
+    contents = await file.read()
+    wb = openpyxl.load_workbook(filename=io.BytesIO(contents), data_only=True)
+    ws = wb.active
+    
+    conn_aurora = get_aurora()
+    cur_a = conn_aurora.cursor()
+    cur_a.execute("SELECT TRIM(COALESCE(nombreempresa, '')) FROM ceesa_cee_sucursales WHERE nombreempresa IS NOT NULL")
+    valid_sucursales = [r[0] for r in cur_a.fetchall() if r[0]]
+    cur_a.execute("SELECT TRIM(COALESCE(Nombre, '')) FROM ceesa_fafempresa WHERE EmpresaIDPadre = '1'")
+    valid_sucursales.extend([r[0] for r in cur_a.fetchall() if r[0]])
+    cur_a.close()
+    conn_aurora.close()
+    
+    valid_sucursales = list(set(valid_sucursales))
+    if "Sede Central" not in valid_sucursales:
+        valid_sucursales.append("Sede Central")
+    
+    conn_supa = get_supabase()
+    cur_supa = conn_supa.cursor()
+    user_email = current_user.get("email", "unknown")
+    
+    errors = []
+    inserted_count = 0
+    suggestions = {}
+    
+    for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        if not row or not any(row): continue
+        
+        unidad_negocio = str(row[0] or "").strip()
+        periodo = str(row[1] or "").strip()
+        concepto = str(row[2] or "").strip()
+        tipo_mov = str(row[3] or "").strip().upper()
+        categoria = str(row[4] or "").strip()
+        importe_val = row[5]
+        observaciones = str(row[6] or "").strip() if len(row) > 6 else ""
+        
+        if not unidad_negocio or not periodo or not tipo_mov or importe_val is None:
+            errors.append(f"Fila {row_idx}: Faltan datos (Unidad, Periodo, Tipo o Importe).")
+            continue
+            
+        if unidad_negocio not in valid_sucursales:
+            matches = difflib.get_close_matches(unidad_negocio, valid_sucursales, n=1, cutoff=0.6)
+            if matches:
+                suggestions[unidad_negocio] = matches[0]
+                unidad_negocio = matches[0]
+            else:
+                errors.append(f"Fila {row_idx}: Unidad '{unidad_negocio}' no encontrada.")
+                continue
+                
+        if tipo_mov not in ["INGRESO", "GASTO"]:
+            errors.append(f"Fila {row_idx}: Tipo '{tipo_mov}' inválido. Use INGRESO o GASTO.")
+            continue
+            
+        try:
+            importe = float(importe_val)
+        except ValueError:
+            errors.append(f"Fila {row_idx}: Importe '{importe_val}' no es un número.")
+            continue
+            
+        cur_supa.execute("""
+            INSERT INTO cert_ajustes_excel (unidad_negocio, periodo, concepto, tipo_movimiento, categoria, importe, observaciones, usuario_carga)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """, (unidad_negocio, periodo, concepto, tipo_mov, categoria, importe, observaciones, user_email))
+        inserted_count += 1
+        
+    conn_supa.commit()
+    cur_supa.close()
+    conn_supa.close()
+    
+    return {
+        "status": "ok" if not errors else "partial",
+        "inserted": inserted_count,
+        "errors": errors,
+        "suggestions": suggestions
+    }
+
+@app.get("/api/config/ajustes-excel")
+def list_ajustes_excel(current_user = Depends(get_current_user)):
+    conn_supa = get_supabase()
+    cur_supa = conn_supa.cursor()
+    cur_supa.execute("SELECT id, unidad_negocio, periodo, concepto, tipo_movimiento, categoria, importe, observaciones, fecha_carga, usuario_carga FROM cert_ajustes_excel ORDER BY fecha_carga DESC LIMIT 100")
+    rows = cur_supa.fetchall()
+    cur_supa.close()
+    conn_supa.close()
+    
+    return [{
+        "id": r[0], "unidad_negocio": r[1], "periodo": r[2], "concepto": r[3],
+        "tipo_movimiento": r[4], "categoria": r[5], "importe": float(r[6]),
+        "observaciones": r[7], "fecha_carga": str(r[8]), "usuario_carga": r[9]
+    } for r in rows]
+
+@app.delete("/api/config/ajustes-excel/{id}")
+def delete_ajuste_excel(id: int, current_user = Depends(get_current_user)):
+    conn_supa = get_supabase()
+    cur_supa = conn_supa.cursor()
+    cur_supa.execute("DELETE FROM cert_ajustes_excel WHERE id = %s", (id,))
+    conn_supa.commit()
+    cur_supa.close()
+    conn_supa.close()
+    return {"status": "ok"}
+
 
 @app.get("/api/finnegans/empresas")
 def get_finnegans_empresas():
@@ -1727,6 +1846,34 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
         
     cur.close()
     conn.close()
+    
+    try:
+        conn_supa = get_supabase()
+        cur_supa = conn_supa.cursor()
+        if unidad_negocio == "Todas":
+            cur_supa.execute("SELECT tipo_movimiento, categoria, fecha, concepto, observaciones, importe, unidad_negocio FROM cert_ajustes_excel WHERE periodo = %s", (periodo,))
+        else:
+            cur_supa.execute("SELECT tipo_movimiento, categoria, fecha, concepto, observaciones, importe, unidad_negocio FROM cert_ajustes_excel WHERE unidad_negocio = %s AND periodo = %s", (unidad_negocio, periodo))
+            
+        rows_ajustes = cur_supa.fetchall()
+        for r in rows_ajustes:
+            item = {
+                "origen": "AJUSTE EXCEL",
+                "tipo_movimiento": "INGRESO" if r[0] == "INGRESO" else "EGRESO",
+                "categoria": r[1] or "Ajuste Manual",
+                "fecha": str(r[2]) if r[2] else None,
+                "concepto": f"[{r[6]}] {r[3]}",
+                "comprobante": r[4] or "-",
+                "importe": float(r[5] or 0)
+            }
+            if r[0] == "INGRESO":
+                ingresos.append(item)
+            else:
+                gastos.append(item)
+        cur_supa.close()
+        conn_supa.close()
+    except Exception as e:
+        print("Error Ajustes Excel:", e)
     
     return {
         "ingresos": ingresos,
