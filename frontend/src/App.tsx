@@ -251,7 +251,7 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
       }
 
       // Empresa (Prestador / Sucursal)
-      let empresa = lowerRow['unidadnegocio'] || lowerRow['empresa'] || 'CEE ENRIQUEZ S.A.';
+      let empresa = lowerRow['empresa'] || lowerRow['unidadnegocio'] || 'CEE ENRIQUEZ S.A.';
 
       // Estado Autorización
       let rawEstado = String(lowerRow['estadoautorizacion'] || lowerRow['estado'] || lowerRow['estadoprocesodetallado'] || 'Desconocido').trim();
