@@ -1339,8 +1339,8 @@ def get_indicadores(user=Depends(get_current_user)):
             record = dict(zip(columns_db, row))
             
             # Filtro estricto por Sucursal/Prestador
-            empresa_val = str(record.get('empresa', '') or '').strip()
-            if user.get("rol") != "admin" and empresa_val not in unidades_permitidas:
+            sucursal_val = str(record.get('unidadnombre', '') or '').strip()
+            if user.get("rol") != "admin" and sucursal_val not in unidades_permitidas:
                 continue
 
             num_doc = record.get('comprobante', '')

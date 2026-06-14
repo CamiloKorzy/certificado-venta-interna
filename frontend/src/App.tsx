@@ -249,8 +249,8 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
         todosLosConceptos.add(concepto);
       }
 
-      // Empresa
-      let empresa = lowerRow['empresa'] || 'CEE ENRIQUEZ S.A.';
+      // Empresa (Prestador / Sucursal)
+      let empresa = lowerRow['unidadnegocio'] || lowerRow['empresa'] || 'CEE ENRIQUEZ S.A.';
 
       // Estado Autorización
       let rawEstado = String(lowerRow['estadoautorizacion'] || lowerRow['estado'] || lowerRow['estadoprocesodetallado'] || 'Desconocido').trim();
@@ -390,7 +390,7 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
     return filteredData.map(d => ({
       id: d._original['Comprobante'] || d._original['comprobante'] || 'Sin ID',
       fecha: d._fecha,
-      prestador: d._original['Empresa'] || d._empresa || '-',
+      prestador: d._empresa || d._original['Empresa'] || '-',
       clienteEmpresa: d._cliente_empresa || '-',
       descripcion: d._descripcion,
       unidad: d._unidad,
