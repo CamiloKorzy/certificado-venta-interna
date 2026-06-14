@@ -597,7 +597,7 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
               onChange={v => setPendingFilters({...pendingFilters, periodo: v})} 
             />
             <MultiSelect 
-              label="Prestador" 
+              label="Prestador/Sucursal" 
               options={options.empresas} 
               selected={pendingFilters.empresa} 
               onChange={v => setPendingFilters({...pendingFilters, empresa: v})} 

@@ -1313,6 +1313,16 @@ def debug_endpoint():
 def get_indicadores(user=Depends(get_current_user)):
     conn = None
     try:
+        # 1. Obtener sucursales permitidas si no es admin
+        unidades_permitidas = set()
+        if user.get("rol") != "admin":
+            conn_supa = get_supabase()
+            cur_supa = conn_supa.cursor()
+            cur_supa.execute("SELECT unidad_negocio FROM cert_usuarios_unidades WHERE usuario_id = %s", (user['id'],))
+            unidades_permitidas = {r[0].strip() for r in cur_supa.fetchall() if r[0]}
+            cur_supa.close()
+            conn_supa.close()
+
         conn = get_aurora()
         
         query = "SELECT * FROM ceesa_cee_certificados_ventas_internas ORDER BY 1 DESC LIMIT 50000"
@@ -1327,6 +1337,12 @@ def get_indicadores(user=Depends(get_current_user)):
         comprobantes = {}
         for i, row in enumerate(data_rows):
             record = dict(zip(columns_db, row))
+            
+            # Filtro estricto por Sucursal/Prestador
+            empresa_val = str(record.get('empresa', '') or '').strip()
+            if user.get("rol") != "admin" and empresa_val not in unidades_permitidas:
+                continue
+
             num_doc = record.get('comprobante', '')
             if not num_doc or num_doc == 'NULL':
                 num_doc = record.get('documento', '')
