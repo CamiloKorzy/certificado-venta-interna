@@ -288,8 +288,6 @@ class UsuarioUpdate(BaseModel):
 
 class UnidadAsignacion(BaseModel):
     unidad_negocio: str
-    notifica_email: bool = False
-    notifica_telegram: bool = False
 
 # ═══════════════════════════════════════════════════════
 # ENDPOINTS DE AUTENTICACIÓN
@@ -882,7 +880,7 @@ def get_user_unidades(user_id: int, user=Depends(get_current_user)):
     try:
         cur = conn.cursor()
         cur.execute("""
-            SELECT unidad_negocio, notifica_email, notifica_telegram 
+            SELECT unidad_negocio 
             FROM cert_usuarios_unidades WHERE usuario_id = %s ORDER BY unidad_negocio
         """, (user_id,))
         cols = [d[0] for d in cur.description]
@@ -908,9 +906,9 @@ def update_user_unidades(user_id: int, body: List[UnidadAsignacion], admin=Depen
             un_limpio = u.unidad_negocio.strip()
             if un_limpio not in vistos:
                 cur.execute("""
-                    INSERT INTO cert_usuarios_unidades (usuario_id, unidad_negocio, notifica_email, notifica_telegram)
-                    VALUES (%s, %s, %s, %s)
-                """, (user_id, un_limpio, u.notifica_email, u.notifica_telegram))
+                    INSERT INTO cert_usuarios_unidades (usuario_id, unidad_negocio)
+                    VALUES (%s, %s)
+                """, (user_id, un_limpio))
                 vistos.add(un_limpio)
         conn.commit()
         cur.close()

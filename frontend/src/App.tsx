@@ -1129,7 +1129,7 @@ function Configuracion({ token }: { token: string }) {
         const existing = userInfo.find((e: any) => String(e.unidad_negocio).trim() === String(sucursalName).trim());
         return existing 
           ? { ...existing, unidad_negocio: sucursalName, display_name: display, is_equipo: isEquipo, empresa_padre: empresaPadre, acceso: true } 
-          : { unidad_negocio: sucursalName, display_name: display, is_equipo: isEquipo, empresa_padre: empresaPadre, notifica_email: false, notifica_telegram: false, acceso: false };
+          : { unidad_negocio: sucursalName, display_name: display, is_equipo: isEquipo, empresa_padre: empresaPadre, acceso: false };
       }));
     } catch (e: any) { 
       console.error(e); 
@@ -1142,17 +1142,7 @@ function Configuracion({ token }: { token: string }) {
   const toggleUn = (idx: number, field: string) => {
     const copy = [...userUnidades];
     const item = { ...copy[idx] };
-    const newValue = !item[field];
-    item[field] = newValue;
-    
-    if ((field === 'notifica_email' || field === 'notifica_telegram') && newValue) {
-      item.acceso = true;
-    }
-    if (field === 'acceso' && !newValue) {
-      item.notifica_email = false;
-      item.notifica_telegram = false;
-    }
-    
+    item[field] = !item[field];
     copy[idx] = item;
     setUserUnidades(copy);
   };
@@ -1162,26 +1152,16 @@ function Configuracion({ token }: { token: string }) {
     const allChecked = userUnidades.every((u: any) => u[field]);
     const newValue = !allChecked;
     
-    const copy = userUnidades.map((u: any) => {
-      const item = { ...u, [field]: newValue };
-      if ((field === 'notifica_email' || field === 'notifica_telegram') && newValue) {
-        item.acceso = true;
-      }
-      if (field === 'acceso' && !newValue) {
-        item.notifica_email = false;
-        item.notifica_telegram = false;
-      }
-      return item;
-    });
+    const copy = userUnidades.map((u: any) => ({ ...u, [field]: newValue }));
     setUserUnidades(copy);
   };
 
   const saveUnidades = async () => {
     setSavingUn(true); setModalMsg({ text: '', type: '' });
     try {
-      const active = userUnidades.filter((u: any) => u.acceso || u.notifica_email || u.notifica_telegram);
+      const active = userUnidades.filter((u: any) => u.acceso);
       await apiFetch(`/api/usuarios/${modalUser.id}/unidades`, token, { method: 'PUT', body: JSON.stringify(active) });
-      setModalMsg({ text: '✅ Unidades y notificaciones actualizadas', type: 'success' });
+      setModalMsg({ text: '✅ Sucursales asignadas correctamente', type: 'success' });
       setTimeout(() => setModalUser(null), 1500);
     } catch (e: any) { setModalMsg({ text: '❌ Error: ' + e.message, type: 'error' }); }
     setSavingUn(false);
@@ -1316,29 +1296,16 @@ function Configuracion({ token }: { token: string }) {
       {modalUser && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col">
-            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-              <div><h3 className="font-bold text-slate-800 text-lg">Notificaciones por Unidad de Negocio</h3><p className="text-sm text-slate-500">{modalUser.nombre}</p></div>
+              <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+              <div><h3 className="font-bold text-slate-800 text-lg">Sucursales Asignadas</h3><p className="text-sm text-slate-500">{modalUser.nombre}</p></div>
               <button onClick={() => setModalUser(null)} className="text-slate-400 hover:bg-slate-100 p-2 rounded-lg"><X size={20} /></button>
             </div>
             <div className="p-5 overflow-y-auto flex-1 bg-slate-50">
-              
-              <div className="mb-5 bg-blue-50 border border-blue-100 rounded-xl p-4 shadow-sm">
-                <h4 className="font-bold text-blue-800 text-xs uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                  <Shield size={14} className="text-blue-600" /> ¿Cómo funciona la asignación?
-                </h4>
-                <p className="text-xs text-blue-700/80 leading-relaxed">
-                  El sistema notifica evaluando ambas puntas de un comprobante: <strong>La Sucursal Emisora</strong> y <strong>El Equipo Solicitante</strong> (destino).
-                  <br className="mb-1" />
-                  • Si tildas una <strong>Sucursal Emisora</strong> (ej. Carlos E. Enriquez S.A.), el usuario recibirá alertas de <b>TODOS</b> los comprobantes emitidos por esa sucursal, sin importar a qué equipo vayan dirigidos. <i>(Recomendado para Gerentes de Sucursal)</i>.
-                  <br className="mb-1" />
-                  • Si tildas un <strong>Equipo Solicitante</strong> (ej. Oficina Central, C105garage), el usuario solo recibirá alertas de comprobantes dirigidos a su equipo, ignorando los demás. <i>(Recomendado para Responsables Operativos)</i>.
-                </p>
-              </div>
 
               {modalLoading ? <div className="flex justify-center p-8"><Loader2 size={24} className="animate-spin text-blue-600" /></div> : (
                 <table className="w-full text-sm bg-white rounded-lg border border-slate-200 overflow-hidden">
                   <thead className="bg-slate-50 border-b border-slate-200"><tr>
-                    <th className="text-left px-4 py-3 font-bold text-slate-600 text-xs uppercase">Unidad de Negocio</th>
+                    <th className="text-left px-4 py-3 font-bold text-slate-600 text-xs uppercase">Sucursal</th>
                     <th className="px-4 py-3 text-center font-bold text-slate-600 text-xs uppercase">
                       <label className="flex items-center justify-center gap-1.5 cursor-pointer hover:text-blue-600 transition-colors" title="Seleccionar/Deseleccionar todos">
                         <span>Acceso</span>
@@ -1352,47 +1319,17 @@ function Configuracion({ token }: { token: string }) {
                         )}
                       </label>
                     </th>
-                    <th className="px-4 py-3 text-center font-bold text-slate-600 text-xs uppercase">
-                      <label className="flex items-center justify-center gap-1.5 cursor-pointer hover:text-blue-600 transition-colors" title="Seleccionar/Deseleccionar todos">
-                        <span>Email</span>
-                        {userUnidades.length > 0 && (
-                          <input 
-                            type="checkbox" 
-                            className="w-3.5 h-3.5 text-blue-600 rounded cursor-pointer mt-0.5" 
-                            checked={userUnidades.every((u: any) => u.notifica_email)}
-                            onChange={() => toggleAll('notifica_email')}
-                          />
-                        )}
-                      </label>
-                    </th>
-                    <th className="px-4 py-3 text-center font-bold text-slate-600 text-xs uppercase">
-                      <label className="flex items-center justify-center gap-1.5 cursor-pointer hover:text-blue-600 transition-colors" title="Seleccionar/Deseleccionar todos">
-                        <span>Telegram</span>
-                        {userUnidades.length > 0 && (
-                          <input 
-                            type="checkbox" 
-                            className="w-3.5 h-3.5 text-blue-600 rounded cursor-pointer mt-0.5" 
-                            checked={userUnidades.every((u: any) => u.notifica_telegram)}
-                            onChange={() => toggleAll('notifica_telegram')}
-                          />
-                        )}
-                      </label>
-                    </th>
                   </tr></thead>
                   <tbody>
                     {userUnidades.map((u: any, idx: number) => (
-                      <tr key={u.unidad_negocio} className={`border-b border-slate-100 transition-colors ${u.is_equipo ? 'bg-indigo-50/40 hover:bg-indigo-100/50' : 'hover:bg-slate-50/50'}`}>
+                      <tr key={u.unidad_negocio} className={`border-b border-slate-100 transition-colors hover:bg-slate-50/50`}>
                         <td className="px-4 py-3 font-medium text-slate-700">
                           <div className="flex flex-col gap-1">
                             <div className="flex items-center gap-2">
-                              {u.is_equipo ? (
-                                <span className="text-[9px] uppercase font-bold bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-200 tracking-wider">Equipo</span>
-                              ) : (
-                                <span className="text-[9px] uppercase font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 tracking-wider">Sucursal</span>
-                              )}
-                              <span className={u.is_equipo ? 'text-indigo-900 font-bold' : 'text-slate-800'}>{u.display_name || u.unidad_negocio}</span>
+                              <span className="text-[9px] uppercase font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 tracking-wider">Sucursal</span>
+                              <span className={'text-slate-800'}>{u.display_name || u.unidad_negocio}</span>
                             </div>
-                            {!u.is_equipo && u.empresa_padre && (
+                            {u.empresa_padre && (
                               <span className="text-[10px] text-slate-400 font-normal ml-10 flex items-center gap-1">
                                 <Building2 size={10} /> {u.empresa_padre}
                               </span>
@@ -1400,8 +1337,6 @@ function Configuracion({ token }: { token: string }) {
                           </div>
                         </td>
                         <td className="px-4 py-2.5 text-center"><input type="checkbox" className="w-4 h-4 text-blue-600 rounded cursor-pointer" checked={u.acceso} onChange={() => toggleUn(idx, 'acceso')} /></td>
-                        <td className="px-4 py-2.5 text-center"><input type="checkbox" className="w-4 h-4 text-blue-600 rounded cursor-pointer" checked={u.notifica_email} onChange={() => toggleUn(idx, 'notifica_email')} /></td>
-                        <td className="px-4 py-2.5 text-center"><input type="checkbox" className="w-4 h-4 text-blue-600 rounded cursor-pointer" checked={u.notifica_telegram} onChange={() => toggleUn(idx, 'notifica_telegram')} /></td>
                       </tr>
                     ))}
                     {userUnidades.length === 0 && <tr><td colSpan={4} className="px-4 py-6 text-center text-slate-400">No hay unidades disponibles</td></tr>}
