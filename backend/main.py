@@ -811,7 +811,7 @@ async def upload_excel(file: UploadFile = File(...)):
                         pass
                         
             cur.execute("""
-                INSERT INTO cert_excel_items (upload_id, unidad_negocio_codigo, fecha, concepto, tipo, importe)
+                INSERT INTO cert_excel_items (upload_id, unidad_negocio, fecha, concepto, tipo, importe)
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (
                 upload_id,
@@ -1902,7 +1902,7 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
     # 3. Excel Items
     y, m = periodo.split('-')
     cur_supa.execute(
-        "SELECT tipo, fecha, concepto, importe FROM cert_excel_items WHERE unidad_negocio_codigo = %s AND EXTRACT(YEAR FROM fecha) = %s AND EXTRACT(MONTH FROM fecha) = %s",
+        "SELECT tipo, fecha, concepto, importe FROM cert_excel_items WHERE unidad_negocio = %s AND EXTRACT(YEAR FROM fecha) = %s AND EXTRACT(MONTH FROM fecha) = %s",
         (unidad_negocio, int(y), int(m))
     )
     excel_items = cur_supa.fetchall()
