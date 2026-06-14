@@ -333,32 +333,30 @@ export default function ConfiguracionAvanzada({ token, tipo }: { token: string, 
         {saveMsg && <span className={`text-sm font-medium ${saveMsg.includes('✅') ? 'text-emerald-600' : 'text-red-600'}`}>{saveMsg}</span>}
       </div>
 
-      {Object.keys(allSelections).length > 0 && (
-        <div className="pt-8 mt-4 border-t border-slate-200">
-          <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2">
-            Resumen de Selecciones (Todas las Sucursales)
-          </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {Object.entries(allSelections).filter(([_, items]) => items.length > 0).map(([sucursal, items]) => (
-              <div key={sucursal} className="bg-slate-50 rounded-xl border border-slate-200 p-4">
-                <h5 className="font-bold text-slate-700 text-sm mb-3">
-                  {sucursal}
-                </h5>
-                <div className="flex flex-wrap gap-2">
-                  {items.map((i: any, idx: number) => (
-                    <span key={idx} className="bg-white border border-slate-200 text-slate-600 text-xs font-medium px-2 py-1 rounded-md shadow-sm">
-                      {i.nombre}
-                    </span>
-                  ))}
-                </div>
+      <div className="pt-8 mt-4 border-t border-slate-200">
+        <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2">
+          Resumen de Selecciones (Todas las Sucursales)
+        </h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Object.entries(allSelections).filter(([_, items]) => items.length > 0).map(([sucursal, items]) => (
+            <div key={sucursal} className="bg-slate-50 rounded-xl border border-slate-200 p-4">
+              <h5 className="font-bold text-slate-700 text-sm mb-3">
+                {sucursal}
+              </h5>
+              <div className="flex flex-wrap gap-2">
+                {items.map((i: any, idx: number) => (
+                  <span key={idx} className="bg-white border border-slate-200 text-slate-600 text-xs font-medium px-2 py-1 rounded-md shadow-sm">
+                    {i.nombre}
+                  </span>
+                ))}
               </div>
-            ))}
-            {Object.values(allSelections).every(items => items.length === 0) && (
-              <p className="text-sm text-slate-400">No hay configuraciones guardadas en ninguna sucursal.</p>
-            )}
-          </div>
+            </div>
+          ))}
+          {Object.values(allSelections).every(items => items.length === 0) && (
+            <p className="text-sm text-slate-400">No hay configuraciones guardadas en ninguna sucursal.</p>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
