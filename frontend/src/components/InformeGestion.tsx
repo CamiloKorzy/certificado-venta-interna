@@ -23,12 +23,16 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
   useEffect(() => {
     const fetchUnidades = async () => {
       try {
-        const res = await fetch('/api/unidades_negocio', {
+        const res = await fetch('/api/mis-unidades', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.ok) {
           const json = await res.json();
           setUnidades(json);
+          // Auto-select first if none selected
+          if (!unidad && json.length > 0) {
+            setUnidad(json[0].nombre);
+          }
         }
       } catch (e) {}
     };

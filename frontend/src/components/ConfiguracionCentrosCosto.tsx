@@ -47,10 +47,11 @@ export default function ConfiguracionCentrosCosto({ token }: { token: string }) 
         apiFetch('/api/unidades-negocio', token),
         apiFetch('/api/finnegans/centros-costo', token)
       ]);
-      setSucursales(sucRes || []);
-      setMaestro(maestroRes || []);
-      if (sucRes && sucRes.length > 0) {
-        setSelectedSucursal(sucRes[0].sucursal);
+      const sucursalesData = sucRes?.data || (Array.isArray(sucRes) ? sucRes : []);
+      setSucursales(sucursalesData);
+      setMaestro(Array.isArray(maestroRes) ? maestroRes : (maestroRes?.data || []));
+      if (sucursalesData.length > 0) {
+        setSelectedSucursal(sucursalesData[0].sucursal);
       }
     } catch (e) {
       console.error(e);
@@ -62,9 +63,10 @@ export default function ConfiguracionCentrosCosto({ token }: { token: string }) 
     setLoadingItems(true);
     try {
       const res = await apiFetch(`/api/config/centros-costo/${encodeURIComponent(suc)}`, token);
-      setItems(res || []);
+      setItems(Array.isArray(res) ? res : []);
     } catch (e) {
       console.error(e);
+      setItems([]);
     }
     setLoadingItems(false);
   };
@@ -86,20 +88,27 @@ export default function ConfiguracionCentrosCosto({ token }: { token: string }) 
     setSaving(false);
   };
 
-  const isSelected = (id: string) => items.some(i => i.id_ref === id);
+  const isSelected = (id: any) => {
+    if (!items || !Array.isArray(items)) return false;
+    return items.some(i => i && String(i.id_ref) === String(id));
+  };
 
   const toggleSelection = (m: any) => {
+    if (!m) return;
     if (isSelected(m.id)) {
-      setItems(items.filter(i => i.id_ref !== m.id));
+      setItems(items.filter(i => i && String(i.id_ref) !== String(m.id)));
     } else {
       setItems([...items, { id_ref: m.id, codigo: m.codigo, nombre: m.nombre }]);
     }
   };
 
-  const filteredMaestro = maestro.filter(m => 
-    (m.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
-    (m.codigo || '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredMaestro = (maestro || []).filter(m => {
+    if (!m) return false;
+    const nom = String(m.nombre || '').toLowerCase();
+    const cod = String(m.codigo || '').toLowerCase();
+    const st = String(searchTerm || '').toLowerCase();
+    return nom.includes(st) || cod.includes(st);
+  });
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden p-6">
@@ -111,8 +120,8 @@ export default function ConfiguracionCentrosCosto({ token }: { token: string }) 
             onChange={(e) => setSelectedSucursal(e.target.value)}
             className="w-full p-2.5 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:bg-white transition-colors"
           >
-            {sucursales.map(s => (
-              <option key={s.sucursal} value={s.sucursal}>{s.sucursal}</option>
+            {(sucursales || []).map((s, idx) => (
+              <option key={s?.sucursal || idx} value={s?.sucursal || ''}>{s?.sucursal || 'Sin nombre'}</option>
             ))}
           </select>
         </div>
@@ -148,16 +157,16 @@ export default function ConfiguracionCentrosCosto({ token }: { token: string }) 
           </div>
           <div className="overflow-y-auto flex-1 p-2">
             {loading ? <div className="p-8 text-center text-slate-400 flex justify-center"><Loader2 size={24} className="animate-spin" /></div> : (
-              filteredMaestro.map(m => (
+              filteredMaestro.map((m, idx) => (
                 <div 
-                  key={m.id} 
+                  key={m?.id || idx} 
                   onClick={() => toggleSelection(m)}
-                  className={`p-3 rounded-lg border-b border-slate-100 last:border-0 cursor-pointer transition-colors flex items-start gap-3 hover:bg-slate-50 ${isSelected(m.id) ? 'bg-blue-50/50' : ''}`}
+                  className={`p-3 rounded-lg border-b border-slate-100 last:border-0 cursor-pointer transition-colors flex items-start gap-3 hover:bg-slate-50 ${isSelected(m?.id) ? 'bg-blue-50/50' : ''}`}
                 >
-                  <input type="checkbox" checked={isSelected(m.id)} readOnly className="mt-1" />
+                  <input type="checkbox" checked={isSelected(m?.id)} readOnly className="mt-1" />
                   <div>
-                    <div className="text-sm font-bold text-slate-700 leading-none mb-1">{m.nombre}</div>
-                    <div className="text-xs text-slate-400 font-mono">{m.codigo}</div>
+                    <div className="text-sm font-bold text-slate-700 leading-none mb-1">{m?.nombre || 'Sin nombre'}</div>
+                    <div className="text-xs text-slate-400 font-mono">{m?.codigo || 'Sin código'}</div>
                   </div>
                 </div>
               ))
@@ -179,14 +188,14 @@ export default function ConfiguracionCentrosCosto({ token }: { token: string }) 
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {items.map(item => (
-                    <div key={item.id_ref} className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex items-center justify-between">
+                  {(items || []).map((item, idx) => (
+                    <div key={item?.id_ref || idx} className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex items-center justify-between">
                       <div>
-                        <div className="text-sm font-bold text-slate-700">{item.nombre}</div>
-                        <div className="text-xs text-slate-400 font-mono">{item.codigo}</div>
+                        <div className="text-sm font-bold text-slate-700">{item?.nombre || 'Sin nombre'}</div>
+                        <div className="text-xs text-slate-400 font-mono">{item?.codigo || 'Sin código'}</div>
                       </div>
-                      <button onClick={() => toggleSelection({id: item.id_ref})} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors">
-                        <Save size={16} className="hidden"/> {/* just keeping lucide imports happy if unused */}
+                      <button onClick={() => toggleSelection({id: item?.id_ref})} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors">
+                        <Save size={16} className="hidden"/>
                         <span className="text-xl leading-none">&times;</span>
                       </button>
                     </div>

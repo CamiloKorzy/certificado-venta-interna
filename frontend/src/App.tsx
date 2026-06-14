@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Building2, PackageCheck, TrendingUp, FileText, Filter, Calendar, LayoutDashboard, Search, ChevronDown, ChevronUp, ChevronRight, BarChart3, Presentation, Download, LogOut, Settings, Users, Save, X, Trash2, Edit2, Send, Check, Loader2, Shield, Bell, Wallet } from 'lucide-react';
 import ConfiguracionAvanzada from './components/ConfiguracionAvanzada';
 import ConfiguracionCentrosCosto from './components/ConfiguracionCentrosCosto';
+import ErrorBoundary from './components/ErrorBoundary';
 import InformeGestion from './components/InformeGestion';
 // ─── API Helper ───
 const API_URL = '';
@@ -1289,7 +1290,9 @@ function Configuracion({ token }: { token: string }) {
           )}
         </div>
       ) : configTab === 'centros-costo' ? (
-        <ConfiguracionCentrosCosto token={token} />
+        <ErrorBoundary>
+          <ConfiguracionCentrosCosto token={token} />
+        </ErrorBoundary>
       ) : (
         <ConfiguracionAvanzada token={token} tipo={configTab as any} />
       )}

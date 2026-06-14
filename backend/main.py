@@ -431,6 +431,41 @@ def get_finnegans_centros_costo():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/config/centros-costo/{sucursal}")
+def get_config_centros_costo(sucursal: str):
+    conn = get_supabase()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT centro_id, codigo, nombre FROM cert_config_centros_costo WHERE sucursal = %s", (sucursal,))
+        data = [{"id_ref": r[0], "codigo": r[1], "nombre": r[2]} for r in cur.fetchall()]
+        cur.close()
+        return data
+    except Exception as e:
+        print(f"Error get_config_centros_costo: {e}")
+        return []
+    finally:
+        conn.close()
+
+@app.post("/api/config/centros-costo/{sucursal}")
+def save_config_centros_costo(sucursal: str, items: list):
+    conn = get_supabase()
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM cert_config_centros_costo WHERE sucursal = %s", (sucursal,))
+        for item in items:
+            cur.execute("""
+                INSERT INTO cert_config_centros_costo (sucursal, centro_id, codigo, nombre)
+                VALUES (%s, %s, %s, %s)
+            """, (sucursal, item.get("id_ref"), item.get("codigo"), item.get("nombre")))
+        conn.commit()
+        cur.close()
+        return {"status": "ok"}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
 @app.post("/api/config/ajustes-excel")
 async def upload_ajustes_excel(file: UploadFile = File(...), current_user = Depends(get_current_user)):
     contents = await file.read()
@@ -907,6 +942,46 @@ def login(req: LoginRequest):
 @app.get("/api/me")
 def get_me(user=Depends(get_current_user)):
     return {"user": user}
+
+@app.get("/api/mis-unidades")
+def get_mis_unidades(user=Depends(get_current_user)):
+    user_id = user.get("id") or user.get("sub")
+    rol = user.get("rol")
+    
+    # Si es admin, puede ver todas las sucursales (leemos de Aurora o simplemente devolvemos las de Aurora)
+    if rol == "admin":
+        try:
+            conn = get_aurora()
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT TRIM(COALESCE(nombreempresa, '')) as sucursal
+                FROM ceesa_cee_sucursales
+                WHERE nombreempresa IS NOT NULL AND TRIM(COALESCE(nombreempresa, '')) != ''
+                GROUP BY TRIM(COALESCE(nombreempresa, ''))
+                ORDER BY sucursal
+            """)
+            lista = [{"id": r[0], "nombre": r[0]} for r in cur.fetchall() if r[0]]
+            cur.close()
+            conn.close()
+            # Añadir 'General' o 'Todas' si hace falta, aunque el frontend tiene un select con option ""
+            return lista
+        except Exception as e:
+            print("Error get_mis_unidades (admin):", e)
+            return []
+            
+    # Si es consulta o responsable_un, solo ve las asignadas
+    conn_supa = get_supabase()
+    try:
+        cur = conn_supa.cursor()
+        cur.execute("SELECT unidad_negocio FROM cert_usuarios_unidades WHERE usuario_id = %s ORDER BY unidad_negocio", (user_id,))
+        rows = cur.fetchall()
+        cur.close()
+        return [{"id": r[0], "nombre": r[0]} for r in rows]
+    except Exception as e:
+        print("Error get_mis_unidades:", e)
+        return []
+    finally:
+        conn_supa.close()
 
 # ═══════════════════════════════════════════════════════
 # CRUD USUARIOS (Solo Admin)
