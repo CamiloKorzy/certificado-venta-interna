@@ -1326,7 +1326,7 @@ def get_indicadores(user=Depends(get_current_user)):
         if user.get("rol") != "admin":
             conn_supa = get_supabase()
             cur_supa = conn_supa.cursor()
-            cur_supa.execute("SELECT unidad_negocio FROM cert_usuarios_unidades WHERE usuario_id = %s", (user['id'],))
+            cur_supa.execute("SELECT unidad_negocio FROM cert_usuarios_unidades WHERE usuario_id = %s", (user.get('id') or user.get('sub'),))
             unidades_permitidas = {r[0].strip() for r in cur_supa.fetchall() if r[0]}
             cur_supa.close()
             conn_supa.close()
