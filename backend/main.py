@@ -459,6 +459,24 @@ def get_finnegans_centros_costo():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/config/centros-costo")
+def get_all_config_centros_costo():
+    try:
+        conn = get_supabase()
+        cur = conn.cursor()
+        cur.execute("SELECT sucursal, centro_costo_id, codigo, nombre FROM cert_config_centros_costo")
+        data = {}
+        for r in cur.fetchall():
+            suc = r[0]
+            if suc not in data:
+                data[suc] = []
+            data[suc].append({"id_ref": r[1], "codigo": r[2], "nombre": r[3]})
+        cur.close()
+        conn.close()
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/config/centros-costo/{sucursal}")
 def get_config_centros_costo(sucursal: str):
     conn = get_supabase()
@@ -644,6 +662,34 @@ class ConfigItem(BaseModel):
     id_ref: str
     codigo: str
     nombre: str
+
+@app.get("/api/config/avanzada/{tipo}")
+def get_all_config_avanzada(tipo: str):
+    try:
+        conn = get_supabase()
+        cur = conn.cursor()
+        
+        if tipo == "ingresos-comprobantes":
+            cur.execute("SELECT sucursal, subtipo_id, codigo, nombre FROM cert_config_ingresos_comprobantes")
+        elif tipo == "gastos-asientos":
+            cur.execute("SELECT sucursal, tipo_asiento_id, codigo, nombre FROM cert_config_gastos_asientos")
+        elif tipo == "gastos-compras":
+            cur.execute("SELECT sucursal, subtipo_id, codigo, nombre FROM cert_config_gastos_compras")
+        else:
+            raise HTTPException(status_code=400, detail="Tipo de configuración inválido")
+            
+        data = {}
+        for r in cur.fetchall():
+            suc = r[0]
+            if suc not in data:
+                data[suc] = []
+            data[suc].append({"id_ref": r[1], "codigo": r[2], "nombre": r[3]})
+            
+        cur.close()
+        conn.close()
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/config/avanzada/{tipo}/{sucursal}")
 def get_config_avanzada(tipo: str, sucursal: str):

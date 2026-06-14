@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Save, Loader2, Check } from 'lucide-react';
+import { Save, Loader2, Check, Building2 } from 'lucide-react';
 
 const API_URL = '';
 function apiFetch(path: string, token: string, options: any = {}) {
@@ -27,6 +27,7 @@ export default function ConfiguracionCentrosCosto({ token }: { token: string }) 
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [allSelections, setAllSelections] = useState<Record<string, any[]>>({});
 
   useEffect(() => {
     loadSucursalesYMaestro();
@@ -39,6 +40,15 @@ export default function ConfiguracionCentrosCosto({ token }: { token: string }) 
       setItems([]);
     }
   }, [selectedSucursal]);
+
+  const loadAllSelections = async () => {
+    try {
+      const allRes = await apiFetch(`/api/config/centros-costo`, token);
+      setAllSelections(allRes || {});
+    } catch(e) {
+      console.error(e);
+    }
+  };
 
   const loadSucursalesYMaestro = async () => {
     setLoading(true);
@@ -53,6 +63,7 @@ export default function ConfiguracionCentrosCosto({ token }: { token: string }) 
       if (sucursalesData.length > 0) {
         setSelectedSucursal(sucursalesData[0].sucursal);
       }
+      await loadAllSelections();
     } catch (e) {
       console.error(e);
     }
@@ -80,6 +91,7 @@ export default function ConfiguracionCentrosCosto({ token }: { token: string }) 
         body: JSON.stringify(items)
       });
       setSaveMsg('✅ Guardado exitosamente');
+      await loadAllSelections();
       setTimeout(() => setSaveMsg(''), 3000);
     } catch (e: any) {
       console.error(e);
@@ -208,6 +220,34 @@ export default function ConfiguracionCentrosCosto({ token }: { token: string }) 
         </div>
         </div>
       </div>
+
+      {Object.keys(allSelections).length > 0 && (
+        <div className="pt-8 mt-4 border-t border-slate-200">
+          <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2">
+            Resumen de Selecciones (Todas las Sucursales)
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Object.entries(allSelections).filter(([_, items]) => items.length > 0).map(([sucursal, items]) => (
+              <div key={sucursal} className="bg-slate-50 rounded-xl border border-slate-200 p-4">
+                <h5 className="font-bold text-slate-700 text-sm mb-3 flex items-center gap-2">
+                  <Building2 size={16} className="text-blue-500" />
+                  {sucursal}
+                </h5>
+                <div className="flex flex-wrap gap-2">
+                  {items.map((i: any, idx: number) => (
+                    <span key={idx} className="bg-white border border-slate-200 text-slate-600 text-xs font-medium px-2 py-1 rounded-md shadow-sm">
+                      {i.nombre}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {Object.values(allSelections).every(items => items.length === 0) && (
+              <p className="text-sm text-slate-400">No hay configuraciones guardadas en ninguna sucursal.</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
