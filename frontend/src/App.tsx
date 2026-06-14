@@ -1159,6 +1159,7 @@ function Configuracion({ token }: { token: string }) {
       const active = userUnidades.filter((u: any) => u.acceso);
       await apiFetch(`/api/usuarios/${modalUser.id}/unidades`, token, { method: 'PUT', body: JSON.stringify(active) });
       setModalMsg({ text: '✅ Sucursales asignadas correctamente', type: 'success' });
+      load(); // Refrescar la tabla para actualizar el contador "X asignadas"
       setTimeout(() => setModalUser(null), 1500);
     } catch (e: any) { setModalMsg({ text: '❌ Error: ' + e.message, type: 'error' }); }
     setSavingUn(false);
