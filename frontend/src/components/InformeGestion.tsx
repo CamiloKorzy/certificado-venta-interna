@@ -23,7 +23,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
   useEffect(() => {
     const fetchUnidades = async () => {
       try {
-        const res = await fetch('http://localhost:8000/api/unidades_negocio', {
+        const res = await fetch('/api/unidades_negocio', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.ok) {
@@ -49,7 +49,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`http://localhost:8000/api/informes/mensual?unidad_negocio=${encodeURIComponent(unidad)}&periodo=${encodeURIComponent(p)}`, {
+      const res = await fetch(`/api/informes/mensual?unidad_negocio=${encodeURIComponent(unidad)}&periodo=${encodeURIComponent(p)}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!res.ok) throw new Error("Error al obtener informe");
@@ -69,7 +69,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
   const handlePresentar = async () => {
     const p = parsePeriodo(periodoStr);
     try {
-      const res = await fetch(`http://localhost:8000/api/cierre/presentar`, {
+      const res = await fetch(`/api/cierre/presentar`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -95,7 +95,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
     if (!window.confirm("¿Seguro que deseas reabrir el periodo?")) return;
     const p = parsePeriodo(periodoStr);
     try {
-      const res = await fetch(`http://localhost:8000/api/cierre/reabrir`, {
+      const res = await fetch(`/api/cierre/reabrir`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
