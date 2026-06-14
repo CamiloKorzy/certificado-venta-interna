@@ -451,6 +451,17 @@ def save_config_centros_costo(sucursal: str, items: list):
     conn = get_supabase()
     try:
         cur = conn.cursor()
+        try:
+            cur.execute("""
+                ALTER TABLE cert_config_centros_costo 
+                ALTER COLUMN codigo TYPE TEXT, 
+                ALTER COLUMN nombre TYPE TEXT, 
+                ALTER COLUMN centro_id TYPE TEXT USING centro_id::text
+            """)
+        except Exception as e:
+            conn.rollback()
+            print("Alter table failed:", e)
+        
         cur.execute("DELETE FROM cert_config_centros_costo WHERE sucursal = %s", (sucursal,))
         for item in items:
             cur.execute("""

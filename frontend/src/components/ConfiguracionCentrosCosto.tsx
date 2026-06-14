@@ -81,9 +81,9 @@ export default function ConfiguracionCentrosCosto({ token }: { token: string }) 
       });
       setSaveMsg('✅ Guardado exitosamente');
       setTimeout(() => setSaveMsg(''), 3000);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      setSaveMsg('❌ Error al guardar');
+      setSaveMsg(`❌ Error al guardar: ${e.message || e}`);
     }
     setSaving(false);
   };
