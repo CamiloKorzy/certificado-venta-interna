@@ -1954,9 +1954,12 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
         SUM(COALESCE(CAST(BSTransaccionDimension.importemonprincipal AS NUMERIC), CAST(BSAsientoItem.importemonprincipal AS NUMERIC)) * CAST(BSAsientoItem.debehaber AS NUMERIC)) AS Importe
     FROM ceesa_bsasientoitem AS BSAsientoItem
     INNER JOIN ceesa_bscuenta AS BSCuenta ON BSAsientoItem.cuentaid = BSCuenta.cuentaid
-    LEFT JOIN ceesa_bstransacciondimension AS BSTransaccionDimension ON BSAsientoItem.asientoitemid = BSTransaccionDimension.asientoitemid AND BSTransaccionDimension.dimensionid = '999999'
-    INNER JOIN ceesa_bstransaccion AS BSTransaccion ON COALESCE(BSTransaccionDimension.transaccionid, BSAsientoItem.transaccionid) = BSTransaccion.transaccionid
+    INNER JOIN ceesa_bstransaccion AS BSTransaccion ON BSAsientoItem.transaccionid = BSTransaccion.transaccionid
     INNER JOIN ceesa_fafempresa AS FAFEmpresa ON BSTransaccion.empresaid = FAFEmpresa.empresaid
+    LEFT JOIN ceesa_bstransacciondimension AS BSTransaccionDimension 
+        ON BSAsientoItem.asientoitemid = BSTransaccionDimension.asientoitemid 
+        AND BSTransaccion.transaccionid = BSTransaccionDimension.transaccionid
+        AND BSTransaccionDimension.dimensionid = '999999'
     LEFT JOIN ceesa_bscentrocosto AS BSCentroCosto ON BSTransaccionDimension.registroid = BSCentroCosto.centrocostoid
     INNER JOIN ceesa_faftransaccionsubtipo AS FAFTransaccionSubtipo ON BSTransaccion.transaccionsubtipoid = FAFTransaccionSubtipo.transaccionsubtipoid
     INNER JOIN ceesa_faftransaccioncategoria AS FAFTransaccionCategoria ON FAFTransaccionSubtipo.transaccioncategoriaid = FAFTransaccionCategoria.transaccioncategoriaid
