@@ -447,7 +447,7 @@ def get_config_centros_costo(sucursal: str):
         conn.close()
 
 @app.post("/api/config/centros-costo/{sucursal}")
-def save_config_centros_costo(sucursal: str, items: list):
+def save_config_centros_costo(sucursal: str, items: List[dict]):
     conn = get_supabase()
     try:
         cur = conn.cursor()
