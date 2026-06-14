@@ -402,7 +402,7 @@ def get_finnegans_subtipos():
     try:
         conn = get_aurora()
         cur = conn.cursor()
-        cur.execute("SELECT TransaccionSubtipoID, Codigo, Nombre FROM FAFTransaccionSubtipo ORDER BY Nombre")
+        cur.execute("SELECT TransaccionSubtipoID, Codigo, Nombre FROM ceesa_faftransaccionsubtipo ORDER BY Nombre")
         data = [{"id": r[0], "codigo": r[1], "nombre": r[2]} for r in cur.fetchall()]
         cur.close()
         conn.close()
@@ -415,7 +415,7 @@ def get_finnegans_centros_costo():
     try:
         conn = get_aurora()
         cur = conn.cursor()
-        cur.execute("SELECT CentroCostoID, Codigo, Nombre FROM BSCentroCosto ORDER BY Nombre")
+        cur.execute("SELECT CentroCostoID, Codigo, Nombre FROM ceesa_bscentrocosto ORDER BY Nombre")
         data = [{"id": r[0], "codigo": r[1], "nombre": r[2]} for r in cur.fetchall()]
         cur.close()
         conn.close()
@@ -428,7 +428,7 @@ def get_finnegans_empresas():
     try:
         conn = get_aurora()
         cur = conn.cursor()
-        cur.execute("SELECT EmpresaID, Codigo, Nombre FROM FAFEmpresa WHERE EmpresaIDPadre = 1 ORDER BY Nombre")
+        cur.execute("SELECT EmpresaID, Codigo, Nombre FROM ceesa_fafempresa WHERE EmpresaIDPadre = '1' ORDER BY Nombre")
         data = [{"id": r[0], "codigo": r[1], "nombre": r[2]} for r in cur.fetchall()]
         cur.close()
         conn.close()
@@ -441,7 +441,7 @@ def get_finnegans_categorias_asiento():
     try:
         conn = get_aurora()
         cur = conn.cursor()
-        cur.execute("SELECT TransaccionCategoriaID, Codigo, Nombre FROM FAFTransaccionCategoria ORDER BY Nombre")
+        cur.execute("SELECT TransaccionCategoriaID, Codigo, Nombre FROM ceesa_faftransaccioncategoria ORDER BY Nombre")
         data = [{"id": r[0], "codigo": r[1], "nombre": r[2]} for r in cur.fetchall()]
         cur.close()
         conn.close()
