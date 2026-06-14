@@ -18,6 +18,8 @@ function apiFetch(path: string, token: string, options: any = {}) {
 }
 
 export default function ConfiguracionAvanzada({ token, tipo }: { token: string, tipo: 'ingresos' | 'gastos-asientos' | 'gastos-compras' | 'ajustes-excel' }) {
+  const [sucursales, setSucursales] = useState<any[]>([]);
+  const [selectedSucursal, setSelectedSucursal] = useState<string>('');
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -33,6 +35,25 @@ export default function ConfiguracionAvanzada({ token, tipo }: { token: string, 
     loadData();
   }, [tipo]);
 
+  useEffect(() => {
+    if (tipo !== 'ajustes-excel' && selectedSucursal) {
+      loadConfigForSucursal(selectedSucursal);
+    }
+  }, [selectedSucursal]);
+
+  const loadConfigForSucursal = async (suc: string) => {
+    setLoading(true);
+    try {
+      const endpoint = tipo === 'ingresos' ? 'ingresos-comprobantes' : tipo;
+      const configRes = await apiFetch(`/api/config/avanzada/${endpoint}/${encodeURIComponent(suc)}`, token);
+      setItems(configRes || []);
+    } catch (e) {
+      console.error(e);
+      setItems([]);
+    }
+    setLoading(false);
+  };
+
   const loadData = async () => {
     setLoading(true);
     try {
@@ -40,14 +61,30 @@ export default function ConfiguracionAvanzada({ token, tipo }: { token: string, 
         const upRes = await apiFetch('/api/config/ajustes-excel', token);
         setUploads(upRes || []);
       } else {
-        const [configRes, maestroRes] = await Promise.all([
-          apiFetch(`/api/config/avanzada/${tipo === 'ingresos' ? 'ingresos-comprobantes' : tipo}`, token),
+        const [sucRes, maestroRes] = await Promise.all([
+          apiFetch('/api/unidades-negocio', token),
           tipo === 'ingresos' ? apiFetch('/api/finnegans/subtipos', token) :
           tipo === 'gastos-asientos' ? apiFetch('/api/finnegans/categorias-asiento', token) :
           apiFetch('/api/finnegans/subtipos', token)
         ]);
-        setItems(configRes || []);
+        
+        const sucursalesData = sucRes?.data || (Array.isArray(sucRes) ? sucRes : []);
+        setSucursales(sucursalesData);
         setMaestro(maestroRes || []);
+
+        let activeSuc = selectedSucursal;
+        if (!activeSuc && sucursalesData.length > 0) {
+          activeSuc = sucursalesData[0].sucursal;
+          setSelectedSucursal(activeSuc);
+        }
+
+        if (activeSuc) {
+          const endpoint = tipo === 'ingresos' ? 'ingresos-comprobantes' : tipo;
+          const configRes = await apiFetch(`/api/config/avanzada/${endpoint}/${encodeURIComponent(activeSuc)}`, token);
+          setItems(configRes || []);
+        } else {
+          setItems([]);
+        }
       }
     } catch (e) {
       console.error(e);
@@ -56,18 +93,19 @@ export default function ConfiguracionAvanzada({ token, tipo }: { token: string, 
   };
 
   const handleSaveSimples = async () => {
+    if (!selectedSucursal) return;
     setSaving(true);
     try {
       const endpoint = tipo === 'ingresos' ? 'ingresos-comprobantes' : tipo;
-      await apiFetch(`/api/config/avanzada/${endpoint}`, token, {
+      await apiFetch(`/api/config/avanzada/${endpoint}/${encodeURIComponent(selectedSucursal)}`, token, {
         method: 'POST',
         body: JSON.stringify(items)
       });
       setSaveMsg('✅ Guardado exitosamente');
       setTimeout(() => setSaveMsg(''), 3000);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      setSaveMsg('❌ Error al guardar');
+      setSaveMsg(`❌ Error al guardar: ${e.message || e}`);
     }
     setSaving(false);
   };
@@ -212,7 +250,24 @@ export default function ConfiguracionAvanzada({ token, tipo }: { token: string, 
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">
-      <h3 className="font-bold text-slate-800 text-lg">{titleMap[tipo]}</h3>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-100 pb-4">
+        <h3 className="font-bold text-slate-800 text-lg">{titleMap[tipo]}</h3>
+        
+        {tipo !== 'ajustes-excel' && (
+          <div className="w-full md:w-64">
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Seleccionar Sucursal</label>
+            <select 
+              value={selectedSucursal}
+              onChange={(e) => setSelectedSucursal(e.target.value)}
+              className="w-full p-2 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:bg-white transition-colors"
+            >
+              {(sucursales || []).map((s, idx) => (
+                <option key={s?.sucursal || idx} value={s?.sucursal || ''}>{s?.sucursal || 'Sin nombre'}</option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div>

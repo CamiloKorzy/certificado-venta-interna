@@ -97,6 +97,31 @@ def auto_setup_db():
         conn = psycopg2.connect(SUPABASE_DB_URL, connect_timeout=10)
         conn.autocommit = True
         cur = conn.cursor()
+        
+        # Migración: Si las tablas de configuración avanzada ya existen pero no tienen la columna 'sucursal', las eliminamos para recrearlas.
+        try:
+            cur.execute("""
+                SELECT EXISTS (
+                    SELECT 1 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'cert_config_ingresos_comprobantes' 
+                      AND column_name = 'sucursal'
+                )
+            """)
+            has_sucursal = cur.fetchone()[0]
+            
+            # También verificamos si la tabla existe. Si no existe, has_sucursal será False.
+            cur.execute("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'cert_config_ingresos_comprobantes')")
+            table_exists = cur.fetchone()[0]
+            
+            if table_exists and not has_sucursal:
+                print("[MIGRACIÓN] Estructura global detectada. Eliminando tablas antiguas de configuración avanzada para recrearlas por sucursal...")
+                cur.execute("DROP TABLE IF EXISTS cert_config_ingresos_comprobantes")
+                cur.execute("DROP TABLE IF EXISTS cert_config_gastos_asientos")
+                cur.execute("DROP TABLE IF EXISTS cert_config_gastos_compras")
+        except Exception as e:
+            print("[MIGRACIÓN] Error durante la comprobación de migración:", e)
+
         cur.execute("""
             CREATE TABLE IF NOT EXISTS cert_usuarios (
                 id SERIAL PRIMARY KEY,
@@ -163,26 +188,29 @@ def auto_setup_db():
             
             CREATE TABLE IF NOT EXISTS cert_config_ingresos_comprobantes (
                 id SERIAL PRIMARY KEY,
+                sucursal TEXT NOT NULL,
                 subtipo_id TEXT NOT NULL,
                 codigo TEXT NOT NULL,
                 nombre TEXT NOT NULL,
-                UNIQUE(subtipo_id)
+                UNIQUE(sucursal, subtipo_id)
             );
             
             CREATE TABLE IF NOT EXISTS cert_config_gastos_asientos (
                 id SERIAL PRIMARY KEY,
+                sucursal TEXT NOT NULL,
                 tipo_asiento_id TEXT NOT NULL,
                 codigo TEXT NOT NULL,
                 nombre TEXT NOT NULL,
-                UNIQUE(tipo_asiento_id)
+                UNIQUE(sucursal, tipo_asiento_id)
             );
             
             CREATE TABLE IF NOT EXISTS cert_config_gastos_compras (
                 id SERIAL PRIMARY KEY,
+                sucursal TEXT NOT NULL,
                 subtipo_id TEXT NOT NULL,
                 codigo TEXT NOT NULL,
                 nombre TEXT NOT NULL,
-                UNIQUE(subtipo_id)
+                UNIQUE(sucursal, subtipo_id)
             );
             
             CREATE TABLE IF NOT EXISTS cert_config_centros_costo (
@@ -617,18 +645,18 @@ class ConfigItem(BaseModel):
     codigo: str
     nombre: str
 
-@app.get("/api/config/avanzada/{tipo}")
-def get_config_avanzada(tipo: str):
+@app.get("/api/config/avanzada/{tipo}/{sucursal}")
+def get_config_avanzada(tipo: str, sucursal: str):
     try:
         conn = get_supabase()
         cur = conn.cursor()
         
         if tipo == "ingresos-comprobantes":
-            cur.execute("SELECT subtipo_id, codigo, nombre FROM cert_config_ingresos_comprobantes")
+            cur.execute("SELECT subtipo_id, codigo, nombre FROM cert_config_ingresos_comprobantes WHERE sucursal = %s", (sucursal,))
         elif tipo == "gastos-asientos":
-            cur.execute("SELECT tipo_asiento_id, codigo, nombre FROM cert_config_gastos_asientos")
+            cur.execute("SELECT tipo_asiento_id, codigo, nombre FROM cert_config_gastos_asientos WHERE sucursal = %s", (sucursal,))
         elif tipo == "gastos-compras":
-            cur.execute("SELECT subtipo_id, codigo, nombre FROM cert_config_gastos_compras")
+            cur.execute("SELECT subtipo_id, codigo, nombre FROM cert_config_gastos_compras WHERE sucursal = %s", (sucursal,))
         else:
             raise HTTPException(status_code=400, detail="Tipo de configuración inválido")
             
@@ -639,27 +667,27 @@ def get_config_avanzada(tipo: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/config/avanzada/{tipo}")
-def save_config_avanzada(tipo: str, items: List[ConfigItem]):
+@app.post("/api/config/avanzada/{tipo}/{sucursal}")
+def save_config_avanzada(tipo: str, sucursal: str, items: List[ConfigItem]):
     try:
         conn = get_supabase()
         cur = conn.cursor()
         
         if tipo == "ingresos-comprobantes":
-            cur.execute("TRUNCATE TABLE cert_config_ingresos_comprobantes")
+            cur.execute("DELETE FROM cert_config_ingresos_comprobantes WHERE sucursal = %s", (sucursal,))
             for item in items:
-                cur.execute("INSERT INTO cert_config_ingresos_comprobantes (subtipo_id, codigo, nombre) VALUES (%s, %s, %s)",
-                            (item.id_ref, item.codigo, item.nombre))
+                cur.execute("INSERT INTO cert_config_ingresos_comprobantes (sucursal, subtipo_id, codigo, nombre) VALUES (%s, %s, %s, %s)",
+                            (sucursal, item.id_ref, item.codigo, item.nombre))
         elif tipo == "gastos-asientos":
-            cur.execute("TRUNCATE TABLE cert_config_gastos_asientos")
+            cur.execute("DELETE FROM cert_config_gastos_asientos WHERE sucursal = %s", (sucursal,))
             for item in items:
-                cur.execute("INSERT INTO cert_config_gastos_asientos (tipo_asiento_id, codigo, nombre) VALUES (%s, %s, %s)",
-                            (item.id_ref, item.codigo, item.nombre))
+                cur.execute("INSERT INTO cert_config_gastos_asientos (sucursal, tipo_asiento_id, codigo, nombre) VALUES (%s, %s, %s, %s)",
+                            (sucursal, item.id_ref, item.codigo, item.nombre))
         elif tipo == "gastos-compras":
-            cur.execute("TRUNCATE TABLE cert_config_gastos_compras")
+            cur.execute("DELETE FROM cert_config_gastos_compras WHERE sucursal = %s", (sucursal,))
             for item in items:
-                cur.execute("INSERT INTO cert_config_gastos_compras (subtipo_id, codigo, nombre) VALUES (%s, %s, %s)",
-                            (item.id_ref, item.codigo, item.nombre))
+                cur.execute("INSERT INTO cert_config_gastos_compras (sucursal, subtipo_id, codigo, nombre) VALUES (%s, %s, %s, %s)",
+                            (sucursal, item.id_ref, item.codigo, item.nombre))
         else:
             raise HTTPException(status_code=400, detail="Tipo de configuración inválido")
             
@@ -1810,6 +1838,16 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
     cur_supa.execute("SELECT id_ref FROM cert_config_centros_costo WHERE sucursal = %s", (unidad_negocio,))
     centros = [r[0] for r in cur_supa.fetchall()]
 
+    # 1b. Configuración Avanzada para esta Sucursal
+    cur_supa.execute("SELECT codigo FROM cert_config_ingresos_comprobantes WHERE sucursal = %s", (unidad_negocio,))
+    ingresos_subtipos = [r[0] for r in cur_supa.fetchall()]
+
+    cur_supa.execute("SELECT tipo_asiento_id FROM cert_config_gastos_asientos WHERE sucursal = %s", (unidad_negocio,))
+    gastos_asientos_ids = [r[0] for r in cur_supa.fetchall()]
+
+    cur_supa.execute("SELECT subtipo_id FROM cert_config_gastos_compras WHERE sucursal = %s", (unidad_negocio,))
+    gastos_compras_ids = [r[0] for r in cur_supa.fetchall()]
+
     # 2. Config Categorías Gastos
     cur_supa.execute("SELECT categoria, cuenta_codigo FROM cert_config_gastos_cuentas")
     cat_rows = cur_supa.fetchall()
@@ -1848,9 +1886,11 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
     conn = get_aurora()
     cur = conn.cursor()
     
-    # -- INGRESOS (usando la vista que ya existe para compatibilidad) --
+    # -- INGRESOS --
+    # Nota: Corregimos los nombres de columnas para evitar el error "column producto does not exist"
+    # Usamos comprobante (ej: 'CI-0001-00000003'), productonombre (ej: 'Servicio...'), y equiposolicitantenombre (ej: 'Arena-K')
     sql_ingresos = """
-    SELECT fecha, documento, producto, solicitante, total
+    SELECT fecha, comprobante, productonombre, equiposolicitantenombre, total
     FROM ceesa_cee_certificados_ventas_internas
     WHERE EXTRACT(YEAR FROM CAST(fecha AS TIMESTAMP)) = %s 
       AND EXTRACT(MONTH FROM CAST(fecha AS TIMESTAMP)) = %s
@@ -1860,7 +1900,12 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
     # Aplicar filtro de unidad
     if sucursales:
         sucs_str = ",".join(f"'{s}'" for s in sucursales)
-        sql_ingresos += f" AND cliente IN ({sucs_str})" # 'cliente' is used as branch in the view
+        sql_ingresos += f" AND cliente IN ({sucs_str})" # 'cliente' se usa como sucursal en la vista
+        
+    # Aplicar filtro de subtipos de comprobante de ingresos si hay configurados para esta sucursal
+    if ingresos_subtipos:
+        subtipos_str = ",".join(f"'{s}'" for s in ingresos_subtipos)
+        sql_ingresos += f" AND split_part(documento, ' - ', 1) IN ({subtipos_str})"
     
     try:
         cur.execute(sql_ingresos, params_ingresos)
@@ -1871,9 +1916,9 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
                 "tipo_movimiento": "INGRESO",
                 "categoria": "Ventas Internas",
                 "fecha": str(r[0]) if r[0] else None,
-                "concepto": r[2] or "Sin Detalle",
-                "comprobante": r[1] or "N/A",
-                "importe": float(r[4] or 0)
+                "concepto": r[2] or "Sin Detalle",        # productonombre
+                "comprobante": r[1] or "N/A",             # comprobante
+                "importe": float(r[4] or 0)               # total
             })
     except Exception as e:
         print("Error Ingresos:", e)
@@ -1889,6 +1934,17 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
         
     cond_gastos = f"({ ' OR '.join(where_gastos) })" if where_gastos else "1=1"
     
+    # Filtro de subtipos de comprobante de compra o categorías de asiento configurados para esta sucursal
+    where_subtipos = []
+    if gastos_compras_ids:
+        compras_str = ",".join(f"'{c}'" for c in gastos_compras_ids)
+        where_subtipos.append(f"FAFTransaccionSubtipo.transaccionsubtipoid IN ({compras_str})")
+    if gastos_asientos_ids:
+        asientos_str = ",".join(f"'{a}'" for a in gastos_asientos_ids)
+        where_subtipos.append(f"FAFTransaccionCategoria.transaccioncategoriaid IN ({asientos_str})")
+        
+    cond_subtipos = f"({ ' OR '.join(where_subtipos) })" if where_subtipos else "1=1"
+    
     sql_gastos = f"""
     SELECT
         BSCuenta.codigo AS CuentaCodigo,
@@ -1902,11 +1958,14 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
     INNER JOIN ceesa_bstransaccion AS BSTransaccion ON COALESCE(BSTransaccionDimension.transaccionid, BSAsientoItem.transaccionid) = BSTransaccion.transaccionid
     INNER JOIN ceesa_fafempresa AS FAFEmpresa ON BSTransaccion.empresaid = FAFEmpresa.empresaid
     LEFT JOIN ceesa_bscentrocosto AS BSCentroCosto ON BSTransaccionDimension.registroid = BSCentroCosto.centrocostoid
+    INNER JOIN ceesa_faftransaccionsubtipo AS FAFTransaccionSubtipo ON BSTransaccion.transaccionsubtipoid = FAFTransaccionSubtipo.transaccionsubtipoid
+    INNER JOIN ceesa_faftransaccioncategoria AS FAFTransaccionCategoria ON FAFTransaccionSubtipo.transaccioncategoriaid = FAFTransaccionCategoria.transaccioncategoriaid
     WHERE FAFEmpresa.empresaidpadre = '1'
       AND BSCuenta.impactaresultados = '1'
       AND EXTRACT(YEAR FROM CAST(BSAsientoItem.fecha AS TIMESTAMP)) = %s
       AND EXTRACT(MONTH FROM CAST(BSAsientoItem.fecha AS TIMESTAMP)) = %s
       AND ({cond_gastos})
+      AND ({cond_subtipos})
     GROUP BY
         BSCuenta.codigo,
         BSCuenta.nombre,
