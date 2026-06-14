@@ -1041,6 +1041,7 @@ function Configuracion({ token }: { token: string }) {
   const [configTab, setConfigTab] = useState<'usuarios' | 'audit' | 'ingresos' | 'gastos-asientos' | 'gastos-compras' | 'unidades' | 'ajustes-excel'>('usuarios');
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
+  const [searchUnidad, setSearchUnidad] = useState('');
 
   const load = useCallback(() => {
     setLoading(true);
@@ -1139,21 +1140,17 @@ function Configuracion({ token }: { token: string }) {
     setModalLoading(false);
   };
 
-  const toggleUn = (idx: number, field: string) => {
-    const copy = [...userUnidades];
-    const item = { ...copy[idx] };
-    item[field] = !item[field];
-    copy[idx] = item;
-    setUserUnidades(copy);
+  const toggleUn = (id_unidad: string, field: string) => {
+    setUserUnidades(prev => prev.map(u => u.unidad_negocio === id_unidad ? { ...u, [field]: !u[field] } : u));
   };
 
-  const toggleAll = (field: string) => {
-    if (userUnidades.length === 0) return;
-    const allChecked = userUnidades.every((u: any) => u[field]);
+  const toggleAll = (field: string, filteredIds: string[]) => {
+    if (filteredIds.length === 0) return;
+    const filteredUnidades = userUnidades.filter((u: any) => filteredIds.includes(u.unidad_negocio));
+    const allChecked = filteredUnidades.every((u: any) => u[field]);
     const newValue = !allChecked;
     
-    const copy = userUnidades.map((u: any) => ({ ...u, [field]: newValue }));
-    setUserUnidades(copy);
+    setUserUnidades(prev => prev.map((u: any) => filteredIds.includes(u.unidad_negocio) ? { ...u, [field]: newValue } : u));
   };
 
   const saveUnidades = async () => {
@@ -1293,71 +1290,91 @@ function Configuracion({ token }: { token: string }) {
       )}
 
       {/* Modal Unidades de Negocio */}
-      {modalUser && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col">
-              <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-              <div><h3 className="font-bold text-slate-800 text-lg">Sucursales Asignadas</h3><p className="text-sm text-slate-500">{modalUser.nombre}</p></div>
-              <button onClick={() => setModalUser(null)} className="text-slate-400 hover:bg-slate-100 p-2 rounded-lg"><X size={20} /></button>
-            </div>
-            <div className="p-5 overflow-y-auto flex-1 bg-slate-50">
+      {modalUser && (() => {
+        const filteredUnidades = userUnidades
+          .filter((u: any) => (u.display_name || u.unidad_negocio).toLowerCase().includes(searchUnidad.toLowerCase()))
+          .sort((a: any, b: any) => Number(b.acceso) - Number(a.acceso));
+        const filteredIds = filteredUnidades.map((u: any) => u.unidad_negocio);
 
-              {modalLoading ? <div className="flex justify-center p-8"><Loader2 size={24} className="animate-spin text-blue-600" /></div> : (
-                <table className="w-full text-sm bg-white rounded-lg border border-slate-200 overflow-hidden">
-                  <thead className="bg-slate-50 border-b border-slate-200"><tr>
-                    <th className="text-left px-4 py-3 font-bold text-slate-600 text-xs uppercase">Sucursal</th>
-                    <th className="px-4 py-3 text-center font-bold text-slate-600 text-xs uppercase">
-                      <label className="flex items-center justify-center gap-1.5 cursor-pointer hover:text-blue-600 transition-colors" title="Seleccionar/Deseleccionar todos">
-                        <span>Acceso</span>
-                        {userUnidades.length > 0 && (
-                          <input 
-                            type="checkbox" 
-                            className="w-3.5 h-3.5 text-blue-600 rounded cursor-pointer mt-0.5" 
-                            checked={userUnidades.every((u: any) => u.acceso)}
-                            onChange={() => toggleAll('acceso')}
-                          />
-                        )}
-                      </label>
-                    </th>
-                  </tr></thead>
-                  <tbody>
-                    {userUnidades.map((u: any, idx: number) => (
-                      <tr key={u.unidad_negocio} className={`border-b border-slate-100 transition-colors hover:bg-slate-50/50`}>
-                        <td className="px-4 py-3 font-medium text-slate-700">
-                          <div className="flex flex-col gap-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-[9px] uppercase font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 tracking-wider">Sucursal</span>
-                              <span className={'text-slate-800'}>{u.display_name || u.unidad_negocio}</span>
-                            </div>
-                            {u.empresa_padre && (
-                              <span className="text-[10px] text-slate-400 font-normal ml-10 flex items-center gap-1">
-                                <Building2 size={10} /> {u.empresa_padre}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-2.5 text-center"><input type="checkbox" className="w-4 h-4 text-blue-600 rounded cursor-pointer" checked={u.acceso} onChange={() => toggleUn(idx, 'acceso')} /></td>
-                      </tr>
-                    ))}
-                    {userUnidades.length === 0 && <tr><td colSpan={4} className="px-4 py-6 text-center text-slate-400">No hay unidades disponibles</td></tr>}
-                  </tbody>
-                </table>
-              )}
-            </div>
-            {modalMsg.text && (
-              <div className={`px-5 py-3 border-t text-sm font-medium flex items-center gap-2 ${modalMsg.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
-                {modalMsg.type === 'success' ? <Check size={16} /> : <span className="text-xl leading-none">⚠️</span>} {modalMsg.text}
+        return (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col">
+              <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+                <div><h3 className="font-bold text-slate-800 text-lg">Sucursales Asignadas</h3><p className="text-sm text-slate-500">{modalUser.nombre}</p></div>
+                <button onClick={() => { setModalUser(null); setSearchUnidad(''); }} className="text-slate-400 hover:bg-slate-100 p-2 rounded-lg"><X size={20} /></button>
               </div>
-            )}
-            <div className="p-4 border-t border-slate-100 flex justify-end gap-3 bg-white rounded-b-2xl">
-              <button onClick={() => setModalUser(null)} className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold px-5 py-2.5 rounded-lg transition-colors">Cancelar</button>
-              <button onClick={saveUnidades} disabled={savingUn} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-5 py-2.5 rounded-lg transition-colors flex items-center gap-2">
-                {savingUn ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Guardar Cambios
-              </button>
+              
+              <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50">
+                <div className="relative">
+                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input 
+                    type="text" 
+                    placeholder="Buscar sucursal..." 
+                    value={searchUnidad}
+                    onChange={(e) => setSearchUnidad(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="p-5 overflow-y-auto flex-1 bg-slate-50">
+                {modalLoading ? <div className="flex justify-center p-8"><Loader2 size={24} className="animate-spin text-blue-600" /></div> : (
+                  <table className="w-full text-sm bg-white rounded-lg border border-slate-200 overflow-hidden">
+                    <thead className="bg-slate-50 border-b border-slate-200"><tr>
+                      <th className="text-left px-4 py-3 font-bold text-slate-600 text-xs uppercase">Sucursal</th>
+                      <th className="px-4 py-3 text-center font-bold text-slate-600 text-xs uppercase">
+                        <label className="flex items-center justify-center gap-1.5 cursor-pointer hover:text-blue-600 transition-colors" title="Seleccionar/Deseleccionar todos">
+                          <span>Acceso</span>
+                          {filteredUnidades.length > 0 && (
+                            <input 
+                              type="checkbox" 
+                              className="w-3.5 h-3.5 text-blue-600 rounded cursor-pointer mt-0.5" 
+                              checked={filteredUnidades.every((u: any) => u.acceso)}
+                              onChange={() => toggleAll('acceso', filteredIds)}
+                            />
+                          )}
+                        </label>
+                      </th>
+                    </tr></thead>
+                    <tbody>
+                      {filteredUnidades.map((u: any) => (
+                        <tr key={u.unidad_negocio} className={`border-b border-slate-100 transition-colors hover:bg-slate-50/50`}>
+                          <td className="px-4 py-3 font-medium text-slate-700">
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[9px] uppercase font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 tracking-wider">Sucursal</span>
+                                <span className={'text-slate-800'}>{u.display_name || u.unidad_negocio}</span>
+                              </div>
+                              {u.empresa_padre && (
+                                <span className="text-[10px] text-slate-400 font-normal ml-10 flex items-center gap-1">
+                                  <Building2 size={10} /> {u.empresa_padre}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-2.5 text-center"><input type="checkbox" className="w-4 h-4 text-blue-600 rounded cursor-pointer" checked={u.acceso} onChange={() => toggleUn(u.unidad_negocio, 'acceso')} /></td>
+                        </tr>
+                      ))}
+                      {filteredUnidades.length === 0 && <tr><td colSpan={2} className="px-4 py-6 text-center text-slate-400">No hay unidades disponibles para esa búsqueda</td></tr>}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+              {modalMsg.text && (
+                <div className={`px-5 py-3 border-t text-sm font-medium flex items-center gap-2 ${modalMsg.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
+                  {modalMsg.type === 'success' ? <Check size={16} /> : <span className="text-xl leading-none">⚠️</span>} {modalMsg.text}
+                </div>
+              )}
+              <div className="p-4 border-t border-slate-100 flex justify-end gap-3 bg-white rounded-b-2xl">
+                <button onClick={() => { setModalUser(null); setSearchUnidad(''); }} className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold px-5 py-2.5 rounded-lg transition-colors">Cancelar</button>
+                <button onClick={saveUnidades} disabled={savingUn} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-5 py-2.5 rounded-lg transition-colors flex items-center gap-2">
+                  {savingUn ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Guardar Cambios
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
