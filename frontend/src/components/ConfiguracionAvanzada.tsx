@@ -17,18 +17,13 @@ function apiFetch(path: string, token: string, options: any = {}) {
   });
 }
 
-export default function ConfiguracionAvanzada({ token, tipo }: { token: string, tipo: 'ingresos' | 'gastos-asientos' | 'gastos-compras' | 'unidades' | 'ajustes-excel' }) {
+export default function ConfiguracionAvanzada({ token, tipo }: { token: string, tipo: 'ingresos' | 'gastos-asientos' | 'gastos-compras' | 'ajustes-excel' }) {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [maestro, setMaestro] = useState<any[]>([]);
   const [saveMsg, setSaveMsg] = useState('');
   
-  // Unidades de Negocio Specific State
-  const [unidades, setUnidades] = useState<any[]>([]);
-  const [sucursales, setSucursales] = useState<any[]>([]);
-  const [centros, setCentros] = useState<any[]>([]);
-  const [nuevaUnidad, setNuevaUnidad] = useState('');
 
   // Excel State
   const [uploads, setUploads] = useState<any[]>([]);
@@ -41,16 +36,7 @@ export default function ConfiguracionAvanzada({ token, tipo }: { token: string, 
   const loadData = async () => {
     setLoading(true);
     try {
-      if (tipo === 'unidades') {
-        const [uns, sucs, ccs] = await Promise.all([
-          apiFetch('/api/config/unidades-negocio', token),
-          apiFetch('/api/finnegans/empresas', token),
-          apiFetch('/api/finnegans/centros-costo', token)
-        ]);
-        setUnidades(uns || []);
-        setSucursales(sucs || []);
-        setCentros(ccs || []);
-      } else if (tipo === 'ajustes-excel') {
+      if (tipo === 'ajustes-excel') {
         const upRes = await apiFetch('/api/excel/uploads', token);
         setUploads(upRes || []);
       } else {
@@ -86,21 +72,6 @@ export default function ConfiguracionAvanzada({ token, tipo }: { token: string, 
     setSaving(false);
   };
 
-  const handleSaveUnidades = async () => {
-    setSaving(true);
-    try {
-      await apiFetch(`/api/config/unidades-negocio`, token, {
-        method: 'POST',
-        body: JSON.stringify(unidades)
-      });
-      setSaveMsg('✅ Unidades guardadas');
-      setTimeout(() => setSaveMsg(''), 3000);
-    } catch (e) {
-      console.error(e);
-      setSaveMsg('❌ Error al guardar unidades');
-    }
-    setSaving(false);
-  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
@@ -146,89 +117,6 @@ export default function ConfiguracionAvanzada({ token, tipo }: { token: string, 
 
   if (loading) return <div className="flex justify-center p-8"><Loader2 size={24} className="animate-spin text-blue-600" /></div>;
 
-  if (tipo === 'unidades') {
-    return (
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">
-        <div className="flex items-center justify-between">
-          <h3 className="font-bold text-slate-800 text-lg">Estructura de Unidades de Negocio</h3>
-          <div className="flex items-center gap-2">
-            <input 
-              className="border border-slate-200 rounded-lg px-3 py-2 text-sm" 
-              placeholder="Nueva Unidad..." 
-              value={nuevaUnidad} 
-              onChange={e => setNuevaUnidad(e.target.value)} 
-            />
-            <button 
-              onClick={() => { if(nuevaUnidad) { setUnidades([...unidades, { nombre: nuevaUnidad, detalles: [] }]); setNuevaUnidad(''); } }}
-              className="bg-slate-800 hover:bg-slate-900 text-white p-2 rounded-lg"
-            >
-              <Plus size={16} />
-            </button>
-          </div>
-        </div>
-
-        {unidades.map((un, i) => (
-          <div key={i} className="border border-slate-200 rounded-xl p-4 bg-slate-50 relative">
-            <button onClick={() => setUnidades(unidades.filter((_, idx) => idx !== i))} className="absolute top-4 right-4 text-slate-400 hover:text-red-500">
-              <Trash2 size={16} />
-            </button>
-            <h4 className="font-bold text-slate-800 mb-4">{un.nombre}</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              
-              {/* Sucursales */}
-              <div className="space-y-2">
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Sucursales (Empresas)</p>
-                <div className="max-h-60 overflow-y-auto border border-slate-200 rounded-lg bg-white p-2 space-y-1">
-                  {sucursales.map(s => {
-                    const isSelected = un.detalles.some((d: any) => d.tipo === 'sucursal' && d.valor_id === s.id);
-                    return (
-                      <label key={s.id} className="flex items-center gap-2 text-sm p-1.5 hover:bg-slate-50 rounded cursor-pointer">
-                        <input type="checkbox" checked={isSelected} onChange={(e) => {
-                          const nd = [...un.detalles];
-                          if (e.target.checked) nd.push({ tipo: 'sucursal', valor_id: s.id, valor_codigo: s.codigo, valor_nombre: s.nombre });
-                          else { const idx = nd.findIndex(x => x.tipo === 'sucursal' && x.valor_id === s.id); if(idx>-1) nd.splice(idx, 1); }
-                          const nu = [...unidades]; nu[i] = { ...nu[i], detalles: nd }; setUnidades(nu);
-                        }} />
-                        <span className="truncate">{s.nombre} ({s.codigo})</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Centros de Costo */}
-              <div className="space-y-2">
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Centros de Costo</p>
-                <div className="max-h-60 overflow-y-auto border border-slate-200 rounded-lg bg-white p-2 space-y-1">
-                  {centros.map(c => {
-                    const isSelected = un.detalles.some((d: any) => d.tipo === 'centro_costo' && d.valor_id === c.id);
-                    return (
-                      <label key={c.id} className="flex items-center gap-2 text-sm p-1.5 hover:bg-slate-50 rounded cursor-pointer">
-                        <input type="checkbox" checked={isSelected} onChange={(e) => {
-                          const nd = [...un.detalles];
-                          if (e.target.checked) nd.push({ tipo: 'centro_costo', valor_id: c.id, valor_codigo: c.codigo, valor_nombre: c.nombre });
-                          else { const idx = nd.findIndex(x => x.tipo === 'centro_costo' && x.valor_id === c.id); if(idx>-1) nd.splice(idx, 1); }
-                          const nu = [...unidades]; nu[i] = { ...nu[i], detalles: nd }; setUnidades(nu);
-                        }} />
-                        <span className="truncate">{c.nombre} ({c.codigo})</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-        ))}
-
-        <div className="flex gap-2 items-center pt-4 border-t border-slate-100">
-          <button onClick={handleSaveUnidades} disabled={saving} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-bold px-5 py-2.5 rounded-lg transition-colors flex items-center gap-2">
-            {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Guardar Estructura
-          </button>
-          {saveMsg && <span className={`text-sm font-medium ${saveMsg.includes('✅') ? 'text-emerald-600' : 'text-red-600'}`}>{saveMsg}</span>}
-        </div>
-      </div>
-    );
-  }
 
   if (tipo === 'ajustes-excel') {
     return (

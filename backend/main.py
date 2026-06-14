@@ -170,20 +170,7 @@ def auto_setup_db():
                 UNIQUE(subtipo_id)
             );
             
-            CREATE TABLE IF NOT EXISTS cert_config_unidades_negocio (
-                id SERIAL PRIMARY KEY,
-                nombre TEXT UNIQUE NOT NULL
-            );
-            
-            CREATE TABLE IF NOT EXISTS cert_config_unidades_detalle (
-                id SERIAL PRIMARY KEY,
-                unidad_id INTEGER REFERENCES cert_config_unidades_negocio(id) ON DELETE CASCADE,
-                tipo TEXT NOT NULL,
-                valor_id TEXT NOT NULL,
-                valor_codigo TEXT,
-                valor_nombre TEXT,
-                UNIQUE(unidad_id, tipo, valor_id)
-            );
+
             
             CREATE TABLE IF NOT EXISTS cert_excel_uploads (
                 id SERIAL PRIMARY KEY,
@@ -512,64 +499,7 @@ def save_config_avanzada(tipo: str, items: List[ConfigItem]):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-class UnidadDetalle(BaseModel):
-    tipo: str
-    valor_id: str
-    valor_codigo: str
-    valor_nombre: str
 
-class UnidadNegocioConfig(BaseModel):
-    nombre: str
-    detalles: List[UnidadDetalle]
-
-@app.get("/api/config/unidades-negocio")
-def get_config_unidades_negocio():
-    try:
-        conn = get_supabase()
-        cur = conn.cursor()
-        cur.execute("SELECT id, nombre FROM cert_config_unidades_negocio ORDER BY nombre")
-        unidades = cur.fetchall()
-        
-        result = []
-        for u in unidades:
-            uid = u[0]
-            unombre = u[1]
-            cur.execute("SELECT tipo, valor_id, valor_codigo, valor_nombre FROM cert_config_unidades_detalle WHERE unidad_id = %s", (uid,))
-            detalles = [{"tipo": d[0], "valor_id": d[1], "valor_codigo": d[2], "valor_nombre": d[3]} for d in cur.fetchall()]
-            result.append({
-                "id": uid,
-                "nombre": unombre,
-                "detalles": detalles
-            })
-            
-        cur.close()
-        conn.close()
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/config/unidades-negocio")
-def save_config_unidades_negocio(unidades: List[UnidadNegocioConfig]):
-    try:
-        conn = get_supabase()
-        cur = conn.cursor()
-        cur.execute("TRUNCATE TABLE cert_config_unidades_negocio CASCADE")
-        
-        for u in unidades:
-            cur.execute("INSERT INTO cert_config_unidades_negocio (nombre) VALUES (%s) RETURNING id", (u.nombre,))
-            uid = cur.fetchone()[0]
-            for d in u.detalles:
-                cur.execute("""
-                    INSERT INTO cert_config_unidades_detalle (unidad_id, tipo, valor_id, valor_codigo, valor_nombre)
-                    VALUES (%s, %s, %s, %s, %s)
-                """, (uid, d.tipo, d.valor_id, d.valor_codigo, d.valor_nombre))
-                
-        conn.commit()
-        cur.close()
-        conn.close()
-        return {"status": "ok"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 
@@ -1634,21 +1564,9 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
     cur_supa = conn_supa.cursor()
     
     # 1. Config Unidades
-    cur_supa.execute("SELECT id FROM cert_config_unidades_negocio WHERE nombre = %s", (unidad_negocio,))
-    un_row = cur_supa.fetchone()
-    if not un_row:
-        # Default behavior: fallback to name matching (for existing logic compatibility)
-        sucursales = [unidad_negocio]
-        centros = [unidad_negocio]
-    else:
-        un_id = un_row[0]
-        cur_supa.execute("SELECT tipo, valor_id FROM cert_config_unidades_detalle WHERE unidad_id = %s", (un_id,))
-        detalles = cur_supa.fetchall()
-        sucursales = [d[1] for d in detalles if d[0] == 'sucursal']
-        centros = [d[1] for d in detalles if d[0] == 'centro_costo']
-        
-    if not sucursales and not centros:
-        sucursales = [unidad_negocio]
+    # La unidad_negocio que llega ya es la sucursal de Finnegans
+    sucursales = [unidad_negocio]
+    centros = []
 
     # 2. Config Categorías Gastos
     cur_supa.execute("SELECT categoria, cuenta_codigo FROM cert_config_gastos_cuentas")
