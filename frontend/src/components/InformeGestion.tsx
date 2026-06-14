@@ -127,19 +127,24 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
     <div className="p-6 max-w-[1600px] mx-auto">
       
       {/* Controles */}
-      <div className="bg-white p-4 shadow rounded-lg mb-6 flex gap-4 items-end">
-        <div className="flex-1">
-            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Unidad de Negocio</label>
-            <select className="w-full border-gray-300 rounded p-2" value={unidad} onChange={e => setUnidad(e.target.value)}>
-                <option value="">Seleccione...</option>
-                {unidades.map(u => (
-                    <option key={u.id} value={u.nombre}>{u.nombre}</option>
-                ))}
-            </select>
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden p-6 mb-8 flex flex-col md:flex-row gap-6 items-start md:items-end">
+        <div className="w-full md:flex-1 relative">
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Unidad de Negocio</label>
+            <div className="relative">
+              <select className="w-full p-2.5 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:bg-white transition-colors focus:ring-2 focus:ring-blue-100 focus:outline-none appearance-none cursor-pointer" value={unidad} onChange={e => setUnidad(e.target.value)}>
+                  <option value="">Seleccione...</option>
+                  {unidades.map(u => (
+                      <option key={u.id} value={u.nombre}>{u.nombre}</option>
+                  ))}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+              </div>
+            </div>
         </div>
-        <div className="flex-1">
-            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Periodo (MM/YYYY)</label>
-            <input type="text" className="w-full border-gray-300 rounded p-2" value={periodoStr} onChange={e => setPeriodoStr(e.target.value)} placeholder="04/2026"/>
+        <div className="w-full md:flex-1">
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Periodo (MM/YYYY)</label>
+            <input type="text" className="w-full p-2.5 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:bg-white transition-colors focus:ring-2 focus:ring-blue-100 focus:outline-none" value={periodoStr} onChange={e => setPeriodoStr(e.target.value)} placeholder="04/2026"/>
         </div>
       </div>
 
