@@ -423,7 +423,7 @@ def get_finnegans_centros_costo():
     try:
         conn = get_aurora()
         cur = conn.cursor()
-        cur.execute("SELECT codigocentrodecosto, codigocentrodecosto, nombrecentrodecosto FROM centros_de_costo_constructoras ORDER BY nombrecentrodecosto")
+        cur.execute("SELECT centrocostoid, codigo, nombre FROM ceesa_bscentrocosto ORDER BY nombre")
         data = [{"id": r[0], "codigo": r[1], "nombre": r[2]} for r in cur.fetchall()]
         cur.close()
         conn.close()
@@ -1796,7 +1796,8 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
     # 1. Config Unidades
     # La unidad_negocio que llega ya es la sucursal de Finnegans
     sucursales = [unidad_negocio]
-    centros = []
+    cur_supa.execute("SELECT id_ref FROM cert_config_centros_costo WHERE sucursal = %s", (unidad_negocio,))
+    centros = [r[0] for r in cur_supa.fetchall()]
 
     # 2. Config Categorías Gastos
     cur_supa.execute("SELECT categoria, cuenta_codigo FROM cert_config_gastos_cuentas")
@@ -1873,9 +1874,9 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
         where_gastos.append(f"FAFEmpresa.nombre IN ({sucs_str})")
     if centros:
         ccs_str = ",".join(f"'{c}'" for c in centros)
-        where_gastos.append(f"BSCentroCosto.nombre IN ({ccs_str})")
+        where_gastos.append(f"BSTransaccionDimension.registroid IN ({ccs_str})")
         
-    cond_gastos = " OR ".join(where_gastos) if where_gastos else "1=1"
+    cond_gastos = f"({ ' OR '.join(where_gastos) })" if where_gastos else "1=1"
     
     sql_gastos = f"""
     SELECT
