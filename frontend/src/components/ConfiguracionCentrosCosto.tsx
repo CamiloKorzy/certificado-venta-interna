@@ -97,8 +97,8 @@ export default function ConfiguracionCentrosCosto({ token }: { token: string }) 
   };
 
   const filteredMaestro = maestro.filter(m => 
-    m.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    m.codigo.toLowerCase().includes(searchTerm.toLowerCase())
+    (m.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+    (m.codigo || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
