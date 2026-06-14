@@ -253,11 +253,10 @@ export default function ConfiguracionAvanzada({ token, tipo }: { token: string, 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-100 pb-4">
         <h3 className="font-bold text-slate-800 text-lg">{titleMap[tipo]}</h3>
         
-        {tipo !== 'ajustes-excel' && (
-          <div className="w-full md:w-64">
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Seleccionar Sucursal</label>
-            <select 
-              value={selectedSucursal}
+        <div className="w-full md:w-64">
+          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Seleccionar Sucursal</label>
+          <select 
+            value={selectedSucursal}
               onChange={(e) => setSelectedSucursal(e.target.value)}
               className="w-full p-2 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:bg-white transition-colors"
             >
@@ -266,7 +265,6 @@ export default function ConfiguracionAvanzada({ token, tipo }: { token: string, 
               ))}
             </select>
           </div>
-        )}
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
