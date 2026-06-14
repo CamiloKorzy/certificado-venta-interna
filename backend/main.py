@@ -170,6 +170,14 @@ def auto_setup_db():
                 UNIQUE(subtipo_id)
             );
             
+            CREATE TABLE IF NOT EXISTS cert_config_centros_costo (
+                id SERIAL PRIMARY KEY,
+                sucursal TEXT NOT NULL,
+                centro_id TEXT NOT NULL,
+                codigo TEXT NOT NULL,
+                nombre TEXT NOT NULL,
+                UNIQUE(sucursal, centro_id)
+            );
 
             
             CREATE TABLE IF NOT EXISTS cert_excel_uploads (
@@ -400,7 +408,7 @@ def get_finnegans_centros_costo():
     try:
         conn = get_aurora()
         cur = conn.cursor()
-        cur.execute("SELECT CentroCostoID, Codigo, Nombre FROM ceesa_bscentrocosto ORDER BY Nombre")
+        cur.execute("SELECT codigocentrodecosto, codigocentrodecosto, nombrecentrodecosto FROM centros_de_costo_constructoras ORDER BY nombrecentrodecosto")
         data = [{"id": r[0], "codigo": r[1], "nombre": r[2]} for r in cur.fetchall()]
         cur.close()
         conn.close()

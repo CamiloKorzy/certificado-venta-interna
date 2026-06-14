@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Building2, PackageCheck, TrendingUp, FileText, Filter, Calendar, LayoutDashboard, Search, ChevronDown, ChevronUp, ChevronRight, BarChart3, Presentation, Download, LogOut, Settings, Users, Save, X, Trash2, Edit2, Send, Check, Loader2, Shield, Bell, Wallet } from 'lucide-react';
 import ConfiguracionAvanzada from './components/ConfiguracionAvanzada';
+import ConfiguracionCentrosCosto from './components/ConfiguracionCentrosCosto';
 import InformeGestion from './components/InformeGestion';
 // ─── API Helper ───
 const API_URL = '';
@@ -1038,7 +1039,7 @@ function Configuracion({ token }: { token: string }) {
   const [savingUn, setSavingUn] = useState(false);
   const [modalLoading, setModalLoading] = useState(false);
   const [modalMsg, setModalMsg] = useState({ text: '', type: '' });
-  const [configTab, setConfigTab] = useState<'usuarios' | 'audit' | 'ingresos' | 'gastos-asientos' | 'gastos-compras' | 'unidades' | 'ajustes-excel'>('usuarios');
+  const [configTab, setConfigTab] = useState<'usuarios' | 'audit' | 'ingresos' | 'gastos-asientos' | 'gastos-compras' | 'centros-costo' | 'unidades' | 'ajustes-excel'>('usuarios');
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
   const [searchUnidad, setSearchUnidad] = useState('');
@@ -1178,6 +1179,7 @@ function Configuracion({ token }: { token: string }) {
           <button onClick={() => setConfigTab('ingresos')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'ingresos' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Conf. Ingresos</button>
           <button onClick={() => setConfigTab('gastos-asientos')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'gastos-asientos' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Conf. Gastos Asientos</button>
           <button onClick={() => setConfigTab('gastos-compras')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'gastos-compras' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Conf. Gastos Compras</button>
+          <button onClick={() => setConfigTab('centros-costo')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'centros-costo' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Conf. Centros de Costo</button>
           <button onClick={() => setConfigTab('ajustes-excel')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'ajustes-excel' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Ajustes Excel</button>
         </div>
       </div>
@@ -1286,6 +1288,8 @@ function Configuracion({ token }: { token: string }) {
             </div>
           )}
         </div>
+      ) : configTab === 'centros-costo' ? (
+        <ConfiguracionCentrosCosto token={token} />
       ) : (
         <ConfiguracionAvanzada token={token} tipo={configTab as any} />
       )}
