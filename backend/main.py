@@ -464,7 +464,7 @@ def get_all_config_centros_costo():
     try:
         conn = get_supabase()
         cur = conn.cursor()
-        cur.execute("SELECT sucursal, centro_costo_id, codigo, nombre FROM cert_config_centros_costo")
+        cur.execute("SELECT sucursal, centro_id, codigo, nombre FROM cert_config_centros_costo")
         data = {}
         for r in cur.fetchall():
             suc = r[0]
