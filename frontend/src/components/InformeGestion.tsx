@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MultiSelect } from './MultiSelect';
-import { Download } from 'lucide-react';
+import { Download, Search } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 const getDefaultPeriod = () => {
