@@ -152,7 +152,7 @@ const HorizontalBarChart = ({ title, data, icon: Icon, colorTheme = "blue", show
   );
 };
 
-function Dashboard({ token, onLogout }: { token: string, onLogout: () => void }) {
+function Dashboard({ token, onLogout, defaultUnidad }: { token: string, onLogout: () => void, defaultUnidad?: string }) {
   const [rawData, setRawData] = useState<any[]>([]);
   const [columns, setColumns] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -167,7 +167,7 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
     periodo: [currentPeriod],
     empresa: ['Todas'],
     cliente: ['Todos'],
-    unidad: ['Todas'],
+    unidad: [defaultUnidad || 'Todas'],
     concepto: ['Todos'],
     estado: ['Todos'],
     fechaDesde: '',
@@ -1401,34 +1401,34 @@ function Configuracion({ token }: { token: string }) {
 // ═══════════════════════════════════════════════════════
 // NEW EMPTY TABS (Dashboard & Gastos)
 // ═══════════════════════════════════════════════════════
-function MainDashboard({ token }: { token: string }) {
+function MainDashboard({ token, defaultUnidad }: { token: string, defaultUnidad?: string }) {
   return (
     <div className="bg-slate-50 min-h-[80vh]">
-      <InformeGestion token={token} mode="dashboard" />
+      <InformeGestion token={token} mode="dashboard" defaultUnidad={defaultUnidad} />
     </div>
   );
 }
 
-function Gastos({ token }: { token: string }) {
+function Gastos({ token, defaultUnidad }: { token: string, defaultUnidad?: string }) {
   return (
     <div className="bg-slate-50 min-h-[80vh]">
-      <InformeGestion token={token} mode="gastos" />
+      <InformeGestion token={token} mode="gastos" defaultUnidad={defaultUnidad} />
     </div>
   );
 }
 
-function Asientos({ token }: { token: string }) {
+function Asientos({ token, defaultUnidad }: { token: string, defaultUnidad?: string }) {
   return (
     <div className="bg-slate-50 min-h-[80vh]">
-      <InformeGestion token={token} mode="asientos" />
+      <InformeGestion token={token} mode="asientos" defaultUnidad={defaultUnidad} />
     </div>
   );
 }
 
-function RRHH({ token }: { token: string }) {
+function RRHH({ token, defaultUnidad }: { token: string, defaultUnidad?: string }) {
   return (
     <div className="bg-slate-50 min-h-[80vh]">
-      <InformeGestion token={token} mode="rrhh" />
+      <InformeGestion token={token} mode="rrhh" defaultUnidad={defaultUnidad} />
     </div>
   );
 }
@@ -1506,11 +1506,11 @@ export default function App() {
       </div>
 
       {/* Content */}
-      {view === 'dashboard' && <MainDashboard token={token} />}
-      {view === 'ingresos' && <Dashboard token={token} onLogout={handleLogout} />}
-      {view === 'gastos' && <Gastos token={token} />}
-      {view === 'asientos' && <Asientos token={token} />}
-      {view === 'rrhh' && <RRHH token={token} />}
+      {view === 'dashboard' && <MainDashboard token={token} defaultUnidad={user?.sucursales?.[0]} />}
+      {view === 'ingresos' && <Dashboard token={token} onLogout={handleLogout} defaultUnidad={user?.sucursales?.[0]} />}
+      {view === 'gastos' && <Gastos token={token} defaultUnidad={user?.sucursales?.[0]} />}
+      {view === 'asientos' && <Asientos token={token} defaultUnidad={user?.sucursales?.[0]} />}
+      {view === 'rrhh' && <RRHH token={token} defaultUnidad={user?.sucursales?.[0]} />}
       {view === 'config' && user?.rol === 'admin' && <Configuracion token={token} />}
 
       {/* Modal Acerca de */}

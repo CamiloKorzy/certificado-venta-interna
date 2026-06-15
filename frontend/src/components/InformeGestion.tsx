@@ -5,7 +5,6 @@ import * as XLSX from 'xlsx';
 
 const getDefaultPeriod = () => {
   const d = new Date();
-  d.setMonth(d.getMonth() - 1);
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const yyyy = d.getFullYear();
   return `${mm}/${yyyy}`;
@@ -23,6 +22,12 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
   
   const [unidades, setUnidades] = useState<any[]>([]);
   const [searchTermRRHH, setSearchTermRRHH] = useState('');
+
+  useEffect(() => {
+    if (defaultUnidad) {
+      setUnidad(defaultUnidad);
+    }
+  }, [defaultUnidad]);
 
   // Format of periodo: MM/YYYY -> YYYY-MM
   const parsePeriodo = (p: string) => {
