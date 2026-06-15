@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { MultiSelect } from './MultiSelect';
 
 export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Activos', defaultPeriodo = '04/2026', mode = 'dashboard' }: { token: string, defaultUnidad?: string, defaultPeriodo?: string, mode?: 'dashboard' | 'gastos' }) {
   const [data, setData] = useState<any>(null);
@@ -143,8 +144,13 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
             </div>
         </div>
         <div className="w-full md:w-64">
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Periodo (MM/YYYY)</label>
-            <input type="text" className="w-full p-2.5 border border-slate-300 rounded-lg text-sm bg-slate-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium text-slate-700" value={periodoStr} onChange={e => setPeriodoStr(e.target.value)} placeholder="04/2026"/>
+            <MultiSelect 
+              label="Periodo" 
+              options={['06/2026', '05/2026', '04/2026', '03/2026', '02/2026', '01/2026', '12/2025', '11/2025', '10/2025']} 
+              selected={[periodoStr]} 
+              onChange={v => setPeriodoStr(v[0])} 
+              singleSelection={true}
+            />
         </div>
       </div>
 

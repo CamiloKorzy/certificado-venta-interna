@@ -21,7 +21,7 @@ function apiFetch(path: string, token: string, options: any = {}) {
   });
 }
 
-const MultiSelect = ({ label, options, selected, onChange }: { label: string, options: string[], selected: string[], onChange: (v: string[]) => void }) => {
+export const MultiSelect = ({ label, options, selected, onChange, singleSelection = false }: { label: string, options: string[], selected: string[], onChange: (v: string[]) => void, singleSelection?: boolean }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
 
@@ -36,6 +36,17 @@ const MultiSelect = ({ label, options, selected, onChange }: { label: string, op
   }, []);
 
   const toggleOption = (option: string) => {
+    if (singleSelection) {
+      if (option !== 'Todos' && option !== 'Todas') {
+        onChange([option]);
+        setIsOpen(false);
+      } else {
+        onChange([option]);
+        setIsOpen(false);
+      }
+      return;
+    }
+
     if (option === 'Todos' || option === 'Todas') {
       onChange([option]);
       return;
