@@ -1031,6 +1031,8 @@ def get_rrhh(
         WHERE periodo = %s
           AND centrocosto IN %s
           AND TRIM(COALESCE(empresa, '')) = %s
+          AND UPPER(nombreconcepto) NOT LIKE '%%SAC%%'
+          AND UPPER(nombreconcepto) NOT LIKE '%%AGUINALDO%%'
         GROUP BY
             legajo, apellidonombre, centrocosto, tipoconcepto
         """
@@ -1067,13 +1069,8 @@ def get_rrhh(
                 }
                 
             tipo = str(record['tipoconcepto']).strip()
-            nombre_concepto = str(record['nombreconcepto']).upper()
             # Convertimos a float para evitar decimal.Decimal json encoding issue
             imp = float(record['importe'])
-            
-            # Ignorar liquidación real del SAC para no duplicar costos y evitar picos
-            if 'SAC' in nombre_concepto or 'AGUINALDO' in nombre_concepto:
-                continue
             
             if tipo in ('Remunerativo', 'Remunerativo Variable'):
                 legajos_map[leg]['remunerativo'] += imp
