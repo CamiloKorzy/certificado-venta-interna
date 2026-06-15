@@ -889,6 +889,179 @@ def update_config_gastos(data: GastoConfigUpdate):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/asientos")
+def get_asientos(
+    empresa: Optional[str] = None,
+    fecha_desde: Optional[str] = None,
+    fecha_hasta: Optional[str] = None
+):
+    try:
+        conn_supa = get_supabase()
+        cur_supa = conn_supa.cursor()
+        
+        # Obtener los subtipos de asiento configurados para esta Sucursal
+        cur_supa.execute("SELECT tipo_asiento_id FROM cert_config_gastos_asientos WHERE sucursal = %s", (empresa,))
+        tipos_rows = cur_supa.fetchall()
+        cur_supa.close()
+        conn_supa.close()
+        
+        tipos_asientos = [r[0] for r in tipos_rows]
+        if not tipos_asientos:
+            return []
+
+        conn = get_aurora()
+        cur = conn.cursor()
+
+        sql = """
+        SELECT 
+            BSAsientoItem.Fecha AS fecha,
+            BSCuenta.Codigo AS cuenta_codigo,
+            BSCuenta.Nombre AS cuenta_nombre,
+            BSAsientoItem.Descripcion AS descripcion,
+            (COALESCE(BSAsientoItem.ImporteMonPrincipal, 0) * BSAsientoItem.DebeHaber) AS importe
+        FROM BSAsientoItem
+        INNER JOIN BSCuenta ON BSAsientoItem.CuentaID = BSCuenta.CuentaID
+        INNER JOIN BSTransaccion ON BSAsientoItem.TransaccionID = BSTransaccion.TransaccionID
+        WHERE BSTransaccion.TransaccionSubtipoID IN %s
+        """
+        
+        params = [tuple(tipos_asientos)]
+        if fecha_desde:
+            sql += " AND BSAsientoItem.Fecha >= %s"
+            params.append(fecha_desde)
+        if fecha_hasta:
+            sql += " AND BSAsientoItem.Fecha <= %s"
+            params.append(fecha_hasta)
+            
+        sql += " ORDER BY BSAsientoItem.Fecha DESC LIMIT 1000"
+        
+        cur.execute(sql, tuple(params))
+        cols = [desc[0].lower() for desc in cur.description]
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        return [dict(zip(cols, row)) for row in rows]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/rrhh")
+def get_rrhh(
+    empresa: Optional[str] = None,
+    periodo: Optional[str] = None
+):
+    try:
+        if not empresa or not periodo:
+            return []
+            
+        # El periodo viene como 'YYYY-MM', para RRHH lo pasamos a 'YYYYMM'
+        periodo_str = periodo.replace("-", "")
+
+        conn_supa = get_supabase()
+        cur_supa = conn_supa.cursor()
+        
+        # Obtener los centros de costo configurados para esta Sucursal
+        cur_supa.execute("SELECT nombre FROM cert_config_centros_costo WHERE sucursal = %s", (empresa,))
+        centros_rows = cur_supa.fetchall()
+        cur_supa.close()
+        conn_supa.close()
+        
+        centros_costo = [r[0] for r in centros_rows]
+        if not centros_costo:
+            return []
+
+        conn = get_aurora()
+        cur = conn.cursor()
+
+        # Agrupamos por legajo, apellidonombre, centrocosto y tipoconcepto
+        sql = """
+        SELECT
+            legajo,
+            apellidonombre,
+            centrocosto,
+            tipoconcepto,
+            SUM(CAST(REPLACE(importe, ',', '.') AS NUMERIC)) as importe
+        FROM ceesa_cee_liquidaciones_de_sueldos_
+        WHERE periodo = %s
+          AND centrocosto IN %s
+        GROUP BY
+            legajo, apellidonombre, centrocosto, tipoconcepto
+        """
+        
+        cur.execute(sql, (periodo_str, tuple(centros_costo)))
+        cols = [desc[0].lower() for desc in cur.description]
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        # Procesar los datos para armar la grilla por legajo y los totales
+        legajos_map = {}
+        totales = {
+            "remunerativo": 0.0,
+            "no_remunerativo": 0.0,
+            "contribuciones": 0.0,
+            "retenciones": 0.0
+        }
+        
+        for row in rows:
+            record = dict(zip(cols, row))
+            leg = record['legajo']
+            if leg not in legajos_map:
+                legajos_map[leg] = {
+                    "legajo": leg,
+                    "apellidonombre": record['apellidonombre'],
+                    "centrocosto": record['centrocosto'],
+                    "remunerativo": 0.0,
+                    "no_remunerativo": 0.0,
+                    "contribuciones": 0.0,
+                    "retenciones": 0.0
+                }
+                
+            tipo = str(record['tipoconcepto']).strip()
+            # Convertimos a float para evitar decimal.Decimal json encoding issue
+            imp = float(record['importe'])
+            
+            if tipo in ('Remunerativo', 'Remunerativo Variable'):
+                legajos_map[leg]['remunerativo'] += imp
+                totales['remunerativo'] += imp
+            elif tipo == 'No Remunerativo':
+                legajos_map[leg]['no_remunerativo'] += imp
+                totales['no_remunerativo'] += imp
+            elif tipo == 'Contribución Patronal' or tipo == 'Contribucion Patronal' or tipo == 'Contribucin Patronal' or 'Contrib' in tipo:
+                legajos_map[leg]['contribuciones'] += imp
+                totales['contribuciones'] += imp
+            elif tipo == 'Retención' or tipo == 'Retencion' or tipo == 'Retencin' or 'Retenc' in tipo:
+                legajos_map[leg]['retenciones'] += imp
+                totales['retenciones'] += imp
+
+        # Computar Costo Empresa y Neto
+        # Costo Empresa = Remunerativo + No Remunerativo + Contribuciones Patronales
+        # Neto = Remunerativo + No Remunerativo - Retenciones Empleado (Asumimos Retenciones viene positivo)
+        resultado_legajos = []
+        for leg in legajos_map.values():
+            rem = leg['remunerativo']
+            no_rem = leg['no_remunerativo']
+            cont = leg['contribuciones']
+            # Si retenciones viene en negativo en BD, lo sumamos, si no lo restamos. Finnegans suele enviar retenciones en negativo
+            # Ajustaremos sumándolo si es negativo, restándolo si es positivo
+            ret = abs(leg['retenciones'])
+            
+            leg['retenciones'] = ret # Mostrar en positivo para la grilla
+            leg['costo_empresa'] = rem + no_rem + cont
+            leg['neto'] = rem + no_rem - ret
+            resultado_legajos.append(leg)
+            
+        totales['retenciones'] = abs(totales['retenciones'])
+        totales['costo_empresa'] = totales['remunerativo'] + totales['no_remunerativo'] + totales['contribuciones']
+        totales['neto'] = totales['remunerativo'] + totales['no_remunerativo'] - totales['retenciones']
+        
+        return {
+            "totales": totales,
+            "detalles": resultado_legajos
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/gastos")
 def get_gastos(
     empresa: Optional[str] = None,

@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { MultiSelect } from './MultiSelect';
+import { Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
-export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Activos', defaultPeriodo = '04/2026', mode = 'dashboard' }: { token: string, defaultUnidad?: string, defaultPeriodo?: string, mode?: 'dashboard' | 'gastos' }) {
+export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Activos', defaultPeriodo = '04/2026', mode = 'dashboard' }: { token: string, defaultUnidad?: string, defaultPeriodo?: string, mode?: 'dashboard' | 'gastos' | 'asientos' | 'rrhh' }) {
   const [data, setData] = useState<any>(null);
+  const [asientosData, setAsientosData] = useState<any>(null);
+  const [rrhhData, setRrhhData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
@@ -54,12 +58,30 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/informes/mensual?unidad_negocio=${encodeURIComponent(unidad)}&periodo=${encodeURIComponent(p)}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error("Error al obtener informe");
-      const json = await res.json();
-      setData(json);
+      if (mode === 'asientos') {
+        const [year, month] = p.split('-');
+        const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+        const fecha_desde = `${p}-01`;
+        const fecha_hasta = `${p}-${lastDay}`;
+        const res = await fetch(`/api/asientos?empresa=${encodeURIComponent(unidad)}&fecha_desde=${encodeURIComponent(fecha_desde)}&fecha_hasta=${encodeURIComponent(fecha_hasta)}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error("Error al obtener asientos");
+        setAsientosData(await res.json());
+      } else if (mode === 'rrhh') {
+        const res = await fetch(`/api/rrhh?empresa=${encodeURIComponent(unidad)}&periodo=${encodeURIComponent(p)}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error("Error al obtener RRHH");
+        setRrhhData(await res.json());
+      } else {
+        const res = await fetch(`/api/informes/mensual?unidad_negocio=${encodeURIComponent(unidad)}&periodo=${encodeURIComponent(p)}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error("Error al obtener informe");
+        const json = await res.json();
+        setData(json);
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -122,6 +144,14 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
     }
   };
 
+  const exportRRHHToxlsx = () => {
+    if (!rrhhData || !rrhhData.legajos) return;
+    const ws = XLSX.utils.json_to_sheet(rrhhData.legajos);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "RRHH");
+    XLSX.writeFile(wb, `RRHH_${unidad}_${periodoStr.replace('/', '-')}.xlsx`);
+  };
+
   const resultado = data ? data.totales.ingresos - data.totales.gastos : 0;
 
   return (
@@ -152,36 +182,48 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
       {error && <div className="p-4 bg-red-100 text-red-800 rounded mb-6">{error}</div>}
       {loading && <div className="p-4 text-gray-500 mb-6">Cargando informe de gestión...</div>}
       
-      {!loading && data && (
+      {!loading && (data || asientosData || rrhhData) && (
         <div className="bg-white p-6 shadow-md rounded-lg space-y-6">
           <div className="flex justify-between items-center border-b pb-4">
             <div>
-              <h2 className="text-2xl font-bold">{mode === 'gastos' ? 'Detalle de Gastos' : 'Dashboard Analítico'}</h2>
+              <h2 className="text-2xl font-bold">
+                {mode === 'gastos' ? 'Detalle de Gastos' : 
+                 mode === 'asientos' ? 'Asientos Vinculados' : 
+                 mode === 'rrhh' ? 'Recursos Humanos' : 'Dashboard Analítico'}
+              </h2>
             </div>
             <div className="flex items-center space-x-4">
-              <span className={`px-3 py-1 rounded-full text-sm font-semibold ${data.estado_cierre === 'CERRADO' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
-                Estado: {data.estado_cierre}
-              </span>
-              {data.estado_cierre === 'CERRADO' && data.usuario_cierre && (
-                <div className="text-sm text-gray-500 text-right">
-                  Cerrado por: {data.usuario_cierre}<br/>
-                  el: {new Date(data.fecha_cierre).toLocaleString()}
-                </div>
+              {data && (
+                <>
+                  <span className={`px-3 py-1 rounded-full text-sm font-semibold ${data.estado_cierre === 'CERRADO' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
+                    Estado: {data.estado_cierre}
+                  </span>
+                  {data.estado_cierre === 'CERRADO' && data.usuario_cierre && (
+                    <div className="text-sm text-gray-500 text-right">
+                      Cerrado por: {data.usuario_cierre}<br/>
+                      el: {new Date(data.fecha_cierre).toLocaleString()}
+                    </div>
+                  )}
+                  {data.estado_cierre === 'ABIERTO' && (
+                    <button onClick={handlePresentar} className="px-4 py-2 bg-blue-600 text-white rounded shadow hover:bg-blue-700 transition">
+                      Presentar Período
+                    </button>
+                  )}
+                  {data.estado_cierre === 'CERRADO' && (
+                    <button onClick={handleReabrir} className="px-4 py-2 border border-red-600 text-red-600 rounded shadow hover:bg-red-50 transition">
+                      Reabrir (Solo Admin)
+                    </button>
+                  )}
+                </>
               )}
-              {data.estado_cierre === 'ABIERTO' && (
-                <button onClick={handlePresentar} className="px-4 py-2 bg-blue-600 text-white rounded shadow hover:bg-blue-700 transition">
-                  Presentar Período
-                </button>
-              )}
-              {data.estado_cierre === 'CERRADO' && (
-                <button onClick={handleReabrir} className="px-4 py-2 border border-red-600 text-red-600 rounded shadow hover:bg-red-50 transition">
-                  Reabrir (Solo Admin)
+              {mode === 'rrhh' && (
+                <button onClick={exportRRHHToxlsx} className="px-4 py-2 bg-green-600 text-white rounded shadow hover:bg-green-700 transition flex items-center gap-2">
+                  <Download size={16} /> Exportar XLSX
                 </button>
               )}
             </div>
           </div>
-
-          {mode === 'dashboard' && (
+          {mode === 'dashboard' && data && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="p-4 bg-green-50 rounded shadow border-l-4 border-green-500">
                 <h3 className="text-gray-500 text-sm uppercase tracking-wider">Total Ingresos</h3>
@@ -198,7 +240,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
             </div>
           )}
 
-          {mode === 'gastos' && (
+          {mode === 'gastos' && data && (
             <div className="space-y-6 mt-8">
               <div>
                 <div className="overflow-x-auto">
@@ -228,6 +270,99 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
                     </tbody>
                   </table>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {mode === 'asientos' && asientosData && (
+            <div className="space-y-6 mt-8">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200 border">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Cuenta</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Descripción</th>
+                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Importe</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {asientosData.map((a: any, idx: number) => (
+                      <tr key={idx} className="hover:bg-gray-50">
+                        <td className="px-4 py-2 text-sm">{a.fecha?.substring(0, 10)}</td>
+                        <td className="px-4 py-2 text-sm">{a.cuenta_codigo} - {a.cuenta_nombre}</td>
+                        <td className="px-4 py-2 text-sm">{a.descripcion || '-'}</td>
+                        <td className="px-4 py-2 text-sm text-right font-medium">$ {a.importe.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
+                      </tr>
+                    ))}
+                    {asientosData.length === 0 && (
+                      <tr><td colSpan={4} className="px-4 py-4 text-center text-gray-500">No hay asientos configurados para este periodo</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {mode === 'rrhh' && rrhhData && (
+            <div className="space-y-6 mt-8">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+                <div className="p-4 bg-white rounded shadow border-l-4 border-blue-500">
+                  <h3 className="text-gray-500 text-xs uppercase tracking-wider">Costo Empresa</h3>
+                  <p className="text-xl font-bold text-blue-700">$ {rrhhData.totales.costo_empresa.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</p>
+                </div>
+                <div className="p-4 bg-white rounded shadow border-l-4 border-slate-500">
+                  <h3 className="text-gray-500 text-xs uppercase tracking-wider">Neto</h3>
+                  <p className="text-lg font-bold text-slate-700">$ {rrhhData.totales.neto.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</p>
+                </div>
+                <div className="p-4 bg-white rounded shadow border-l-4 border-green-500">
+                  <h3 className="text-gray-500 text-xs uppercase tracking-wider">Remunerativo</h3>
+                  <p className="text-lg font-bold text-green-700">$ {rrhhData.totales.remunerativo.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</p>
+                </div>
+                <div className="p-4 bg-white rounded shadow border-l-4 border-teal-500">
+                  <h3 className="text-gray-500 text-xs uppercase tracking-wider">No Remunerativo</h3>
+                  <p className="text-lg font-bold text-teal-700">$ {rrhhData.totales.no_remunerativo.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</p>
+                </div>
+                <div className="p-4 bg-white rounded shadow border-l-4 border-orange-500">
+                  <h3 className="text-gray-500 text-xs uppercase tracking-wider">Contribuciones</h3>
+                  <p className="text-lg font-bold text-orange-700">$ {rrhhData.totales.contribuciones.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</p>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200 border">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Legajo</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Centro Costo</th>
+                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Costo Empresa</th>
+                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Neto</th>
+                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Remunerativo</th>
+                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">No Remun.</th>
+                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Contrib.</th>
+                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Retenc.</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {rrhhData.legajos.map((l: any, idx: number) => (
+                      <tr key={idx} className="hover:bg-gray-50">
+                        <td className="px-4 py-2 text-sm font-medium">{l.legajo}</td>
+                        <td className="px-4 py-2 text-sm">{l.apellidonombre}</td>
+                        <td className="px-4 py-2 text-sm text-gray-500">{l.centrocosto}</td>
+                        <td className="px-4 py-2 text-sm text-right font-bold text-blue-700">$ {l.costo_empresa.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
+                        <td className="px-4 py-2 text-sm text-right text-slate-700">$ {l.neto.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
+                        <td className="px-4 py-2 text-sm text-right">$ {l.remunerativo.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
+                        <td className="px-4 py-2 text-sm text-right">$ {l.no_remunerativo.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
+                        <td className="px-4 py-2 text-sm text-right">$ {l.contribuciones.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
+                        <td className="px-4 py-2 text-sm text-right">$ {l.retenciones.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
+                      </tr>
+                    ))}
+                    {rrhhData.legajos.length === 0 && (
+                      <tr><td colSpan={9} className="px-4 py-4 text-center text-gray-500">No hay datos de RRHH para este periodo</td></tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}

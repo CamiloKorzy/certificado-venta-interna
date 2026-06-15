@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { Building2, PackageCheck, TrendingUp, FileText, Filter, Calendar, LayoutDashboard, Search, ChevronDown, ChevronUp, ChevronRight, BarChart3, Presentation, Download, LogOut, Settings, Users, Save, X, Trash2, Edit2, Send, Check, Loader2, Shield, Bell, Wallet } from 'lucide-react';
+import { Building2, PackageCheck, TrendingUp, FileText, Filter, Calendar, LayoutDashboard, Search, ChevronDown, ChevronUp, ChevronRight, BarChart3, Presentation, Download, LogOut, Settings, Users, Save, X, Trash2, Edit2, Send, Check, Loader2, Shield, Bell, Wallet, Info } from 'lucide-react';
 import ConfiguracionAvanzada from './components/ConfiguracionAvanzada';
 import ConfiguracionCentrosCosto from './components/ConfiguracionCentrosCosto';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -1417,6 +1417,22 @@ function Gastos({ token }: { token: string }) {
   );
 }
 
+function Asientos({ token }: { token: string }) {
+  return (
+    <div className="bg-slate-50 min-h-[80vh]">
+      <InformeGestion token={token} mode="asientos" />
+    </div>
+  );
+}
+
+function RRHH({ token }: { token: string }) {
+  return (
+    <div className="bg-slate-50 min-h-[80vh]">
+      <InformeGestion token={token} mode="rrhh" />
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════════════════
 // APP WRAPPER — Login + Navigation
 // ═══════════════════════════════════════════════════════
@@ -1425,7 +1441,8 @@ export default function App() {
   const [user, setUser] = useState<any>(() => {
     try { return JSON.parse(localStorage.getItem('cert_user') || 'null'); } catch { return null; }
   });
-  const [view, setView] = useState<'dashboard' | 'ingresos' | 'gastos' | 'config'>('ingresos');
+  const [view, setView] = useState<'dashboard' | 'ingresos' | 'gastos' | 'asientos' | 'rrhh' | 'config'>('ingresos');
+  const [showAbout, setShowAbout] = useState(false);
 
   const handleLogin = (t: string, u: any) => {
     setToken(t); setUser(u);
@@ -1464,6 +1481,14 @@ export default function App() {
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'gastos' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
                 <span className="flex items-center gap-1.5"><Wallet size={15} /> Gastos</span>
               </button>
+              <button onClick={() => setView('asientos')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'asientos' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
+                <span className="flex items-center gap-1.5"><FileText size={15} /> Asientos</span>
+              </button>
+              <button onClick={() => setView('rrhh')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'rrhh' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
+                <span className="flex items-center gap-1.5"><Users size={15} /> RRHH</span>
+              </button>
               {user?.rol === 'admin' && (
                 <button onClick={() => setView('config')}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'config' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
@@ -1474,6 +1499,7 @@ export default function App() {
           </div>
           <div className="flex items-center gap-4">
             <span className="text-xs text-slate-500">{user?.nombre} <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md ml-1">{ROLES_MAP[user?.rol] || user?.rol}</span></span>
+            <button onClick={() => setShowAbout(true)} className="text-slate-400 hover:text-blue-500 hover:bg-blue-50 p-2 rounded-lg transition-colors" title="Acerca de..."><Info size={16} /></button>
             <button onClick={handleLogout} className="text-slate-400 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors" title="Cerrar Sesión"><LogOut size={16} /></button>
           </div>
         </div>
@@ -1483,7 +1509,39 @@ export default function App() {
       {view === 'dashboard' && <MainDashboard token={token} />}
       {view === 'ingresos' && <Dashboard token={token} onLogout={handleLogout} />}
       {view === 'gastos' && <Gastos token={token} />}
+      {view === 'asientos' && <Asientos token={token} />}
+      {view === 'rrhh' && <RRHH token={token} />}
       {view === 'config' && user?.rol === 'admin' && <Configuracion token={token} />}
+
+      {/* Modal Acerca de */}
+      {showAbout && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden">
+            <div className="p-6 text-center space-y-4">
+              <img src="/logo_cee.png" alt="CEE" className="h-16 w-16 mx-auto rounded-xl object-contain shadow-sm border border-slate-100" />
+              <div>
+                <h3 className="text-xl font-bold text-slate-800">Reporte de Resultados</h3>
+                <p className="text-slate-500 text-sm mt-1">Sistema Integrado de Gestión</p>
+              </div>
+              <div className="py-4 border-y border-slate-100 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">Versión:</span>
+                  <span className="font-semibold text-slate-800">1.2.0</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">Fecha de Generación:</span>
+                  <span className="font-semibold text-slate-800">Junio 2026</span>
+                </div>
+              </div>
+            </div>
+            <div className="p-4 bg-slate-50 flex justify-center">
+              <button onClick={() => setShowAbout(false)} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg transition-colors w-full">
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
