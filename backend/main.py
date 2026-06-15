@@ -951,8 +951,20 @@ def get_rrhh(
     periodo: Optional[str] = None
 ):
     try:
+        empty_response = {
+            "legajos": [],
+            "totales": {
+                "remunerativo": 0.0,
+                "no_remunerativo": 0.0,
+                "contribuciones": 0.0,
+                "retenciones": 0.0,
+                "costo_empresa": 0.0,
+                "neto": 0.0
+            }
+        }
+        
         if not empresa or not periodo:
-            return []
+            return empty_response
             
         # El periodo viene como 'YYYY-MM', para RRHH lo pasamos a 'YYYYMM'
         periodo_str = periodo.replace("-", "")
@@ -968,7 +980,7 @@ def get_rrhh(
         
         centros_costo = [r[0] for r in centros_rows]
         if not centros_costo:
-            return []
+            return empty_response
 
         conn = get_aurora()
         cur = conn.cursor()
@@ -1057,7 +1069,7 @@ def get_rrhh(
         
         return {
             "totales": totales,
-            "detalles": resultado_legajos
+            "legajos": resultado_legajos
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
