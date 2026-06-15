@@ -1526,11 +1526,11 @@ export default function App() {
               <div className="py-4 border-y border-slate-100 space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-500">Versión:</span>
-                  <span className="font-semibold text-slate-800">1.2.0</span>
+                  <span className="font-semibold text-slate-800">{__APP_VERSION__} ({__COMMIT_HASH__})</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-500">Fecha de Generación:</span>
-                  <span className="font-semibold text-slate-800">Junio 2026</span>
+                  <span className="font-semibold text-slate-800">{__BUILD_DATE__}</span>
                 </div>
               </div>
             </div>
