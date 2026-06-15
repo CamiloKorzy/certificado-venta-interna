@@ -2337,13 +2337,19 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
                     tipodocumento AS Categoria,
                     proveedor AS Concepto,
                     numerodocumento AS Comprobante,
-                    CAST(importeimputado AS NUMERIC) AS Importe,
+                    SUM(CAST(importeimputado AS NUMERIC)) AS Importe,
                     centrocosto AS Sucursal
                 FROM ceesa_cee_gastos_cc
                 WHERE EXTRACT(YEAR FROM CAST(fecha AS TIMESTAMP)) = %s
                   AND EXTRACT(MONTH FROM CAST(fecha AS TIMESTAMP)) = %s
                   AND ({cond_compras})
                   AND tipodocumento IN ({compras_nombres_str})
+                GROUP BY
+                    fecha,
+                    tipodocumento,
+                    proveedor,
+                    numerodocumento,
+                    centrocosto
                 """
                 cur.execute(sql_compras, [int(y), int(m)])
                 rows_compras = cur.fetchall()
