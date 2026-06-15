@@ -128,7 +128,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
     <div className="p-6 max-w-[1600px] mx-auto">
       
       {/* Controles */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden p-6 mb-8 flex flex-col md:flex-row gap-4 items-start md:items-end">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-visible p-6 mb-8 flex flex-col md:flex-row gap-4 items-start md:items-end">
         <div className="w-full md:w-64 relative">
             <MultiSelect 
               label="Unidad de Negocio" 
