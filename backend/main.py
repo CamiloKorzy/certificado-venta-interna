@@ -2260,63 +2260,107 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
         
     cond_gastos = f"({ ' AND '.join(where_gastos) })" if where_gastos else "1=1"
     
-    # Filtro de subtipos de comprobante de compra o categorías de asiento configurados para esta sucursal
-    where_subtipos = []
-    if gastos_compras_ids:
-        compras_str = ",".join(f"'{c}'" for c in gastos_compras_ids)
-        where_subtipos.append(f"FAFTransaccionSubtipo.transaccionsubtipoid IN ({compras_str})")
+    # Filtros para Asientos
+    where_subtipos_asientos = []
     if gastos_asientos_ids:
         asientos_str = ",".join(f"'{a}'" for a in gastos_asientos_ids)
-        where_subtipos.append(f"FAFTransaccionCategoria.transaccioncategoriaid IN ({asientos_str})")
-        
-    cond_subtipos = f"({ ' OR '.join(where_subtipos) })" if where_subtipos else "1=1"
+        where_subtipos_asientos.append(f"FAFTransaccionCategoria.transaccioncategoriaid IN ({asientos_str})")
     
-    sql_gastos = f"""
-    SELECT
-        BSCuenta.codigo AS CuentaCodigo,
-        BSCuenta.nombre AS Cuenta,
-        CAST(BSAsientoItem.fecha AS TIMESTAMP) AS Fecha,
-        FAFEmpresa.nombre AS Sucursal,
-        COALESCE(CAST(BSTransaccionDimension.importemonprincipal AS NUMERIC), CAST(BSAsientoItem.importemonprincipal AS NUMERIC)) * CAST(BSAsientoItem.debehaber AS NUMERIC) AS Importe,
-        BSTransaccion.descripcion AS Comprobante,
-        VProv.nombre AS Proveedor
-    FROM ceesa_bsasientoitem AS BSAsientoItem
-    INNER JOIN ceesa_bscuenta AS BSCuenta ON BSAsientoItem.cuentaid = BSCuenta.cuentaid
-    INNER JOIN ceesa_bstransaccion AS BSTransaccion ON BSAsientoItem.transaccionid = BSTransaccion.transaccionid
-    INNER JOIN ceesa_fafempresa AS FAFEmpresa ON BSTransaccion.empresaid = FAFEmpresa.empresaid
-    LEFT JOIN ceesa_bstransacciondimension AS BSTransaccionDimension 
-        ON BSAsientoItem.asientoitemid = BSTransaccionDimension.asientoitemid 
-        AND BSTransaccion.transaccionid = BSTransaccionDimension.transaccionid
-        AND BSTransaccionDimension.dimensionid = '999999'
-    LEFT JOIN ceesa_bscentrocosto AS BSCentroCosto ON BSTransaccionDimension.registroid = BSCentroCosto.centrocostoid
-    INNER JOIN ceesa_faftransaccionsubtipo AS FAFTransaccionSubtipo ON BSTransaccion.transaccionsubtipoid = FAFTransaccionSubtipo.transaccionsubtipoid
-    INNER JOIN ceesa_faftransaccioncategoria AS FAFTransaccionCategoria ON FAFTransaccionSubtipo.transaccioncategoriaid = FAFTransaccionCategoria.transaccioncategoriaid
-    LEFT JOIN ceesa_vprov AS VProv ON BSTransaccion.entidadid = VProv.entidadid
-    WHERE FAFEmpresa.empresaidpadre = '1'
-      AND BSCuenta.impactaresultados = '1'
-      AND EXTRACT(YEAR FROM CAST(BSAsientoItem.fecha AS TIMESTAMP)) = %s
-      AND EXTRACT(MONTH FROM CAST(BSAsientoItem.fecha AS TIMESTAMP)) = %s
-      AND ({cond_gastos})
-      AND ({cond_subtipos})
-    """
-    
-    try:
-        cur.execute(sql_gastos, [int(y), int(m)])
-        rows_gastos = cur.fetchall()
-        for r in rows_gastos:
-            cat = cat_map.get(r[0], r[1])
-            gastos.append({
-                "origen": "FINNEGANS",
-                "tipo_movimiento": "EGRESO",
-                "categoria": cat,
-                "fecha": str(r[2]) if r[2] else None,
-                "concepto": f"{r[0]} - {r[1]}",
-                "comprobante": r[5] or "Asiento Contable",
-                "proveedor": r[6],
-                "importe": float(r[4] or 0)
-            })
-    except Exception as e:
-        print("Error Gastos:", e)
+    # === 1. Asientos Contables ===
+    if where_subtipos_asientos:
+        cond_asientos = f"({ ' OR '.join(where_subtipos_asientos) })"
+        sql_asientos = f"""
+        SELECT
+            BSCuenta.codigo AS CuentaCodigo,
+            BSCuenta.nombre AS Cuenta,
+            CAST(BSAsientoItem.fecha AS TIMESTAMP) AS Fecha,
+            FAFEmpresa.nombre AS Sucursal,
+            COALESCE(CAST(BSTransaccionDimension.importemonprincipal AS NUMERIC), CAST(BSAsientoItem.importemonprincipal AS NUMERIC)) * CAST(BSAsientoItem.debehaber AS NUMERIC) AS Importe,
+            BSTransaccion.descripcion AS Comprobante,
+            VProv.nombre AS Proveedor
+        FROM ceesa_bsasientoitem AS BSAsientoItem
+        INNER JOIN ceesa_bscuenta AS BSCuenta ON BSAsientoItem.cuentaid = BSCuenta.cuentaid
+        INNER JOIN ceesa_bstransaccion AS BSTransaccion ON BSAsientoItem.transaccionid = BSTransaccion.transaccionid
+        INNER JOIN ceesa_fafempresa AS FAFEmpresa ON BSTransaccion.empresaid = FAFEmpresa.empresaid
+        LEFT JOIN ceesa_bstransacciondimension AS BSTransaccionDimension 
+            ON BSAsientoItem.asientoitemid = BSTransaccionDimension.asientoitemid 
+            AND BSTransaccion.transaccionid = BSTransaccionDimension.transaccionid
+            AND BSTransaccionDimension.dimensionid = '999999'
+        LEFT JOIN ceesa_bscentrocosto AS BSCentroCosto ON BSTransaccionDimension.registroid = BSCentroCosto.centrocostoid
+        INNER JOIN ceesa_faftransaccionsubtipo AS FAFTransaccionSubtipo ON BSTransaccion.transaccionsubtipoid = FAFTransaccionSubtipo.transaccionsubtipoid
+        INNER JOIN ceesa_faftransaccioncategoria AS FAFTransaccionCategoria ON FAFTransaccionSubtipo.transaccioncategoriaid = FAFTransaccionCategoria.transaccioncategoriaid
+        LEFT JOIN ceesa_vprov AS VProv ON BSTransaccion.entidadid = VProv.entidadid
+        WHERE FAFEmpresa.empresaidpadre = '1'
+          AND BSCuenta.impactaresultados = '1'
+          AND EXTRACT(YEAR FROM CAST(BSAsientoItem.fecha AS TIMESTAMP)) = %s
+          AND EXTRACT(MONTH FROM CAST(BSAsientoItem.fecha AS TIMESTAMP)) = %s
+          AND ({cond_gastos})
+          AND ({cond_asientos})
+        """
+        try:
+            cur.execute(sql_asientos, [int(y), int(m)])
+            rows_asientos = cur.fetchall()
+            for r in rows_asientos:
+                cat = cat_map.get(r[0], r[1])
+                gastos.append({
+                    "origen": "FINNEGANS",
+                    "tipo_movimiento": "EGRESO",
+                    "categoria": cat,
+                    "fecha": str(r[2]) if r[2] else None,
+                    "concepto": f"{r[0]} - {r[1]}",
+                    "comprobante": r[5] or "Asiento Contable",
+                    "proveedor": r[6],
+                    "importe": float(r[4] or 0)
+                })
+        except Exception as e:
+            print("Error Gastos Asientos:", e)
+
+    # === 2. Comprobantes de Compra (Nuevo Dataset) ===
+    if gastos_compras_ids:
+        try:
+            compras_id_str = ",".join(f"'{c}'" for c in gastos_compras_ids)
+            cur.execute(f"SELECT nombre FROM ceesa_faftransaccionsubtipo WHERE transaccionsubtipoid IN ({compras_id_str})")
+            compras_nombres = [r[0] for r in cur.fetchall()]
+            
+            if compras_nombres:
+                compras_nombres_str = ",".join(f"'{n}'" for n in compras_nombres)
+                
+                where_compras = []
+                if centros:
+                    ccs_str = ",".join(f"'{c}'" for c in centros)
+                    where_compras.append(f"centrocostoid IN ({ccs_str})")
+                cond_compras = f"({ ' AND '.join(where_compras) })" if where_compras else "1=1"
+                
+                sql_compras = f"""
+                SELECT
+                    CAST(fecha AS TIMESTAMP) AS Fecha,
+                    tipodocumento AS Categoria,
+                    proveedor AS Concepto,
+                    numerodocumento AS Comprobante,
+                    CAST(importeimputado AS NUMERIC) AS Importe,
+                    centrocosto AS Sucursal
+                FROM ceesa_cee_gastos_cc
+                WHERE EXTRACT(YEAR FROM CAST(fecha AS TIMESTAMP)) = %s
+                  AND EXTRACT(MONTH FROM CAST(fecha AS TIMESTAMP)) = %s
+                  AND ({cond_compras})
+                  AND tipodocumento IN ({compras_nombres_str})
+                """
+                cur.execute(sql_compras, [int(y), int(m)])
+                rows_compras = cur.fetchall()
+                for r in rows_compras:
+                    gastos.append({
+                        "origen": "FINNEGANS",
+                        "tipo_movimiento": "EGRESO",
+                        "categoria": "Gastos de Compra",  # O r[1] si queremos que sea el tipo de documento
+                        "fecha": str(r[0]) if r[0] else None,
+                        "concepto": f"{r[1]} - {r[2] or 'Sin Proveedor'}",
+                        "comprobante": r[3] or "S/N",
+                        "proveedor": r[2],
+                        "importe": float(r[4] or 0)
+                    })
+        except Exception as e:
+            print("Error Gastos Compras:", e)
+
         
     cur.close()
     conn.close()
