@@ -3,7 +3,15 @@ import { MultiSelect } from './MultiSelect';
 import { Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
-export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Activos', defaultPeriodo = '04/2026', mode = 'dashboard' }: { token: string, defaultUnidad?: string, defaultPeriodo?: string, mode?: 'dashboard' | 'gastos' | 'asientos' | 'rrhh' }) {
+const getDefaultPeriod = () => {
+  const d = new Date();
+  d.setMonth(d.getMonth() - 1);
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  return `${mm}/${yyyy}`;
+};
+
+export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Activos', defaultPeriodo = getDefaultPeriod(), mode = 'dashboard' }: { token: string, defaultUnidad?: string, defaultPeriodo?: string, mode?: 'dashboard' | 'gastos' | 'asientos' | 'rrhh' }) {
   const [data, setData] = useState<any>(null);
   const [asientosData, setAsientosData] = useState<any>(null);
   const [rrhhData, setRrhhData] = useState<any>(null);
