@@ -909,13 +909,17 @@ def get_asientos(
         centros = [r[0] for r in cur_supa.fetchall()]
         
         # Obtener empresa padre
-        cur_supa.execute("""
+        conn_a_tmp = get_aurora()
+        cur_a_tmp = conn_a_tmp.cursor()
+        cur_a_tmp.execute("""
             SELECT MAX(TRIM(COALESCE(nombreempresapadre, '')))
             FROM ceesa_cee_sucursales
             WHERE TRIM(COALESCE(nombreempresa, '')) = %s
         """, (empresa,))
-        padre_row = cur_supa.fetchone()
+        padre_row = cur_a_tmp.fetchone()
         empresa_padre = padre_row[0] if padre_row and padre_row[0] else empresa
+        cur_a_tmp.close()
+        conn_a_tmp.close()
 
         cur_supa.close()
         conn_supa.close()
@@ -1144,13 +1148,17 @@ def get_gastos(
         centros = [r[0] for r in cur_supa.fetchall()]
         
         # Obtener empresa padre
-        cur_supa.execute("""
+        conn_a_tmp = get_aurora()
+        cur_a_tmp = conn_a_tmp.cursor()
+        cur_a_tmp.execute("""
             SELECT MAX(TRIM(COALESCE(nombreempresapadre, '')))
             FROM ceesa_cee_sucursales
             WHERE TRIM(COALESCE(nombreempresa, '')) = %s
         """, (empresa,))
-        padre_row = cur_supa.fetchone()
+        padre_row = cur_a_tmp.fetchone()
         empresa_padre = padre_row[0] if padre_row and padre_row[0] else empresa
+        cur_a_tmp.close()
+        conn_a_tmp.close()
 
         cur_supa.execute("SELECT categoria, cuenta_codigo FROM cert_config_gastos_cuentas")
         config_rows = cur_supa.fetchall()
@@ -2240,15 +2248,17 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
         print("Error Ingresos:", e)
 
     # Obtener empresa padre
-    cur_supa = conn_supa.cursor()
-    cur_supa.execute("""
+    conn_a_tmp = get_aurora()
+    cur_a_tmp = conn_a_tmp.cursor()
+    cur_a_tmp.execute("""
         SELECT MAX(TRIM(COALESCE(nombreempresapadre, '')))
         FROM ceesa_cee_sucursales
         WHERE TRIM(COALESCE(nombreempresa, '')) = %s
     """, (unidad_negocio,))
-    padre_row = cur_supa.fetchone()
+    padre_row = cur_a_tmp.fetchone()
     empresa_padre = padre_row[0] if padre_row and padre_row[0] else unidad_negocio
-    cur_supa.close()
+    cur_a_tmp.close()
+    conn_a_tmp.close()
 
     empresas_validas = list(set([unidad_negocio, empresa_padre]))
     empresas_str = ",".join(f"'{e}'" for e in empresas_validas)
