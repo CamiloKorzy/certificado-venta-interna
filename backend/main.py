@@ -985,6 +985,15 @@ def get_rrhh(
         conn = get_aurora()
         cur = conn.cursor()
 
+        # Obtener la empresa padre para filtrar la liquidacion
+        cur.execute("""
+            SELECT MAX(TRIM(COALESCE(nombreempresapadre, '')))
+            FROM ceesa_cee_sucursales
+            WHERE TRIM(COALESCE(nombreempresa, '')) = %s
+        """, (empresa,))
+        padre_row = cur.fetchone()
+        empresa_padre = padre_row[0] if padre_row and padre_row[0] else empresa
+
         # Agrupamos por legajo, apellidonombre, centrocosto y tipoconcepto
         sql = """
         SELECT
@@ -996,11 +1005,12 @@ def get_rrhh(
         FROM ceesa_cee_liquidaciones_de_sueldos_
         WHERE periodo = %s
           AND centrocosto IN %s
+          AND TRIM(COALESCE(empresa, '')) = %s
         GROUP BY
             legajo, apellidonombre, centrocosto, tipoconcepto
         """
         
-        cur.execute(sql, (periodo_str, tuple(centros_costo)))
+        cur.execute(sql, (periodo_str, tuple(centros_costo), empresa_padre))
         cols = [desc[0].lower() for desc in cur.description]
         rows = cur.fetchall()
         cur.close()
