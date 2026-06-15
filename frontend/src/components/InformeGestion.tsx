@@ -22,6 +22,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
   const [periodoStr, setPeriodoStr] = useState(defaultPeriodo);
   
   const [unidades, setUnidades] = useState<any[]>([]);
+  const [searchTermRRHH, setSearchTermRRHH] = useState('');
 
   // Format of periodo: MM/YYYY -> YYYY-MM
   const parsePeriodo = (p: string) => {
@@ -337,6 +338,20 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
                 </div>
               </div>
 
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-gray-700">Detalle de Legajos</h3>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Buscar por legajo o nombre..."
+                    value={searchTermRRHH}
+                    onChange={e => setSearchTermRRHH(e.target.value)}
+                    className="pl-9 pr-4 py-2 border rounded-md text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200 border">
                   <thead className="bg-gray-50">
@@ -353,7 +368,12 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {rrhhData.legajos.map((l: any, idx: number) => (
+                    {rrhhData.legajos.filter((l: any) => {
+                      if (!searchTermRRHH) return true;
+                      const s = searchTermRRHH.toLowerCase();
+                      return (l.legajo && String(l.legajo).toLowerCase().includes(s)) ||
+                             (l.apellidonombre && String(l.apellidonombre).toLowerCase().includes(s));
+                    }).map((l: any, idx: number) => (
                       <tr key={idx} className="hover:bg-gray-50">
                         <td className="px-4 py-2 text-sm font-medium">{l.legajo}</td>
                         <td className="px-4 py-2 text-sm">{l.apellidonombre}</td>
@@ -368,6 +388,14 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
                     ))}
                     {rrhhData.legajos.length === 0 && (
                       <tr><td colSpan={9} className="px-4 py-4 text-center text-gray-500">No hay datos de RRHH para este periodo</td></tr>
+                    )}
+                    {rrhhData.legajos.length > 0 && rrhhData.legajos.filter((l: any) => {
+                      if (!searchTermRRHH) return true;
+                      const s = searchTermRRHH.toLowerCase();
+                      return (l.legajo && String(l.legajo).toLowerCase().includes(s)) ||
+                             (l.apellidonombre && String(l.apellidonombre).toLowerCase().includes(s));
+                    }).length === 0 && (
+                      <tr><td colSpan={9} className="px-4 py-4 text-center text-gray-500">No se encontraron legajos que coincidan con la búsqueda</td></tr>
                     )}
                   </tbody>
                 </table>
