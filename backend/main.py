@@ -259,8 +259,16 @@ def auto_setup_db():
                 fecha DATE,
                 concepto TEXT,
                 comprobante TEXT,
+                proveedor TEXT,
                 importe NUMERIC(15,2) NOT NULL
             );
+            
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='cert_cierres_detalle' AND column_name='proveedor') THEN
+                    ALTER TABLE cert_cierres_detalle ADD COLUMN proveedor TEXT;
+                END IF;
+            END $$;
 
         """)
         # Crear admin por defecto si no existe
@@ -1832,8 +1840,8 @@ def presentar_periodo(req: PresentarPeriodoReq, current_user = Depends(get_curre
         
         for item in informe["ingresos"] + informe["gastos"]:
             cur_supa.execute(
-                "INSERT INTO cert_cierres_detalle (cierre_id, origen, tipo_movimiento, categoria, fecha, concepto, comprobante, importe) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-                (cierre_id, item["origen"], item["tipo_movimiento"], item["categoria"], item["fecha"] if item["fecha"] else None, item["concepto"], item["comprobante"], item["importe"])
+                "INSERT INTO cert_cierres_detalle (cierre_id, origen, tipo_movimiento, categoria, fecha, concepto, comprobante, proveedor, importe) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                (cierre_id, item["origen"], item["tipo_movimiento"], item["categoria"], item["fecha"] if item["fecha"] else None, item["concepto"], item["comprobante"], item.get("proveedor"), item["importe"])
             )
             
         conn_supa.commit()
@@ -1997,7 +2005,9 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
         BSCuenta.nombre AS Cuenta,
         CAST(BSAsientoItem.fecha AS TIMESTAMP) AS Fecha,
         FAFEmpresa.nombre AS Sucursal,
-        SUM(COALESCE(CAST(BSTransaccionDimension.importemonprincipal AS NUMERIC), CAST(BSAsientoItem.importemonprincipal AS NUMERIC)) * CAST(BSAsientoItem.debehaber AS NUMERIC)) AS Importe
+        COALESCE(CAST(BSTransaccionDimension.importemonprincipal AS NUMERIC), CAST(BSAsientoItem.importemonprincipal AS NUMERIC)) * CAST(BSAsientoItem.debehaber AS NUMERIC) AS Importe,
+        BSTransaccion.descripcion AS Comprobante,
+        VProv.nombre AS Proveedor
     FROM ceesa_bsasientoitem AS BSAsientoItem
     INNER JOIN ceesa_bscuenta AS BSCuenta ON BSAsientoItem.cuentaid = BSCuenta.cuentaid
     INNER JOIN ceesa_bstransaccion AS BSTransaccion ON BSAsientoItem.transaccionid = BSTransaccion.transaccionid
@@ -2009,17 +2019,13 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
     LEFT JOIN ceesa_bscentrocosto AS BSCentroCosto ON BSTransaccionDimension.registroid = BSCentroCosto.centrocostoid
     INNER JOIN ceesa_faftransaccionsubtipo AS FAFTransaccionSubtipo ON BSTransaccion.transaccionsubtipoid = FAFTransaccionSubtipo.transaccionsubtipoid
     INNER JOIN ceesa_faftransaccioncategoria AS FAFTransaccionCategoria ON FAFTransaccionSubtipo.transaccioncategoriaid = FAFTransaccionCategoria.transaccioncategoriaid
+    LEFT JOIN ceesa_vprov AS VProv ON BSTransaccion.entidadid = VProv.entidadid
     WHERE FAFEmpresa.empresaidpadre = '1'
       AND BSCuenta.impactaresultados = '1'
       AND EXTRACT(YEAR FROM CAST(BSAsientoItem.fecha AS TIMESTAMP)) = %s
       AND EXTRACT(MONTH FROM CAST(BSAsientoItem.fecha AS TIMESTAMP)) = %s
       AND ({cond_gastos})
       AND ({cond_subtipos})
-    GROUP BY
-        BSCuenta.codigo,
-        BSCuenta.nombre,
-        CAST(BSAsientoItem.fecha AS TIMESTAMP),
-        FAFEmpresa.nombre
     """
     
     try:
@@ -2033,7 +2039,8 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
                 "categoria": cat,
                 "fecha": str(r[2]) if r[2] else None,
                 "concepto": f"{r[0]} - {r[1]}",
-                "comprobante": "Asiento Contable",
+                "comprobante": r[5] or "Asiento Contable",
+                "proveedor": r[6],
                 "importe": float(r[4] or 0)
             })
     except Exception as e:
@@ -2090,7 +2097,7 @@ def get_informe_mensual(unidad_negocio: str, periodo: str, current_user = Depend
         if cierre:
             cierre_id = cierre[0]
             cur_supa.execute(
-                "SELECT origen, tipo_movimiento, categoria, fecha, concepto, comprobante, importe FROM cert_cierres_detalle WHERE cierre_id = %s",
+                "SELECT origen, tipo_movimiento, categoria, fecha, concepto, comprobante, proveedor, importe FROM cert_cierres_detalle WHERE cierre_id = %s",
                 (cierre_id,)
             )
             rows = cur_supa.fetchall()
@@ -2105,7 +2112,8 @@ def get_informe_mensual(unidad_negocio: str, periodo: str, current_user = Depend
                     "fecha": str(r[3]) if r[3] else None,
                     "concepto": r[4],
                     "comprobante": r[5],
-                    "importe": float(r[6])
+                    "proveedor": r[6],
+                    "importe": float(r[7])
                 }
                 if r[1] == "INGRESO":
                     ingresos.append(item)

@@ -569,12 +569,12 @@ function Dashboard({ token, onLogout }: { token: string, onLogout: () => void })
             </div>
             <div>
               <h1 className="text-xl font-bold tracking-tight">Certificados de Ventas Internos</h1>
-              <p className="text-blue-300 text-xs font-bold tracking-widest uppercase mt-0.5">Dashboard Analítico</p>
+              <p className="text-blue-300 text-xs font-bold tracking-widest uppercase mt-0.5">Ingresos</p>
             </div>
           </div>
           <div className="flex items-center gap-2 text-sm text-slate-300 bg-slate-800 px-4 py-2 rounded-full border border-slate-700">
             <Presentation size={16} className="text-blue-400" />
-            <span className="font-medium">Dashboard Analítico</span>
+            <span className="font-medium">Ingresos</span>
           </div>
         </div>
       </nav>
@@ -1393,7 +1393,7 @@ function Configuracion({ token }: { token: string }) {
 function MainDashboard({ token }: { token: string }) {
   return (
     <div className="bg-slate-50 min-h-[80vh]">
-      <InformeGestion token={token} />
+      <InformeGestion token={token} mode="dashboard" />
     </div>
   );
 }
@@ -1401,7 +1401,7 @@ function MainDashboard({ token }: { token: string }) {
 function Gastos({ token }: { token: string }) {
   return (
     <div className="bg-slate-50 min-h-[80vh]">
-      <InformeGestion token={token} />
+      <InformeGestion token={token} mode="gastos" />
     </div>
   );
 }
