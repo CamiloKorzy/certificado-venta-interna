@@ -902,12 +902,28 @@ def get_asientos(
         # Obtener los subtipos de asiento configurados para esta Sucursal
         cur_supa.execute("SELECT tipo_asiento_id FROM cert_config_gastos_asientos WHERE sucursal = %s", (empresa,))
         tipos_rows = cur_supa.fetchall()
+        tipos_asientos = [r[0] for r in tipos_rows]
+        
+        # Obtener centros de costo
+        cur_supa.execute("SELECT centro_id FROM cert_config_centros_costo WHERE sucursal = %s", (empresa,))
+        centros = [r[0] for r in cur_supa.fetchall()]
+        
+        # Obtener empresa padre
+        cur_supa.execute("""
+            SELECT MAX(TRIM(COALESCE(nombreempresapadre, '')))
+            FROM ceesa_cee_sucursales
+            WHERE TRIM(COALESCE(nombreempresa, '')) = %s
+        """, (empresa,))
+        padre_row = cur_supa.fetchone()
+        empresa_padre = padre_row[0] if padre_row and padre_row[0] else empresa
+
         cur_supa.close()
         conn_supa.close()
         
-        tipos_asientos = [r[0] for r in tipos_rows]
-        if not tipos_asientos:
+        if not tipos_asientos or not centros:
             return []
+            
+        empresas_validas = list(set([empresa, empresa_padre]))
 
         conn = get_aurora()
         cur = conn.cursor()
@@ -922,10 +938,19 @@ def get_asientos(
         FROM BSAsientoItem
         INNER JOIN BSCuenta ON BSAsientoItem.CuentaID = BSCuenta.CuentaID
         INNER JOIN BSTransaccion ON BSAsientoItem.TransaccionID = BSTransaccion.TransaccionID
+        INNER JOIN FAFEmpresa ON BSTransaccion.EmpresaID = FAFEmpresa.EmpresaID
+        LEFT JOIN BSTransaccionDimension 
+            ON BSAsientoItem.AsientoItemID = BSTransaccionDimension.AsientoItemID 
+            AND BSTransaccion.TransaccionID = BSTransaccionDimension.TransaccionID
+            AND BSTransaccionDimension.DimensionID = '999999'
         WHERE BSTransaccion.TransaccionSubtipoID IN %s
         """
         
         params = [tuple(tipos_asientos)]
+        
+        empresas_str = ",".join(f"'{e}'" for e in empresas_validas)
+        ccs_str = ",".join(f"'{c}'" for c in centros)
+        sql += f" AND FAFEmpresa.Nombre IN ({empresas_str}) AND BSTransaccionDimension.RegistroID IN ({ccs_str})"
         if fecha_desde:
             sql += " AND BSAsientoItem.Fecha >= %s"
             params.append(fecha_desde)
@@ -1093,14 +1118,33 @@ def get_gastos(
     try:
         conn_supa = get_supabase()
         cur_supa = conn_supa.cursor()
+        
+        # Obtener centros de costo
+        cur_supa.execute("SELECT centro_id FROM cert_config_centros_costo WHERE sucursal = %s", (empresa,))
+        centros = [r[0] for r in cur_supa.fetchall()]
+        
+        # Obtener empresa padre
+        cur_supa.execute("""
+            SELECT MAX(TRIM(COALESCE(nombreempresapadre, '')))
+            FROM ceesa_cee_sucursales
+            WHERE TRIM(COALESCE(nombreempresa, '')) = %s
+        """, (empresa,))
+        padre_row = cur_supa.fetchone()
+        empresa_padre = padre_row[0] if padre_row and padre_row[0] else empresa
+
         cur_supa.execute("SELECT categoria, cuenta_codigo FROM cert_config_gastos_cuentas")
         config_rows = cur_supa.fetchall()
         cur_supa.close()
         conn_supa.close()
         
+        if not centros:
+            return []
+            
         cat_map = {}
         for r in config_rows:
             cat_map[r[1]] = r[0]
+
+        empresas_validas = list(set([empresa, empresa_padre]))
 
         conn = get_aurora()
         cur = conn.cursor()
@@ -1116,15 +1160,18 @@ def get_gastos(
             SUM(COALESCE(BSTransaccionDimension.ImporteMonPrincipal, BSAsientoItem.ImporteMonPrincipal) * BSAsientoItem.DebeHaber) AS Importe
         FROM BSAsientoItem
         INNER JOIN BSCuenta ON BSAsientoItem.CuentaID = BSCuenta.CuentaID
-        LEFT JOIN BSTransaccionDimension ON BSAsientoItem.AsientoItemID = BSTransaccionDimension.AsientoItemID AND BSTransaccionDimension.DimensionID = 999999
+        LEFT JOIN BSTransaccionDimension ON BSAsientoItem.AsientoItemID = BSTransaccionDimension.AsientoItemID AND BSTransaccionDimension.DimensionID = '999999'
         INNER JOIN BSTransaccion ON COALESCE(BSTransaccionDimension.TransaccionID, BSAsientoItem.TransaccionID) = BSTransaccion.TransaccionID
         INNER JOIN FAFTransaccionSubtipo ON BSTransaccion.TransaccionSubtipoID = FAFTransaccionSubtipo.TransaccionSubtipoID
         INNER JOIN FAFTransaccionCategoria ON FAFTransaccionSubtipo.TransaccionCategoriaID = FAFTransaccionCategoria.TransaccionCategoriaID
         INNER JOIN FAFEmpresa ON BSTransaccion.EmpresaID = FAFEmpresa.EmpresaID
         LEFT JOIN BSCentroCosto ON BSTransaccionDimension.RegistroID = BSCentroCosto.CentroCostoID
-        WHERE FAFEmpresa.EmpresaIDPadre = 1
-          AND BSCuenta.ImpactaResultados = 1
+        WHERE BSCuenta.ImpactaResultados = 1
         """
+        
+        empresas_str = ",".join(f"'{e}'" for e in empresas_validas)
+        ccs_str = ",".join(f"'{c}'" for c in centros)
+        sql += f" AND FAFEmpresa.Nombre IN ({empresas_str}) AND BSTransaccionDimension.RegistroID IN ({ccs_str})"
         
         params = []
         if fecha_desde:
@@ -2172,16 +2219,26 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
     except Exception as e:
         print("Error Ingresos:", e)
 
-    # -- GASTOS (Usando ceesa_bsasientoitem casted properly) --
-    where_gastos = []
-    if sucursales:
-        sucs_str = ",".join(f"'{s}'" for s in sucursales)
-        where_gastos.append(f"FAFEmpresa.nombre IN ({sucs_str})")
+    # Obtener empresa padre
+    cur_supa = conn_supa.cursor()
+    cur_supa.execute("""
+        SELECT MAX(TRIM(COALESCE(nombreempresapadre, '')))
+        FROM ceesa_cee_sucursales
+        WHERE TRIM(COALESCE(nombreempresa, '')) = %s
+    """, (unidad_negocio,))
+    padre_row = cur_supa.fetchone()
+    empresa_padre = padre_row[0] if padre_row and padre_row[0] else unidad_negocio
+    cur_supa.close()
+
+    empresas_validas = list(set([unidad_negocio, empresa_padre]))
+    empresas_str = ",".join(f"'{e}'" for e in empresas_validas)
+    
+    where_gastos = [f"FAFEmpresa.nombre IN ({empresas_str})"]
     if centros:
         ccs_str = ",".join(f"'{c}'" for c in centros)
         where_gastos.append(f"BSTransaccionDimension.registroid IN ({ccs_str})")
         
-    cond_gastos = f"({ ' OR '.join(where_gastos) })" if where_gastos else "1=1"
+    cond_gastos = f"({ ' AND '.join(where_gastos) })" if where_gastos else "1=1"
     
     # Filtro de subtipos de comprobante de compra o categorías de asiento configurados para esta sucursal
     where_subtipos = []
