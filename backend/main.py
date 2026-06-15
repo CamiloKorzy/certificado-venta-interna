@@ -1021,18 +1021,29 @@ def get_rrhh(
 
         # Agrupamos por legajo, apellidonombre, centrocosto y tipoconcepto
         sql = """
+        WITH distinct_rows AS (
+            SELECT DISTINCT
+                transaccionid,
+                legajo,
+                apellidonombre,
+                centrocosto,
+                tipoconcepto,
+                codigoconcepto,
+                CAST(REPLACE(importe, ',', '.') AS NUMERIC) as importe
+            FROM ceesa_cee_liquidaciones_de_sueldos_
+            WHERE periodo = %s
+              AND centrocosto IN %s
+              AND TRIM(COALESCE(empresa, '')) = %s
+              AND UPPER(nombreconcepto) NOT LIKE '%%SAC%%'
+              AND UPPER(nombreconcepto) NOT LIKE '%%AGUINALDO%%'
+        )
         SELECT
             legajo,
             apellidonombre,
             centrocosto,
             tipoconcepto,
-            SUM(CAST(REPLACE(importe, ',', '.') AS NUMERIC)) as importe
-        FROM ceesa_cee_liquidaciones_de_sueldos_
-        WHERE periodo = %s
-          AND centrocosto IN %s
-          AND TRIM(COALESCE(empresa, '')) = %s
-          AND UPPER(nombreconcepto) NOT LIKE '%%SAC%%'
-          AND UPPER(nombreconcepto) NOT LIKE '%%AGUINALDO%%'
+            SUM(importe) as importe
+        FROM distinct_rows
         GROUP BY
             legajo, apellidonombre, centrocosto, tipoconcepto
         """
