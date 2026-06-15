@@ -315,7 +315,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
 
           {mode === 'rrhh' && rrhhData && (
             <div className="space-y-6 mt-8">
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6">
                 <div className="p-4 bg-white rounded shadow border-l-4 border-blue-500">
                   <h3 className="text-gray-500 text-xs uppercase tracking-wider">Costo Empresa</h3>
                   <p className="text-xl font-bold text-blue-700">$ {rrhhData.totales.costo_empresa.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</p>
@@ -335,6 +335,10 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
                 <div className="p-4 bg-white rounded shadow border-l-4 border-orange-500">
                   <h3 className="text-gray-500 text-xs uppercase tracking-wider">Contribuciones</h3>
                   <p className="text-lg font-bold text-orange-700">$ {rrhhData.totales.contribuciones.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</p>
+                </div>
+                <div className="p-4 bg-white rounded shadow border-l-4 border-purple-500">
+                  <h3 className="text-gray-500 text-xs uppercase tracking-wider">SAC Prorrat.</h3>
+                  <p className="text-lg font-bold text-purple-700">$ {rrhhData.totales.sac_prorrateado.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</p>
                 </div>
               </div>
 
@@ -364,6 +368,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
                       <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Remunerativo</th>
                       <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">No Remun.</th>
                       <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Contrib.</th>
+                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">SAC Prorrat.</th>
                       <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Retenc.</th>
                     </tr>
                   </thead>
@@ -383,11 +388,12 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
                         <td className="px-4 py-2 text-sm text-right">$ {l.remunerativo.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
                         <td className="px-4 py-2 text-sm text-right">$ {l.no_remunerativo.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
                         <td className="px-4 py-2 text-sm text-right">$ {l.contribuciones.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
+                        <td className="px-4 py-2 text-sm text-right text-purple-700">$ {l.sac_prorrateado.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
                         <td className="px-4 py-2 text-sm text-right">$ {l.retenciones.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
                       </tr>
                     ))}
                     {rrhhData.legajos.length === 0 && (
-                      <tr><td colSpan={9} className="px-4 py-4 text-center text-gray-500">No hay datos de RRHH para este periodo</td></tr>
+                      <tr><td colSpan={10} className="px-4 py-4 text-center text-gray-500">No hay datos de RRHH para este periodo</td></tr>
                     )}
                     {rrhhData.legajos.length > 0 && rrhhData.legajos.filter((l: any) => {
                       if (!searchTermRRHH) return true;
@@ -395,7 +401,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
                       return (l.legajo && String(l.legajo).toLowerCase().includes(s)) ||
                              (l.apellidonombre && String(l.apellidonombre).toLowerCase().includes(s));
                     }).length === 0 && (
-                      <tr><td colSpan={9} className="px-4 py-4 text-center text-gray-500">No se encontraron legajos que coincidan con la búsqueda</td></tr>
+                      <tr><td colSpan={10} className="px-4 py-4 text-center text-gray-500">No se encontraron legajos que coincidan con la búsqueda</td></tr>
                     )}
                   </tbody>
                 </table>

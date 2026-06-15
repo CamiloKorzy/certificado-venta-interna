@@ -1047,7 +1047,8 @@ def get_rrhh(
             "remunerativo": 0.0,
             "no_remunerativo": 0.0,
             "contribuciones": 0.0,
-            "retenciones": 0.0
+            "retenciones": 0.0,
+            "sac_prorrateado": 0.0
         }
         
         for row in rows:
@@ -1061,12 +1062,18 @@ def get_rrhh(
                     "remunerativo": 0.0,
                     "no_remunerativo": 0.0,
                     "contribuciones": 0.0,
-                    "retenciones": 0.0
+                    "retenciones": 0.0,
+                    "sac_prorrateado": 0.0
                 }
                 
             tipo = str(record['tipoconcepto']).strip()
+            nombre_concepto = str(record['nombreconcepto']).upper()
             # Convertimos a float para evitar decimal.Decimal json encoding issue
             imp = float(record['importe'])
+            
+            # Ignorar liquidación real del SAC para no duplicar costos y evitar picos
+            if 'SAC' in nombre_concepto or 'AGUINALDO' in nombre_concepto:
+                continue
             
             if tipo in ('Remunerativo', 'Remunerativo Variable'):
                 legajos_map[leg]['remunerativo'] += imp
@@ -1082,24 +1089,29 @@ def get_rrhh(
                 totales['retenciones'] += imp
 
         # Computar Costo Empresa y Neto
-        # Costo Empresa = Remunerativo + No Remunerativo + Contribuciones Patronales
+        # Costo Empresa = Remunerativo + No Remunerativo + Contribuciones Patronales + SAC Prorrateado
         # Neto = Remunerativo + No Remunerativo - Retenciones Empleado (Asumimos Retenciones viene positivo)
         resultado_legajos = []
         for leg in legajos_map.values():
             rem = leg['remunerativo']
             no_rem = leg['no_remunerativo']
             cont = leg['contribuciones']
+            # Calculamos SAC prorrateado
+            sac_prorr = (rem / 12.0) + (cont / 12.0)
+            leg['sac_prorrateado'] = sac_prorr
+            totales['sac_prorrateado'] += sac_prorr
+            
             # Si retenciones viene en negativo en BD, lo sumamos, si no lo restamos. Finnegans suele enviar retenciones en negativo
             # Ajustaremos sumándolo si es negativo, restándolo si es positivo
             ret = abs(leg['retenciones'])
             
             leg['retenciones'] = ret # Mostrar en positivo para la grilla
-            leg['costo_empresa'] = rem + no_rem + cont
+            leg['costo_empresa'] = rem + no_rem + cont + sac_prorr
             leg['neto'] = rem + no_rem - ret
             resultado_legajos.append(leg)
             
         totales['retenciones'] = abs(totales['retenciones'])
-        totales['costo_empresa'] = totales['remunerativo'] + totales['no_remunerativo'] + totales['contribuciones']
+        totales['costo_empresa'] = totales['remunerativo'] + totales['no_remunerativo'] + totales['contribuciones'] + totales['sac_prorrateado']
         totales['neto'] = totales['remunerativo'] + totales['no_remunerativo'] - totales['retenciones']
         
         return {
