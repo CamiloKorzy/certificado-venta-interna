@@ -2351,6 +2351,7 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
             })
     except Exception as e:
         print("Error Ingresos:", e)
+        ingresos.append({"origen": "ERROR", "tipo_movimiento": "INGRESO", "categoria": "ERROR", "fecha": None, "concepto": "ERROR: " + str(e), "comprobante": "N/A", "proveedor": "-", "cantidad": 0, "importe": 0})
 
     # Obtener empresa padre
     conn_a_tmp = get_aurora()
