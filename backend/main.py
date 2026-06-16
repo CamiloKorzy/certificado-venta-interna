@@ -2298,9 +2298,9 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
     
     # -- INGRESOS --
     # Nota: Corregimos los nombres de columnas para evitar el error "column producto does not exist"
-    # Usamos comprobante (ej: 'CI-0001-00000003'), productonombre (ej: 'Servicio...'), y equiposolicitantenombre (ej: 'Arena-K')
+    # Usamos documento y comprobante, productonombre, y equiposolicitantenombre
     sql_ingresos = """
-    SELECT fecha, comprobante, productonombre, equiposolicitantenombre, total, gravado
+    SELECT fecha, documento, comprobante, productonombre, equiposolicitantenombre, total, gravado
     FROM ceesa_cee_certificados_ventas_internas
     WHERE EXTRACT(YEAR FROM CAST(fecha AS TIMESTAMP)) = %s 
       AND EXTRACT(MONTH FROM CAST(fecha AS TIMESTAMP)) = %s
@@ -2315,20 +2315,26 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
     # Aplicar filtro de subtipos de comprobante de ingresos si hay configurados para esta sucursal
     if ingresos_subtipos:
         subtipos_str = ",".join(f"'{s}'" for s in ingresos_subtipos)
-        sql_ingresos += f" AND split_part(comprobante, '-', 1) IN ({subtipos_str})"
+        sql_ingresos += f" AND (split_part(comprobante, '-', 1) IN ({subtipos_str}) OR TRIM(split_part(documento, '-', 1)) IN ({subtipos_str}))"
     
     try:
         cur.execute(sql_ingresos, params_ingresos)
         rows_ingresos = cur.fetchall()
         for r in rows_ingresos:
+            val_gravado = float(r[6] or 0) if len(r) > 6 else 0.0
+            val_total = float(r[5] or 0) if len(r) > 5 else 0.0
+            importe_ingreso = val_gravado if val_gravado != 0 else val_total
+            
+            comp_val = r[2] if r[2] and str(r[2]).strip() else r[1] # fallback a documento si comprobante es vacio
+            
             ingresos.append({
                 "origen": "FINNEGANS",
                 "tipo_movimiento": "INGRESO",
                 "categoria": "Ventas Internas",
                 "fecha": str(r[0]) if r[0] else None,
-                "concepto": r[2] or "Sin Detalle",        # productonombre
-                "comprobante": r[1] or "N/A",             # comprobante
-                "importe": float(r[4] or 0)               # total
+                "concepto": r[3] or "Sin Detalle",        # productonombre
+                "comprobante": comp_val or "N/A",         # comprobante o documento
+                "importe": importe_ingreso
             })
     except Exception as e:
         print("Error Ingresos:", e)
