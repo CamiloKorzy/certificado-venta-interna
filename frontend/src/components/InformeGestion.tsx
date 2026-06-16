@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MultiSelect } from './MultiSelect';
-import { Download, Search } from 'lucide-react';
+import { Download, Search, UploadCloud, Loader2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 const getDefaultPeriod = () => {
@@ -10,11 +10,50 @@ const getDefaultPeriod = () => {
   return `${mm}/${yyyy}`;
 };
 
-export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Activos', defaultPeriodo = getDefaultPeriod(), mode = 'dashboard' }: { token: string, defaultUnidad?: string, defaultPeriodo?: string, mode?: 'dashboard' | 'gastos' | 'asientos' | 'rrhh' }) {
+export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Activos', defaultPeriodo = getDefaultPeriod(), mode = 'dashboard' }: { token: string, defaultUnidad?: string, defaultPeriodo?: string, mode?: 'dashboard' | 'costos' | 'asientos' | 'rrhh' }) {
   const [data, setData] = useState<any>(null);
   const [asientosData, setAsientosData] = useState<any>(null);
   const [rrhhData, setRrhhData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState('');
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, tipoMovimiento: 'INGRESO' | 'COSTO') => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    setUploading(true);
+    setUploadMsg('');
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("unidad", unidad);
+    formData.append("periodo", periodoStr);
+    formData.append("tipo", tipoMovimiento);
+
+    try {
+      const res = await fetch('/api/config/ajustes-excel', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(err);
+      }
+      const json = await res.json();
+      if (json.status === 'ok') {
+        setUploadMsg(`✅ Importado exitosamente (${json.inserted} filas)`);
+        setTimeout(() => setUploadMsg(''), 5000);
+        // Refresh component state or dashboard here if possible
+      } else {
+        setUploadMsg(`⚠️ Importado con errores. ${json.inserted} filas creadas.`);
+      }
+    } catch(err: any) {
+      setUploadMsg('❌ Error al subir: ' + err.message);
+    }
+    setUploading(false);
+    e.target.value = '';
+  };
+
   const [error, setError] = useState('');
   
   const [unidad, setUnidad] = useState(defaultUnidad);
@@ -180,54 +219,19 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
   };
 
   const exportIngresosToxlsx = () => {
-    if (!data || !data.ingresos || data.ingresos.length === 0) {
-      alert("No hay ingresos para exportar");
-      return;
-    }
+    if (!data || !data.ingresos) return;
+    const ws = XLSX.utils.json_to_sheet(data.ingresos);
     const wb = XLSX.utils.book_new();
-    const wsIngresos = XLSX.utils.json_to_sheet(data.ingresos.map((i: any) => ({
-      Fecha: i.fecha?.substring(0, 10),
-      Concepto: i.concepto,
-      Comprobante: i.comprobante,
-      Solicitante: i.proveedor || '-',
-      Cantidad: i.cantidad || 0,
-      Importe: i.importe
-    })));
-    XLSX.utils.book_append_sheet(wb, wsIngresos, "Ingresos");
+    XLSX.utils.book_append_sheet(wb, ws, "Ingresos");
     XLSX.writeFile(wb, `Ingresos_${unidad}_${periodoStr.replace('/', '-')}.xlsx`);
   };
 
-  const exportGastosToxlsx = () => {
-    if (!data || !data.gastos || data.gastos.length === 0) {
-      alert("No hay gastos para exportar");
-      return;
-    }
+  const exportCostosToxlsx = () => {
+    if (!data || !data.gastos) return;
+    const ws = XLSX.utils.json_to_sheet(data.gastos);
     const wb = XLSX.utils.book_new();
-    const wsGastos = XLSX.utils.json_to_sheet(data.gastos.map((g: any) => ({
-      Fecha: g.fecha?.substring(0, 10),
-      Concepto: g.concepto,
-      Comprobante: g.comprobante,
-      Proveedor: g.proveedor || '-',
-      Importe: g.importe
-    })));
-    XLSX.utils.book_append_sheet(wb, wsGastos, "Gastos");
-    XLSX.writeFile(wb, `Egresos_${unidad}_${periodoStr.replace('/', '-')}.xlsx`);
-  };
-
-  const exportAsientosToxlsx = () => {
-    if (!asientosData || asientosData.length === 0) {
-      alert("No hay asientos para exportar");
-      return;
-    }
-    const wb = XLSX.utils.book_new();
-    const wsAsientos = XLSX.utils.json_to_sheet(asientosData.map((a: any) => ({
-      Fecha: a.fecha?.substring(0, 10),
-      Cuenta: a.cuenta_codigo + ' - ' + a.cuenta_nombre,
-      Descripción: a.descripcion || '-',
-      Importe: a.importe
-    })));
-    XLSX.utils.book_append_sheet(wb, wsAsientos, "Asientos");
-    XLSX.writeFile(wb, `Asientos_${unidad}_${periodoStr.replace('/', '-')}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, "Costos");
+    XLSX.writeFile(wb, `Costos_${unidad}_${periodoStr.replace('/', '-')}.xlsx`);
   };
 
   const agrupadoPorRubro = (items: any[]) => {
@@ -278,7 +282,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
           <div className="flex justify-between items-center border-b pb-4">
             <div>
               <h2 className="text-2xl font-bold">
-                {mode === 'gastos' ? 'Detalle de Gastos' : 
+                {mode === 'costos' ? 'Detalle de Costos' : 
                  mode === 'asientos' ? 'Asientos Vinculados' : 
                  mode === 'rrhh' ? 'Recursos Humanos' : 'Dashboard Analítico'}
               </h2>
@@ -312,23 +316,18 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
                   <Download size={16} /> Exportar XLSX
                 </button>
               )}
-              {mode === 'gastos' && data && (
-                <button onClick={exportGastosToxlsx} className="px-4 py-2 bg-red-600 text-white rounded shadow hover:bg-red-700 transition flex items-center gap-2">
-                  <Download size={16} /> Exportar XLSX
-                </button>
-              )}
-              {mode === 'asientos' && asientosData && (
-                <button onClick={exportAsientosToxlsx} className="px-4 py-2 bg-blue-600 text-white rounded shadow hover:bg-blue-700 transition flex items-center gap-2">
-                  <Download size={16} /> Exportar XLSX
-                </button>
-              )}
-              {mode === 'dashboard' && data && (
-                <div className="flex gap-2">
-                  <button onClick={exportIngresosToxlsx} className="px-4 py-2 bg-green-600 text-white rounded shadow hover:bg-green-700 transition flex items-center gap-2">
-                    <Download size={16} /> Exportar Ingresos
-                  </button>
-                  <button onClick={exportGastosToxlsx} className="px-4 py-2 bg-red-600 text-white rounded shadow hover:bg-red-700 transition flex items-center gap-2">
-                    <Download size={16} /> Exportar Egresos
+              {mode === 'costos' && (
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <input type="file" id="upload-costos" className="hidden" accept=".xlsx,.xls" onChange={(e) => handleFileUpload(e, 'COSTO')} />
+                    <label htmlFor="upload-costos" className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm cursor-pointer">
+                      {uploading ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
+                      Importar adicionales de Costos
+                    </label>
+                    {uploadMsg && <span className="absolute top-full mt-1 right-0 text-xs font-medium bg-white px-2 py-1 shadow-sm rounded text-slate-700 whitespace-nowrap z-50">{uploadMsg}</span>}
+                  </div>
+                  <button onClick={exportCostosToxlsx} className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-all shadow-sm">
+                    <Download size={16} /> Exportar a Excel
                   </button>
                 </div>
               )}
@@ -345,7 +344,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
                 </div>
                 <div className="p-4 bg-red-50 rounded shadow border-l-4 border-red-500 flex flex-col justify-between">
                   <div>
-                    <h3 className="text-gray-500 text-sm uppercase tracking-wider">Total Gastos</h3>
+                    <h3 className="text-gray-500 text-sm uppercase tracking-wider">Total Costos</h3>
                     <p className="text-2xl font-bold text-red-700 mt-1">$ {data.totales.gastos.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</p>
                   </div>
                 </div>
@@ -380,7 +379,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
 
                 <div className="bg-white rounded shadow border border-gray-200">
                   <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
-                    <h3 className="font-semibold text-gray-700">Gastos por Rubro</h3>
+                    <h3 className="font-semibold text-gray-700">Costos por Rubro</h3>
                   </div>
                   <div className="p-4">
                     {gastosPorRubro.length > 0 ? (
@@ -393,86 +392,19 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
                         ))}
                       </ul>
                     ) : (
-                      <p className="text-gray-500 text-sm">No hay gastos registrados en este periodo.</p>
+                      <p className="text-gray-500 text-sm">No hay costos registrados en este periodo.</p>
                     )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Tablas de detalle en Dashboard */}
-              <div className="mt-8 space-y-8">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-700 mb-4 border-b pb-2">Detalle de Ingresos</h3>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200 border">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Concepto</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Comprobante</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Solicitante</th>
-                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Cantidad</th>
-                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Importe</th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {data.ingresos.map((i: any, idx: number) => (
-                          <tr key={idx} className="hover:bg-gray-50">
-                            <td className="px-4 py-2 text-sm">{i.fecha?.substring(0, 10)}</td>
-                            <td className="px-4 py-2 text-sm">{i.concepto}</td>
-                            <td className="px-4 py-2 text-sm">{i.comprobante}</td>
-                            <td className="px-4 py-2 text-sm">{i.proveedor || '-'}</td>
-                            <td className="px-4 py-2 text-sm text-right">{i.cantidad || 0}</td>
-                            <td className="px-4 py-2 text-sm text-right text-green-700">$ {i.importe.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
-                          </tr>
-                        ))}
-                        {data.ingresos.length === 0 && (
-                          <tr><td colSpan={6} className="px-4 py-4 text-center text-gray-500">No hay ingresos detallados en este periodo</td></tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-700 mb-4 border-b pb-2">Detalle de Gastos</h3>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200 border">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Concepto</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Comprobante</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Proveedor</th>
-                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Importe</th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {data.gastos.map((i: any, idx: number) => (
-                          <tr key={idx} className="hover:bg-gray-50">
-                            <td className="px-4 py-2 text-sm">{i.fecha?.substring(0, 10)}</td>
-                            <td className="px-4 py-2 text-sm">{i.concepto}</td>
-                            <td className="px-4 py-2 text-sm">{i.comprobante}</td>
-                            <td className="px-4 py-2 text-sm">{i.proveedor || '-'}</td>
-                            <td className="px-4 py-2 text-sm text-right text-red-700">$ {i.importe.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
-                          </tr>
-                        ))}
-                        {data.gastos.length === 0 && (
-                          <tr><td colSpan={5} className="px-4 py-4 text-center text-gray-500">No hay gastos detallados en este periodo</td></tr>
-                        )}
-                      </tbody>
-                    </table>
                   </div>
                 </div>
               </div>
             </div>
           )}
 
-          {mode === 'gastos' && data && (
+          {mode === 'costos' && data && (
             <div className="space-y-6 mt-8">
               <div className="flex justify-between items-center bg-red-50 p-4 rounded shadow border-l-4 border-red-500 mb-6">
                  <div>
-                   <h3 className="text-gray-500 text-sm uppercase tracking-wider">Total Gastos</h3>
+                   <h3 className="text-gray-500 text-sm uppercase tracking-wider">Total Costos</h3>
                    <p className="text-2xl font-bold text-red-700 mt-1">$ {data.totales.gastos.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</p>
                  </div>
               </div>

@@ -1,5 +1,6 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { Building2, PackageCheck, TrendingUp, FileText, Filter, Calendar, LayoutDashboard, Search, ChevronDown, ChevronUp, ChevronRight, BarChart3, Presentation, Download, LogOut, Settings, Users, Save, X, Trash2, Edit2, Send, Check, Loader2, Shield, Bell, Wallet, Info } from 'lucide-react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import * as XLSX from 'xlsx';
+import { UploadCloud, Building2, PackageCheck, TrendingUp, FileText, Filter, Calendar, LayoutDashboard, Search, ChevronDown, ChevronUp, ChevronRight, BarChart3, Presentation, Download, LogOut, Settings, Users, Save, X, Trash2, Edit2, Send, Check, Loader2, Shield, Bell, Wallet, Info } from 'lucide-react';
 import ConfiguracionAvanzada from './components/ConfiguracionAvanzada';
 import ConfiguracionCentrosCosto from './components/ConfiguracionCentrosCosto';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -180,6 +181,50 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
 
   const applyFilters = () => {
     setAppliedFilters(pendingFilters);
+  };
+
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState('');
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    setUploading(true);
+    setUploadMsg('');
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("unidad", appliedFilters.empresa.includes('Todas') ? (defaultUnidad || '') : appliedFilters.empresa[0]);
+    formData.append("periodo", appliedFilters.periodo.includes('Todos') ? currentPeriod : appliedFilters.periodo[0]);
+    formData.append("tipo", "INGRESO");
+
+    try {
+      const res = await fetch('/api/config/ajustes-excel', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(err);
+      }
+      const json = await res.json();
+      if (json.status === 'ok') {
+        setUploadMsg(`✅ Importado exitosamente (${json.inserted} filas)`);
+        setTimeout(() => setUploadMsg(''), 5000);
+        // Recargar datos
+        apiFetch('/api/indicadores', token)
+          .then(res_json => {
+            setRawData(res_json.data || []);
+            setColumns(res_json.columns || []);
+          });
+      } else {
+        setUploadMsg(`⚠️ Importado con errores. ${json.inserted} filas creadas.`);
+      }
+    } catch(err: any) {
+      setUploadMsg('❌ Error al subir: ' + err.message);
+    }
+    setUploading(false);
+    e.target.value = '';
   };
 
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
@@ -814,6 +859,15 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
                 <Download size={14} />
                 Descargar XLSX
               </button>
+              
+              <div className="relative">
+                <input type="file" id="upload-ingresos" className="hidden" accept=".xlsx,.xls" onChange={handleFileUpload} />
+                <label htmlFor="upload-ingresos" className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm cursor-pointer">
+                  {uploading ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
+                  Importar adicionales de Ingresos
+                </label>
+                {uploadMsg && <span className="absolute top-full mt-1 right-0 text-xs font-medium bg-white px-2 py-1 shadow-sm rounded text-slate-700 whitespace-nowrap z-50">{uploadMsg}</span>}
+              </div>
             </div>
           </div>
           
@@ -1052,7 +1106,7 @@ function Configuracion({ token }: { token: string }) {
   const [savingUn, setSavingUn] = useState(false);
   const [modalLoading, setModalLoading] = useState(false);
   const [modalMsg, setModalMsg] = useState({ text: '', type: '' });
-  const [configTab, setConfigTab] = useState<'usuarios' | 'audit' | 'ingresos' | 'gastos-asientos' | 'gastos-compras' | 'centros-costo' | 'unidades' | 'ajustes-excel'>('usuarios');
+  const [configTab, setConfigTab] = useState<'usuarios' | 'audit' | 'ingresos' | 'costos-asientos' | 'costos-compras' | 'centros-costo' | 'unidades' | 'ajustes-excel'>('usuarios');
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
   const [searchUnidad, setSearchUnidad] = useState('');
@@ -1190,10 +1244,10 @@ function Configuracion({ token }: { token: string }) {
           <button onClick={() => setConfigTab('usuarios')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'usuarios' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Usuarios</button>
           <button onClick={() => setConfigTab('audit')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'audit' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Auditoría</button>
           <button onClick={() => setConfigTab('ingresos')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'ingresos' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Conf. Ingresos</button>
-          <button onClick={() => setConfigTab('gastos-asientos')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'gastos-asientos' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Conf. Asientos</button>
-          <button onClick={() => setConfigTab('gastos-compras')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'gastos-compras' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Conf. Gastos Compras</button>
+          <button onClick={() => setConfigTab('costos-asientos')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'costos-asientos' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Conf. Asientos</button>
+          <button onClick={() => setConfigTab('costos-compras')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'costos-compras' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Conf. Costos Compras</button>
           <button onClick={() => setConfigTab('centros-costo')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'centros-costo' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Conf. Centros de Costo</button>
-          <button onClick={() => setConfigTab('ajustes-excel')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'ajustes-excel' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Ajustes Excel</button>
+
         </div>
       </div>
 
@@ -1400,7 +1454,7 @@ function Configuracion({ token }: { token: string }) {
 }
 
 // ═══════════════════════════════════════════════════════
-// NEW EMPTY TABS (Dashboard & Gastos)
+// NEW EMPTY TABS (Dashboard & Costos)
 // ═══════════════════════════════════════════════════════
 function MainDashboard({ token, defaultUnidad, defaultPeriodo }: { token: string, defaultUnidad?: string, defaultPeriodo?: string }) {
   return (
@@ -1410,10 +1464,10 @@ function MainDashboard({ token, defaultUnidad, defaultPeriodo }: { token: string
   );
 }
 
-function Gastos({ token, defaultUnidad, defaultPeriodo }: { token: string, defaultUnidad?: string, defaultPeriodo?: string }) {
+function Costos({ token, defaultUnidad, defaultPeriodo }: { token: string, defaultUnidad?: string, defaultPeriodo?: string }) {
   return (
     <div className="bg-slate-50 min-h-[80vh]">
-      <InformeGestion token={token} mode="gastos" defaultUnidad={defaultUnidad} defaultPeriodo={defaultPeriodo} />
+      <InformeGestion token={token} mode="costos" defaultUnidad={defaultUnidad} defaultPeriodo={defaultPeriodo} />
     </div>
   );
 }
@@ -1442,7 +1496,7 @@ export default function App() {
   const [user, setUser] = useState<any>(() => {
     try { return JSON.parse(localStorage.getItem('cert_user') || 'null'); } catch { return null; }
   });
-  const [view, setView] = useState<'proyectos' | 'dashboard' | 'ingresos' | 'gastos' | 'asientos' | 'rrhh' | 'config'>('proyectos');
+  const [view, setView] = useState<'proyectos' | 'dashboard' | 'ingresos' | 'costos' | 'asientos' | 'rrhh' | 'config'>('proyectos');
   const [globalUnidad, setGlobalUnidad] = useState<string | undefined>(undefined);
   const [globalPeriodo, setGlobalPeriodo] = useState<string | undefined>(undefined);
   const [showAbout, setShowAbout] = useState(false);
@@ -1486,9 +1540,9 @@ export default function App() {
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'ingresos' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
                 <span className="flex items-center gap-1.5"><TrendingUp size={15} /> Ingresos</span>
               </button>
-              <button onClick={() => setView('gastos')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'gastos' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
-                <span className="flex items-center gap-1.5"><Wallet size={15} /> Gastos</span>
+              <button onClick={() => setView('costos')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'costos' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
+                <span className="flex items-center gap-1.5"><Wallet size={15} /> Costos</span>
               </button>
               <button onClick={() => setView('asientos')}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'asientos' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
@@ -1518,7 +1572,7 @@ export default function App() {
       {view === 'proyectos' && <GestorInformes token={token} user={user} onOpenReport={(u: string, p: string) => { setGlobalUnidad(u); setGlobalPeriodo(p); setView('dashboard'); }} />}
       {view === 'dashboard' && <MainDashboard token={token} defaultUnidad={globalUnidad || user?.sucursales?.[0]} defaultPeriodo={globalPeriodo} />}
       {view === 'ingresos' && <Dashboard token={token} onLogout={handleLogout} defaultUnidad={globalUnidad || user?.sucursales?.[0]} defaultPeriodo={globalPeriodo} />}
-      {view === 'gastos' && <Gastos token={token} defaultUnidad={globalUnidad || user?.sucursales?.[0]} defaultPeriodo={globalPeriodo} />}
+      {view === 'costos' && <Costos token={token} defaultUnidad={globalUnidad || user?.sucursales?.[0]} defaultPeriodo={globalPeriodo} />}
       {view === 'asientos' && <Asientos token={token} defaultUnidad={globalUnidad || user?.sucursales?.[0]} defaultPeriodo={globalPeriodo} />}
       {view === 'rrhh' && <RRHH token={token} defaultUnidad={globalUnidad || user?.sucursales?.[0]} defaultPeriodo={globalPeriodo} />}
       {view === 'config' && user?.rol === 'admin' && <Configuracion token={token} />}

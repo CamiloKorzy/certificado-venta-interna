@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request, Depends, UploadFile, File
+from fastapi import FastAPI, HTTPException, Request, Depends, UploadFile, File, Form
 import io
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -558,7 +558,13 @@ def save_config_centros_costo(sucursal: str, items: List[dict]):
         conn.close()
 
 @app.post("/api/config/ajustes-excel")
-async def upload_ajustes_excel(file: UploadFile = File(...), current_user = Depends(get_current_user)):
+async def upload_ajustes_excel(
+    file: UploadFile = File(...), 
+    unidad: Optional[str] = Form(None),
+    periodo: Optional[str] = Form(None),
+    tipo: Optional[str] = Form(None),
+    current_user = Depends(get_current_user)
+):
     contents = await file.read()
     wb = openpyxl.load_workbook(filename=io.BytesIO(contents), data_only=True)
     ws = wb.active
@@ -587,15 +593,26 @@ async def upload_ajustes_excel(file: UploadFile = File(...), current_user = Depe
     for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
         if not row or not any(row): continue
         
-        unidad_negocio = str(row[0] or "").strip()
-        periodo = str(row[1] or "").strip()
-        concepto = str(row[2] or "").strip()
-        tipo_mov = str(row[3] or "").strip().upper()
-        categoria = str(row[4] or "").strip()
-        importe_val = row[5]
-        observaciones = str(row[6] or "").strip() if len(row) > 6 else ""
+        # If parameters were sent via form (new UI), the Excel file has 4 columns: Concepto, Categoría, Importe, Observaciones
+        if unidad and periodo and tipo:
+            unidad_negocio = str(unidad).strip()
+            periodo_val = str(periodo).strip()
+            tipo_mov = str(tipo).strip().upper()
+            concepto = str(row[0] or "").strip()
+            categoria = str(row[1] or "").strip()
+            importe_val = row[2]
+            observaciones = str(row[3] or "").strip() if len(row) > 3 else ""
+        else:
+            # Old format fallback just in case
+            unidad_negocio = str(row[0] or "").strip()
+            periodo_val = str(row[1] or "").strip()
+            concepto = str(row[2] or "").strip()
+            tipo_mov = str(row[3] or "").strip().upper()
+            categoria = str(row[4] or "").strip()
+            importe_val = row[5]
+            observaciones = str(row[6] or "").strip() if len(row) > 6 else ""
         
-        if not unidad_negocio or not periodo or not tipo_mov or importe_val is None:
+        if not unidad_negocio or not periodo_val or not tipo_mov or importe_val is None:
             errors.append(f"Fila {row_idx}: Faltan datos (Unidad, Periodo, Tipo o Importe).")
             continue
             
@@ -608,9 +625,13 @@ async def upload_ajustes_excel(file: UploadFile = File(...), current_user = Depe
                 errors.append(f"Fila {row_idx}: Unidad '{unidad_negocio}' no encontrada.")
                 continue
                 
-        if tipo_mov not in ["INGRESO", "GASTO"]:
-            errors.append(f"Fila {row_idx}: Tipo '{tipo_mov}' inválido. Use INGRESO o GASTO.")
+        if tipo_mov not in ["INGRESO", "GASTO", "COSTO"]:
+            errors.append(f"Fila {row_idx}: Tipo '{tipo_mov}' inválido. Use INGRESO o COSTO.")
             continue
+            
+        # Convert GASTO to COSTO if imported from old files
+        if tipo_mov == "GASTO":
+            tipo_mov = "COSTO"
             
         try:
             importe = float(importe_val)
@@ -621,7 +642,7 @@ async def upload_ajustes_excel(file: UploadFile = File(...), current_user = Depe
         cur_supa.execute("""
             INSERT INTO cert_ajustes_excel (unidad_negocio, periodo, concepto, tipo_movimiento, categoria, importe, observaciones, usuario_carga)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        """, (unidad_negocio, periodo, concepto, tipo_mov, categoria, importe, observaciones, user_email))
+        """, (unidad_negocio, periodo_val, concepto, tipo_mov, categoria, importe, observaciones, user_email))
         inserted_count += 1
         
     conn_supa.commit()
@@ -2043,7 +2064,7 @@ def get_indicadores(user=Depends(get_current_user)):
                     'metadata': record,
                     'max_importe': imp,
                     'max_gravado': gravado,
-                    'items': {},
+                    'items': [],
                 }
             
             if imp > comprobantes[num_doc]['max_importe']:
@@ -2052,30 +2073,31 @@ def get_indicadores(user=Depends(get_current_user)):
                 comprobantes[num_doc]['max_gravado'] = gravado
             
             if producto and producto != 'NULL':
-                if producto not in comprobantes[num_doc]['items']:
-                    cant_raw = record.get('itemcantidad', '0') or '0'
-                    precio_raw = record.get('itemprecio', '0') or '0'
-                    itemimp_raw = record.get('itemimporte', '0') or '0'
-                    try:
-                        cant = float(str(cant_raw).replace(',', '.'))
-                    except:
-                        cant = 1.0
-                    try:
-                        precio = float(str(precio_raw).replace(',', '.'))
-                    except:
-                        precio = 0.0
-                    try:
-                        itemimp = float(str(itemimp_raw).replace(',', '.'))
-                    except:
-                        itemimp = 0.0
-                    
-                    comprobantes[num_doc]['items'][producto] = {
-                        'Producto': producto,
-                        'Cantidad': cant,
-                        'Precio': precio,
-                        'Importe': itemimp,
-                        'Unidad': record.get('unidadnombre', '')
-                    }
+                cant_raw = record.get('itemcantidad', '0') or '0'
+                precio_raw = record.get('itemprecio', '0') or '0'
+                itemimp_raw = record.get('itemimporte', '0') or '0'
+                try:
+                    cant = float(str(cant_raw).replace(',', '.'))
+                except:
+                    cant = 1.0
+                try:
+                    precio = float(str(precio_raw).replace(',', '.'))
+                except:
+                    precio = 0.0
+                try:
+                    itemimp = float(str(itemimp_raw).replace(',', '.'))
+                except:
+                    itemimp = 0.0
+                
+                item_data = {
+                    'Producto': producto,
+                    'Cantidad': cant,
+                    'Precio': precio,
+                    'Importe': itemimp,
+                    'Unidad': record.get('unidadnombre', '')
+                }
+                if item_data not in comprobantes[num_doc]['items']:
+                    comprobantes[num_doc]['items'].append(item_data)
         
         # ─── PASO 2: Construir registros finales ───
         records = []
@@ -2104,7 +2126,7 @@ def get_indicadores(user=Depends(get_current_user)):
                 return str(val).strip()
             
             desc = clean(meta.get('descripcion', ''))
-            items_list = list(data['items'].values())
+            items_list = data['items']
             
             total_val = data['max_importe']
             gravado_val = data['max_gravado']
@@ -2310,7 +2332,7 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
     # Nota: Corregimos los nombres de columnas para evitar el error "column producto does not exist"
     # Usamos documento y comprobante, productonombre, y equiposolicitantenombre
     sql_ingresos = """
-    SELECT fecha, documento, comprobante, productonombre, equiposolicitantenombre, itemimporte, itemimportegravado, itemcantidad
+    SELECT DISTINCT fecha, documento, comprobante, productonombre, equiposolicitantenombre, itemimporte, itemimportegravado, itemcantidad
     FROM ceesa_cee_certificados_ventas_internas
     WHERE EXTRACT(YEAR FROM CAST(fecha AS TIMESTAMP)) = %s 
       AND EXTRACT(MONTH FROM CAST(fecha AS TIMESTAMP)) = %s
