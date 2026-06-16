@@ -179,6 +179,19 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
     XLSX.writeFile(wb, `RRHH_${unidad}_${periodoStr.replace('/', '-')}.xlsx`);
   };
 
+  const agrupadoPorRubro = (items: any[]) => {
+    const agrupado: Record<string, number> = {};
+    if (!items) return [];
+    items.forEach(i => {
+      const rubro = i.categoria || 'Sin Categoría';
+      agrupado[rubro] = (agrupado[rubro] || 0) + (i.importe || 0);
+    });
+    return Object.entries(agrupado).map(([rubro, total]) => ({ rubro, total })).sort((a, b) => b.total - a.total);
+  };
+
+  const ingresosPorRubro = data ? agrupadoPorRubro(data.ingresos) : [];
+  const gastosPorRubro = data ? agrupadoPorRubro(data.gastos) : [];
+
   const resultado = data ? data.totales.ingresos - data.totales.gastos : 0;
 
   return (
@@ -251,24 +264,80 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
             </div>
           </div>
           {mode === 'dashboard' && data && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="p-4 bg-green-50 rounded shadow border-l-4 border-green-500">
-                <h3 className="text-gray-500 text-sm uppercase tracking-wider">Total Ingresos</h3>
-                <p className="text-2xl font-bold text-green-700">$ {data.totales.ingresos.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</p>
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="p-4 bg-green-50 rounded shadow border-l-4 border-green-500 flex flex-col justify-between">
+                  <div>
+                    <h3 className="text-gray-500 text-sm uppercase tracking-wider">Total Ingresos</h3>
+                    <p className="text-2xl font-bold text-green-700 mt-1">$ {data.totales.ingresos.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</p>
+                  </div>
+                </div>
+                <div className="p-4 bg-red-50 rounded shadow border-l-4 border-red-500 flex flex-col justify-between">
+                  <div>
+                    <h3 className="text-gray-500 text-sm uppercase tracking-wider">Total Gastos</h3>
+                    <p className="text-2xl font-bold text-red-700 mt-1">$ {data.totales.gastos.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</p>
+                  </div>
+                </div>
+                <div className={`p-4 rounded shadow border-l-4 ${resultado >= 0 ? 'bg-blue-50 border-blue-500' : 'bg-orange-50 border-orange-500'} flex flex-col justify-between`}>
+                  <div>
+                    <h3 className="text-gray-500 text-sm uppercase tracking-wider">Resultado Neto</h3>
+                    <p className={`text-2xl font-bold mt-1 ${resultado >= 0 ? 'text-blue-700' : 'text-orange-700'}`}>$ {resultado.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</p>
+                  </div>
+                </div>
               </div>
-              <div className="p-4 bg-red-50 rounded shadow border-l-4 border-red-500">
-                <h3 className="text-gray-500 text-sm uppercase tracking-wider">Total Gastos</h3>
-                <p className="text-2xl font-bold text-red-700">$ {data.totales.gastos.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</p>
-              </div>
-              <div className={`p-4 rounded shadow border-l-4 ${resultado >= 0 ? 'bg-blue-50 border-blue-500' : 'bg-orange-50 border-orange-500'}`}>
-                <h3 className="text-gray-500 text-sm uppercase tracking-wider">Resultado Neto</h3>
-                <p className={`text-2xl font-bold ${resultado >= 0 ? 'text-blue-700' : 'text-orange-700'}`}>$ {resultado.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                <div className="bg-white rounded shadow border border-gray-200">
+                  <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                    <h3 className="font-semibold text-gray-700">Ingresos por Rubro</h3>
+                  </div>
+                  <div className="p-4">
+                    {ingresosPorRubro.length > 0 ? (
+                      <ul className="space-y-3">
+                        {ingresosPorRubro.map((r, idx) => (
+                          <li key={idx} className="flex justify-between items-center text-sm">
+                            <span className="text-gray-600 truncate mr-2" title={r.rubro}>{r.rubro}</span>
+                            <span className="font-medium text-green-700 whitespace-nowrap">$ {r.total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-gray-500 text-sm">No hay ingresos registrados en este periodo.</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-white rounded shadow border border-gray-200">
+                  <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                    <h3 className="font-semibold text-gray-700">Gastos por Rubro</h3>
+                  </div>
+                  <div className="p-4">
+                    {gastosPorRubro.length > 0 ? (
+                      <ul className="space-y-3">
+                        {gastosPorRubro.map((r, idx) => (
+                          <li key={idx} className="flex justify-between items-center text-sm">
+                            <span className="text-gray-600 truncate mr-2" title={r.rubro}>{r.rubro}</span>
+                            <span className="font-medium text-red-700 whitespace-nowrap">$ {r.total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-gray-500 text-sm">No hay gastos registrados en este periodo.</p>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           )}
 
           {mode === 'gastos' && data && (
             <div className="space-y-6 mt-8">
+              <div className="flex justify-between items-center bg-red-50 p-4 rounded shadow border-l-4 border-red-500 mb-6">
+                 <div>
+                   <h3 className="text-gray-500 text-sm uppercase tracking-wider">Total Gastos</h3>
+                   <p className="text-2xl font-bold text-red-700 mt-1">$ {data.totales.gastos.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</p>
+                 </div>
+              </div>
               <div>
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200 border">
