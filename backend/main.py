@@ -2300,7 +2300,7 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
     # Nota: Corregimos los nombres de columnas para evitar el error "column producto does not exist"
     # Usamos documento y comprobante, productonombre, y equiposolicitantenombre
     sql_ingresos = """
-    SELECT fecha, documento, comprobante, productonombre, equiposolicitantenombre, total, gravado
+    SELECT fecha, documento, comprobante, productonombre, equiposolicitantenombre, itemimporte, itemimportegravado, itemcantidad
     FROM ceesa_cee_certificados_ventas_internas
     WHERE EXTRACT(YEAR FROM CAST(fecha AS TIMESTAMP)) = %s 
       AND EXTRACT(MONTH FROM CAST(fecha AS TIMESTAMP)) = %s
@@ -2326,6 +2326,7 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
             importe_ingreso = val_gravado if val_gravado != 0 else val_total
             
             comp_val = r[2] if r[2] and str(r[2]).strip() else r[1] # fallback a documento si comprobante es vacio
+            cantidad = float(r[7] or 0) if len(r) > 7 else 0.0
             
             ingresos.append({
                 "origen": "FINNEGANS",
@@ -2334,6 +2335,8 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
                 "fecha": str(r[0]) if r[0] else None,
                 "concepto": r[3] or "Sin Detalle",        # productonombre
                 "comprobante": comp_val or "N/A",         # comprobante o documento
+                "proveedor": r[4] or "-",                 # equiposolicitantenombre (UI usa proveedor/cliente)
+                "cantidad": cantidad,
                 "importe": importe_ingreso
             })
     except Exception as e:

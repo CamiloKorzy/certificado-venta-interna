@@ -179,6 +179,33 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
     XLSX.writeFile(wb, `RRHH_${unidad}_${periodoStr.replace('/', '-')}.xlsx`);
   };
 
+  const exportDashboardToxlsx = () => {
+    if (!data) return;
+    const wb = XLSX.utils.book_new();
+    if (data.ingresos && data.ingresos.length > 0) {
+      const wsIngresos = XLSX.utils.json_to_sheet(data.ingresos.map((i: any) => ({
+        Fecha: i.fecha?.substring(0, 10),
+        Concepto: i.concepto,
+        Comprobante: i.comprobante,
+        Solicitante: i.proveedor || '-',
+        Cantidad: i.cantidad || 0,
+        Importe: i.importe
+      })));
+      XLSX.utils.book_append_sheet(wb, wsIngresos, "Ingresos");
+    }
+    if (data.gastos && data.gastos.length > 0) {
+      const wsGastos = XLSX.utils.json_to_sheet(data.gastos.map((g: any) => ({
+        Fecha: g.fecha?.substring(0, 10),
+        Concepto: g.concepto,
+        Comprobante: g.comprobante,
+        Proveedor: g.proveedor || '-',
+        Importe: g.importe
+      })));
+      XLSX.utils.book_append_sheet(wb, wsGastos, "Gastos");
+    }
+    XLSX.writeFile(wb, `Dashboard_${unidad}_${periodoStr.replace('/', '-')}.xlsx`);
+  };
+
   const agrupadoPorRubro = (items: any[]) => {
     const agrupado: Record<string, number> = {};
     if (!items) return [];
@@ -261,6 +288,11 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
                   <Download size={16} /> Exportar XLSX
                 </button>
               )}
+              {mode === 'dashboard' && data && (
+                <button onClick={exportDashboardToxlsx} className="px-4 py-2 bg-green-600 text-white rounded shadow hover:bg-green-700 transition flex items-center gap-2">
+                  <Download size={16} /> Exportar XLSX
+                </button>
+              )}
             </div>
           </div>
           {mode === 'dashboard' && data && (
@@ -339,7 +371,8 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
                           <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
                           <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Concepto</th>
                           <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Comprobante</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Cliente</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Solicitante</th>
+                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Cantidad</th>
                           <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Importe</th>
                         </tr>
                       </thead>
@@ -350,11 +383,12 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
                             <td className="px-4 py-2 text-sm">{i.concepto}</td>
                             <td className="px-4 py-2 text-sm">{i.comprobante}</td>
                             <td className="px-4 py-2 text-sm">{i.proveedor || '-'}</td>
+                            <td className="px-4 py-2 text-sm text-right">{i.cantidad || 0}</td>
                             <td className="px-4 py-2 text-sm text-right text-green-700">$ {i.importe.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
                           </tr>
                         ))}
                         {data.ingresos.length === 0 && (
-                          <tr><td colSpan={5} className="px-4 py-4 text-center text-gray-500">No hay ingresos detallados en este periodo</td></tr>
+                          <tr><td colSpan={6} className="px-4 py-4 text-center text-gray-500">No hay ingresos detallados en este periodo</td></tr>
                         )}
                       </tbody>
                     </table>
