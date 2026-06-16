@@ -54,6 +54,27 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
     e.target.value = '';
   };
 
+  const downloadTemplate = (tipo: string) => {
+    let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<?mso-application progid="Excel.Sheet"?>\n';
+    xml += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\n';
+    xml += '<Styles><Style ss:ID="hdr"><Font ss:Bold="1" ss:Size="11"/><Interior ss:Color="#1E293B" ss:Pattern="Solid"/><Font ss:Color="#FFFFFF" ss:Bold="1" ss:Size="11"/></Style></Styles>\n';
+    xml += `<Worksheet ss:Name="Plantilla ${tipo}"><Table>\n`;
+    [300, 200, 150, 400].forEach(w => { xml += `<Column ss:Width="${w}"/>\n`; });
+    xml += '<Row>';
+    ['Concepto', 'Categoría', 'Importe', 'Observaciones'].forEach(h => {
+      xml += `<Cell ss:StyleID="hdr"><Data ss:Type="String">${h}</Data></Cell>`;
+    });
+    xml += '</Row>\n';
+    xml += '</Table></Worksheet></Workbook>';
+    const blob = new Blob([xml], { type: 'application/vnd.ms-excel' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Plantilla_Importacion_${tipo}.xls`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const [error, setError] = useState('');
   
   const [unidad, setUnidad] = useState(defaultUnidad);
@@ -318,6 +339,14 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
               )}
               {mode === 'costos' && (
                 <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => downloadTemplate('COSTO')}
+                    className="flex items-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm"
+                    title="Descargar plantilla Excel vacía para importar costos"
+                  >
+                    <Download size={14} />
+                    Descargar Plantilla
+                  </button>
                   <div className="relative">
                     <input type="file" id="upload-costos" className="hidden" accept=".xlsx,.xls" onChange={(e) => handleFileUpload(e, 'COSTO')} />
                     <label htmlFor="upload-costos" className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm cursor-pointer">
