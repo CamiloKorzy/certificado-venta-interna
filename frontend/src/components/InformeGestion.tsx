@@ -22,6 +22,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
   
   const [unidades, setUnidades] = useState<any[]>([]);
   const [searchTermRRHH, setSearchTermRRHH] = useState('');
+  const [estadoCierre, setEstadoCierre] = useState<any>(null);
 
   useEffect(() => {
     if (defaultUnidad) {
@@ -69,9 +70,19 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
        return;
     }
 
+
     setLoading(true);
     setError('');
     try {
+      const pStr = parsePeriodo(periodoStr);
+      const estadoRes = await fetch(`/api/informes/estado?unidad_negocio=${encodeURIComponent(unidad)}&periodo=${encodeURIComponent(pStr!)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (estadoRes.ok) {
+        const estadoJson = await estadoRes.json();
+        setEstadoCierre(estadoJson);
+      }
+
       if (mode === 'asientos') {
         const [year, month] = p.split('-');
         const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
@@ -110,7 +121,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
   const handlePresentar = async () => {
     const p = parsePeriodo(periodoStr);
     try {
-      const res = await fetch(`/api/cierre/presentar`, {
+      const res = await fetch(`/api/informes/cerrar`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -118,7 +129,8 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
         },
         body: JSON.stringify({
           unidad_negocio: unidad,
-          periodo: p
+          periodo: p,
+          usuario: JSON.parse(localStorage.getItem('cert_user') || '{}')?.email || 'Usuario'
         })
       });
       if (!res.ok) {
@@ -136,7 +148,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
     if (!window.confirm("¿Seguro que deseas reabrir el periodo?")) return;
     const p = parsePeriodo(periodoStr);
     try {
-      const res = await fetch(`/api/cierre/reabrir`, {
+      const res = await fetch(`/api/informes/reabrir`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -144,7 +156,8 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
         },
         body: JSON.stringify({
           unidad_negocio: unidad,
-          periodo: p
+          periodo: p,
+          usuario: JSON.parse(localStorage.getItem('cert_user') || '{}')?.email || 'Usuario'
         })
       });
       if (!res.ok) {
@@ -207,23 +220,23 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
               </h2>
             </div>
             <div className="flex items-center space-x-4">
-              {data && (
+              {estadoCierre && (
                 <>
-                  <span className={`px-3 py-1 rounded-full text-sm font-semibold ${data.estado_cierre === 'CERRADO' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
-                    Estado: {data.estado_cierre}
+                  <span className={`px-3 py-1 rounded-full text-sm font-semibold ${estadoCierre?.estado === 'CERRADO' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
+                    Estado: {estadoCierre?.estado}
                   </span>
-                  {data.estado_cierre === 'CERRADO' && data.usuario_cierre && (
+                  {estadoCierre?.estado === 'CERRADO' && estadoCierre?.usuario_cierre && (
                     <div className="text-sm text-gray-500 text-right">
-                      Cerrado por: {data.usuario_cierre}<br/>
-                      el: {new Date(data.fecha_cierre).toLocaleString()}
+                      Cerrado por: {estadoCierre?.usuario_cierre}<br/>
+                      el: {new Date(estadoCierre?.fecha_cierre).toLocaleString()}
                     </div>
                   )}
-                  {data.estado_cierre === 'ABIERTO' && (
+                  {estadoCierre?.estado === 'ABIERTO' && (
                     <button onClick={handlePresentar} className="px-4 py-2 bg-blue-600 text-white rounded shadow hover:bg-blue-700 transition">
                       Presentar Período
                     </button>
                   )}
-                  {data.estado_cierre === 'CERRADO' && (
+                  {estadoCierre?.estado === 'CERRADO' && (
                     <button onClick={handleReabrir} className="px-4 py-2 border border-red-600 text-red-600 rounded shadow hover:bg-red-50 transition">
                       Reabrir (Solo Admin)
                     </button>

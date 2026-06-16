@@ -4,6 +4,7 @@ import ConfiguracionAvanzada from './components/ConfiguracionAvanzada';
 import ConfiguracionCentrosCosto from './components/ConfiguracionCentrosCosto';
 import ErrorBoundary from './components/ErrorBoundary';
 import InformeGestion from './components/InformeGestion';
+import GestorInformes from './components/GestorInformes';
 // ─── API Helper ───
 const API_URL = '';
 function apiFetch(path: string, token: string, options: any = {}) {
@@ -1401,34 +1402,34 @@ function Configuracion({ token }: { token: string }) {
 // ═══════════════════════════════════════════════════════
 // NEW EMPTY TABS (Dashboard & Gastos)
 // ═══════════════════════════════════════════════════════
-function MainDashboard({ token, defaultUnidad }: { token: string, defaultUnidad?: string }) {
+function MainDashboard({ token, defaultUnidad, defaultPeriodo }: { token: string, defaultUnidad?: string, defaultPeriodo?: string }) {
   return (
     <div className="bg-slate-50 min-h-[80vh]">
-      <InformeGestion token={token} mode="dashboard" defaultUnidad={defaultUnidad} />
+      <InformeGestion token={token} mode="dashboard" defaultUnidad={defaultUnidad} defaultPeriodo={defaultPeriodo} />
     </div>
   );
 }
 
-function Gastos({ token, defaultUnidad }: { token: string, defaultUnidad?: string }) {
+function Gastos({ token, defaultUnidad, defaultPeriodo }: { token: string, defaultUnidad?: string, defaultPeriodo?: string }) {
   return (
     <div className="bg-slate-50 min-h-[80vh]">
-      <InformeGestion token={token} mode="gastos" defaultUnidad={defaultUnidad} />
+      <InformeGestion token={token} mode="gastos" defaultUnidad={defaultUnidad} defaultPeriodo={defaultPeriodo} />
     </div>
   );
 }
 
-function Asientos({ token, defaultUnidad }: { token: string, defaultUnidad?: string }) {
+function Asientos({ token, defaultUnidad, defaultPeriodo }: { token: string, defaultUnidad?: string, defaultPeriodo?: string }) {
   return (
     <div className="bg-slate-50 min-h-[80vh]">
-      <InformeGestion token={token} mode="asientos" defaultUnidad={defaultUnidad} />
+      <InformeGestion token={token} mode="asientos" defaultUnidad={defaultUnidad} defaultPeriodo={defaultPeriodo} />
     </div>
   );
 }
 
-function RRHH({ token, defaultUnidad }: { token: string, defaultUnidad?: string }) {
+function RRHH({ token, defaultUnidad, defaultPeriodo }: { token: string, defaultUnidad?: string, defaultPeriodo?: string }) {
   return (
     <div className="bg-slate-50 min-h-[80vh]">
-      <InformeGestion token={token} mode="rrhh" defaultUnidad={defaultUnidad} />
+      <InformeGestion token={token} mode="rrhh" defaultUnidad={defaultUnidad} defaultPeriodo={defaultPeriodo} />
     </div>
   );
 }
@@ -1469,6 +1470,12 @@ export default function App() {
               Reporte de Resultados
             </h1>
             <nav className="flex gap-1">
+
+              <button onClick={() => setView('proyectos')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'proyectos' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
+                <span className="flex items-center gap-1.5"><FileText size={15} /> Proyectos</span>
+              </button>
+
               <button onClick={() => setView('dashboard')}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'dashboard' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
                 <span className="flex items-center gap-1.5"><LayoutDashboard size={15} /> Dashboard</span>
@@ -1506,11 +1513,12 @@ export default function App() {
       </div>
 
       {/* Content */}
-      {view === 'dashboard' && <MainDashboard token={token} defaultUnidad={user?.sucursales?.[0]} />}
-      {view === 'ingresos' && <Dashboard token={token} onLogout={handleLogout} defaultUnidad={user?.sucursales?.[0]} />}
-      {view === 'gastos' && <Gastos token={token} defaultUnidad={user?.sucursales?.[0]} />}
-      {view === 'asientos' && <Asientos token={token} defaultUnidad={user?.sucursales?.[0]} />}
-      {view === 'rrhh' && <RRHH token={token} defaultUnidad={user?.sucursales?.[0]} />}
+      {view === 'proyectos' && <GestorInformes token={token} user={user} onOpenReport={(u: string, p: string) => { setGlobalUnidad(u); setGlobalPeriodo(p); setView('dashboard'); }} />}
+      {view === 'dashboard' && <MainDashboard token={token} defaultUnidad={globalUnidad || user?.sucursales?.[0]} defaultPeriodo={globalPeriodo} />}
+      {view === 'ingresos' && <Dashboard token={token} onLogout={handleLogout} defaultUnidad={globalUnidad || user?.sucursales?.[0]} />}
+      {view === 'gastos' && <Gastos token={token} defaultUnidad={globalUnidad || user?.sucursales?.[0]} defaultPeriodo={globalPeriodo} />}
+      {view === 'asientos' && <Asientos token={token} defaultUnidad={globalUnidad || user?.sucursales?.[0]} defaultPeriodo={globalPeriodo} />}
+      {view === 'rrhh' && <RRHH token={token} defaultUnidad={globalUnidad || user?.sucursales?.[0]} defaultPeriodo={globalPeriodo} />}
       {view === 'config' && user?.rol === 'admin' && <Configuracion token={token} />}
 
       {/* Modal Acerca de */}
