@@ -2314,6 +2314,7 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
     FROM ceesa_cee_certificados_ventas_internas
     WHERE EXTRACT(YEAR FROM CAST(fecha AS TIMESTAMP)) = %s 
       AND EXTRACT(MONTH FROM CAST(fecha AS TIMESTAMP)) = %s
+      AND productonombre IS NOT NULL AND TRIM(productonombre) != ''
     """
     params_ingresos = [int(y), int(m)]
     
