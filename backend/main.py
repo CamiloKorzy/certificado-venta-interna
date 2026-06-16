@@ -26,6 +26,16 @@ from auth import hash_password, verify_password, create_token, decode_token
 from telegram_service import telegram_nuevo_certificado, telegram_test
 
 
+def safe_float(val):
+    if not val:
+        return 0.0
+    if isinstance(val, str) and val.strip().upper() == 'NULL':
+        return 0.0
+    try:
+        return float(val)
+    except:
+        return 0.0
+
 def check_informe_cerrado(empresa: str, periodo: str, modulo: str):
     try:
         if not empresa or not periodo: return None
@@ -2321,12 +2331,12 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
         cur.execute(sql_ingresos, params_ingresos)
         rows_ingresos = cur.fetchall()
         for r in rows_ingresos:
-            val_gravado = float(r[6] or 0) if len(r) > 6 else 0.0
-            val_total = float(r[5] or 0) if len(r) > 5 else 0.0
+            val_gravado = safe_float(r[6]) if len(r) > 6 else 0.0
+            val_total = safe_float(r[5]) if len(r) > 5 else 0.0
             importe_ingreso = val_gravado if val_gravado != 0 else val_total
             
             comp_val = r[2] if r[2] and str(r[2]).strip() else r[1] # fallback a documento si comprobante es vacio
-            cantidad = float(r[7] or 0) if len(r) > 7 else 0.0
+            cantidad = safe_float(r[7]) if len(r) > 7 else 0.0
             
             ingresos.append({
                 "origen": "FINNEGANS",
