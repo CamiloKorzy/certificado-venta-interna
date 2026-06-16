@@ -2310,7 +2310,7 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
     # Aplicar filtro de unidad
     if sucursales:
         sucs_str = ",".join(f"'{s}'" for s in sucursales)
-        sql_ingresos += f" AND cliente IN ({sucs_str})" # 'cliente' se usa como sucursal en la vista
+        sql_ingresos += f" AND empresa IN ({sucs_str})" # 'empresa' es el prestador
         
     # Aplicar filtro de subtipos de comprobante de ingresos si hay configurados para esta sucursal
     if ingresos_subtipos:
