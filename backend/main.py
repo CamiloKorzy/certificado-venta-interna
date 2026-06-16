@@ -683,6 +683,9 @@ def delete_ajuste_excel(id: int, current_user = Depends(get_current_user)):
 
 
 
+class BulkDeleteReq(BaseModel):
+    ids: List[int]
+
 @app.delete("/api/config/ajustes-excel/bulk")
 def delete_ajustes_excel_bulk(req: BulkDeleteReq, current_user = Depends(get_current_user)):
     conn_supa = get_supabase()
@@ -728,8 +731,7 @@ def get_finnegans_categorias_asiento():
 # CRUD CONFIGURACIÓN AVANZADA
 # ═══════════════════════════════════════════════════════
 
-class BulkDeleteReq(BaseModel):
-    ids: list[int]
+
 
 class ConfigItem(BaseModel):
     id_ref: str
