@@ -16,7 +16,60 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
   const [rrhhData, setRrhhData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+
+  const [selectedAjustes, setSelectedAjustes] = useState<Set<number>>(new Set());
+  
+  const handleSelectAjuste = (id: number) => {
+    const newSet = new Set(selectedAjustes);
+    if (newSet.has(id)) newSet.delete(id);
+    else newSet.add(id);
+    setSelectedAjustes(newSet);
+  };
+  
+  const handleSelectAllAjustes = () => {
+    const ajustes = data.gastos.filter((c: any) => c.origen === 'AJUSTE EXCEL' && c.id_ajuste);
+    if (selectedAjustes.size === ajustes.length && ajustes.length > 0) {
+      setSelectedAjustes(new Set());
+    } else {
+      setSelectedAjustes(new Set(ajustes.map((c: any) => c.id_ajuste)));
+    }
+  };
+  
+  const handleDeleteSelected = async () => {
+    if (selectedAjustes.size === 0) return;
+    if (!confirm(`¿Eliminar ${selectedAjustes.size} ajustes seleccionados?`)) return;
+    
+    setUploading(true);
+    try {
+      await fetch('/api/config/ajustes-excel/bulk', {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: Array.from(selectedAjustes) })
+      });
+      setSelectedAjustes(new Set());
+      loadInforme();
+    } catch (e) {
+      console.error(e);
+      alert('Error eliminando ajustes');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const [uploadMsg, setUploadMsg] = useState('');
+
+  
+  const downloadTemplate = (tipo: string) => {
+    const ws_data = [
+      ['Concepto', 'Categoría', 'Importe', 'Observaciones']
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(ws_data);
+    const wscols = [{wch:30}, {wch:20}, {wch:15}, {wch:40}];
+    ws['!cols'] = wscols;
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Plantilla_Ajustes");
+    XLSX.writeFile(wb, `Plantilla_Ajustes_${tipo}.xlsx`);
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, tipoMovimiento: 'INGRESO' | 'COSTO') => {
     if (!e.target.files || e.target.files.length === 0) return;
@@ -365,6 +418,24 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
               )}
               {mode === 'costos' && (
                 <div className="flex items-center gap-3">
+
+                  
+                  {selectedAjustes.size > 0 && (
+                    <button
+                      onClick={handleDeleteSelected}
+                      className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm"
+                    >
+                      <Trash2 size={14} />
+                      Eliminar seleccionados ({selectedAjustes.size})
+                    </button>
+                  )}
+                  <button
+                    onClick={() => downloadTemplate('COSTO')}
+                    className="flex items-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm"
+                  >
+                    <Download size={14} />
+                    Descargar Plantilla
+                  </button>
 
                   <div className="relative">
                     <input type="file" id="upload-costos" className="hidden" accept=".xlsx,.xls" onChange={(e) => handleFileUpload(e, 'COSTO')} />

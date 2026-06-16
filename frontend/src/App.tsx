@@ -184,7 +184,62 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
   };
 
   const [uploading, setUploading] = useState(false);
+
+  const [selectedAjustes, setSelectedAjustes] = useState<Set<number>>(new Set());
+  
+  const handleSelectAjuste = (id: number) => {
+    const newSet = new Set(selectedAjustes);
+    if (newSet.has(id)) newSet.delete(id);
+    else newSet.add(id);
+    setSelectedAjustes(newSet);
+  };
+  
+  const handleSelectAllAjustes = () => {
+    const ajustes = filteredGridData.filter((c: any) => c.origen === 'AJUSTE EXCEL' && c.id_ajuste);
+    if (selectedAjustes.size === ajustes.length && ajustes.length > 0) {
+      setSelectedAjustes(new Set());
+    } else {
+      setSelectedAjustes(new Set(ajustes.map((c: any) => c.id_ajuste)));
+    }
+  };
+  
+  const handleDeleteSelected = async () => {
+    if (selectedAjustes.size === 0) return;
+    if (!confirm(`¿Eliminar ${selectedAjustes.size} ajustes seleccionados?`)) return;
+    
+    setUploading(true);
+    try {
+      await apiFetch('/api/config/ajustes-excel/bulk', token, {
+        method: 'DELETE',
+        body: JSON.stringify({ ids: Array.from(selectedAjustes) })
+      });
+      setSelectedAjustes(new Set());
+      apiFetch('/api/indicadores', token).then(res_json => {
+        setRawData(res_json.data || []);
+        setColumns(res_json.columns || []);
+      });
+    } catch (e) {
+      console.error(e);
+      alert('Error eliminando ajustes');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const [uploadMsg, setUploadMsg] = useState('');
+
+  
+  const downloadTemplate = () => {
+    const ws_data = [
+      ['Concepto', 'Categoría', 'Importe', 'Observaciones']
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(ws_data);
+    const wscols = [{wch:30}, {wch:20}, {wch:15}, {wch:40}];
+    ws['!cols'] = wscols;
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Plantilla_Ajustes");
+    XLSX.writeFile(wb, `Plantilla_Ingresos.xlsx`);
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
@@ -875,6 +930,24 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
               
 
 
+              
+              {selectedAjustes.size > 0 && (
+                <button
+                  onClick={handleDeleteSelected}
+                  className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm"
+                >
+                  <Trash2 size={14} />
+                  Eliminar seleccionados ({selectedAjustes.size})
+                </button>
+              )}
+              <button
+                onClick={downloadTemplate}
+                className="flex items-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm"
+              >
+                <Download size={14} />
+                Descargar Plantilla
+              </button>
+
               <div className="relative">
                 <input type="file" id="upload-ingresos" className="hidden" accept=".xlsx,.xls" onChange={handleFileUpload} />
                 <label htmlFor="upload-ingresos" className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm cursor-pointer">
@@ -1005,6 +1078,9 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
               <thead>
                 <tr className="bg-white border-b border-slate-200">
                   <th className="px-6 py-4 w-12 text-center"></th>
+                  <th className="px-4 py-4 w-10 text-center bg-slate-50/50">
+                    <input type="checkbox" onChange={handleSelectAllAjustes} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" />
+                  </th>
                   <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50">Fecha</th>
                   <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50">Comprobante</th>
                   <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50">Descripción</th>
@@ -1020,11 +1096,26 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
                   return (
                     <React.Fragment key={comp.id}>
                       <tr 
-                        className={`hover:bg-blue-50/50 transition-colors cursor-pointer ${isExpanded ? 'bg-blue-50/30' : ''}`}
-                        onClick={() => toggleRow(comp.id)}
+                        className={`hover:bg-blue-50/50 transition-colors cursor-pointer ${comp.origen === 'AJUSTE EXCEL' ? 'bg-amber-50/60' : ''} ${isExpanded ? 'bg-blue-50/30' : ''}`}
+                        onClick={(e) => {
+                          // Evitar toggle si se hace click en el checkbox
+                          if ((e.target as HTMLElement).tagName !== 'INPUT') {
+                            toggleRow(comp.id);
+                          }
+                        }}
                       >
                         <td className="px-6 py-4 text-slate-400 text-center">
                           {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                        </td>
+                        <td className="px-4 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                          {comp.origen === 'AJUSTE EXCEL' && comp.id_ajuste && (
+                            <input 
+                              type="checkbox" 
+                              checked={selectedAjustes.has(comp.id_ajuste)}
+                              onChange={() => handleSelectAjuste(comp.id_ajuste)}
+                              className="rounded border-amber-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                            />
+                          )}
                         </td>
                         <td className="px-6 py-4 text-sm text-slate-600">{comp.fecha}</td>
                         <td className="px-6 py-4 text-sm"><span className="text-slate-900 font-bold bg-slate-100 px-2 py-1 rounded text-xs border border-slate-200">{comp.id}</span></td>

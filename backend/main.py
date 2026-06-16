@@ -682,6 +682,21 @@ def delete_ajuste_excel(id: int, current_user = Depends(get_current_user)):
     return {"status": "ok"}
 
 
+
+@app.delete("/api/config/ajustes-excel/bulk")
+def delete_ajustes_excel_bulk(req: BulkDeleteReq, current_user = Depends(get_current_user)):
+    conn_supa = get_supabase()
+    cur_supa = conn_supa.cursor()
+    if not req.ids:
+        return {"status": "ok"}
+    
+    format_strings = ','.join(['%s'] * len(req.ids))
+    cur_supa.execute(f"DELETE FROM cert_ajustes_excel WHERE id IN ({format_strings})", tuple(req.ids))
+    conn_supa.commit()
+    cur_supa.close()
+    conn_supa.close()
+    return {"status": "ok"}
+
 @app.get("/api/finnegans/empresas")
 def get_finnegans_empresas():
     try:
@@ -712,6 +727,9 @@ def get_finnegans_categorias_asiento():
 # ═══════════════════════════════════════════════════════
 # CRUD CONFIGURACIÓN AVANZADA
 # ═══════════════════════════════════════════════════════
+
+class BulkDeleteReq(BaseModel):
+    ids: list[int]
 
 class ConfigItem(BaseModel):
     id_ref: str
@@ -2149,7 +2167,71 @@ def get_indicadores(user=Depends(get_current_user)):
             }
             records.append(record)
         
+
+        # --- PASO 2.5: Añadir Ajustes Excel (Ingresos) ---
+        try:
+            conn_supa = get_supabase()
+            cur_supa = conn_supa.cursor()
+            
+            # Construir la query base
+            query_ajustes = "SELECT id, tipo_movimiento, categoria, fecha_carga, concepto, observaciones, importe, unidad_negocio FROM cert_ajustes_excel WHERE tipo_movimiento = 'INGRESO'"
+            params_ajustes = []
+            
+            if user.get("rol") != "admin" and unidades_permitidas:
+                # Filtrar por unidades permitidas
+                placeholders = ','.join(['%s'] * len(unidades_permitidas))
+                query_ajustes += f" AND unidad_negocio IN ({placeholders})"
+                params_ajustes.extend(list(unidades_permitidas))
+            
+            cur_supa.execute(query_ajustes, tuple(params_ajustes))
+            rows_ajustes = cur_supa.fetchall()
+            
+            for r in rows_ajustes:
+                id_ajuste = r[0]
+                categoria = r[2] or "Ajuste Manual"
+                fecha = str(r[3]) if r[3] else ""
+                if fecha and len(fecha) >= 10:
+                    try:
+                        import datetime
+                        fecha = datetime.datetime.strptime(fecha[:10], '%Y-%m-%d').strftime('%d/%m/%Y')
+                    except:
+                        pass
+                concepto_str = f"[{r[7]}] {r[4]}"
+                observaciones = r[5] or "-"
+                importe_val = float(r[6] or 0)
+                
+                record_ajuste = {
+                    'Fecha': fecha,
+                    'Comprobante': f"EXCEL-{id_ajuste}",
+                    'id_ajuste': id_ajuste,
+                    'Empresa': r[7],  # unidad_negocio
+                    'Cliente': '-',
+                    'Descripción': observaciones,
+                    'Solicitante': '-',
+                    'EstadoAutorizacion': 'Ajuste',
+                    'Total Bruto': str(importe_val),
+                    'Neto Gravado': str(importe_val),
+                    'IVA': '0.0',
+                    'UnidadNegocio': r[7],
+                    'Concepto': categoria,
+                    'origen': 'AJUSTE EXCEL',
+                    'items': [{
+                        'id': f'item-{id_ajuste}',
+                        'descripcion': observaciones,
+                        'precio': importe_val,
+                        'cantidad': 1,
+                        'total': importe_val
+                    }]
+                }
+                records.append(record_ajuste)
+            
+            cur_supa.close()
+            conn_supa.close()
+        except Exception as e:
+            print(f"Error consultando Ajustes Excel en indicadores: {e}")
+
         if not records:
+
             raise Exception("No data found en Aurora")
             
         final_columns = ['Fecha', 'Comprobante', 'Empresa', 'Cliente', 'Descripción', 'Solicitante', 'EstadoAutorizacion', 'Neto Gravado', 'IVA', 'Total Bruto', 'UnidadNegocio', 'Concepto']
@@ -2514,22 +2596,23 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
         conn_supa = get_supabase()
         cur_supa = conn_supa.cursor()
         if unidad_negocio == "Todas":
-            cur_supa.execute("SELECT tipo_movimiento, categoria, fecha_carga, concepto, observaciones, importe, unidad_negocio FROM cert_ajustes_excel WHERE periodo = %s", (periodo,))
+            cur_supa.execute("SELECT id, tipo_movimiento, categoria, fecha_carga, concepto, observaciones, importe, unidad_negocio FROM cert_ajustes_excel WHERE periodo = %s", (periodo,))
         else:
-            cur_supa.execute("SELECT tipo_movimiento, categoria, fecha_carga, concepto, observaciones, importe, unidad_negocio FROM cert_ajustes_excel WHERE unidad_negocio = %s AND periodo = %s", (unidad_negocio, periodo))
+            cur_supa.execute("SELECT id, tipo_movimiento, categoria, fecha_carga, concepto, observaciones, importe, unidad_negocio FROM cert_ajustes_excel WHERE unidad_negocio = %s AND periodo = %s", (unidad_negocio, periodo))
             
         rows_ajustes = cur_supa.fetchall()
         for r in rows_ajustes:
             item = {
                 "origen": "AJUSTE EXCEL",
-                "tipo_movimiento": "INGRESO" if r[0] == "INGRESO" else "EGRESO",
-                "categoria": r[1] or "Ajuste Manual",
-                "fecha": str(r[2]) if r[2] else None,
-                "concepto": f"[{r[6]}] {r[3]}",
-                "comprobante": r[4] or "-",
-                "importe": float(r[5] or 0)
+                "id_ajuste": r[0],
+                "tipo_movimiento": "INGRESO" if r[1] == "INGRESO" else "EGRESO",
+                "categoria": r[2] or "Ajuste Manual",
+                "fecha": str(r[3]) if r[3] else None,
+                "concepto": f"[{r[7]}] {r[4]}",
+                "comprobante": r[5] or "-",
+                "importe": float(r[6] or 0)
             }
-            if r[0] == "INGRESO":
+            if r[1] == "INGRESO":
                 ingresos.append(item)
             else:
                 gastos.append(item)
