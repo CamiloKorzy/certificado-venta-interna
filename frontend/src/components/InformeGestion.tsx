@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { MultiSelect } from './MultiSelect';
-import { Download, Search, UploadCloud, Loader2 } from 'lucide-react';
+import { Download, Search, UploadCloud, Loader2, Settings, X, Trash2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 const getDefaultPeriod = () => {
@@ -54,26 +54,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
     e.target.value = '';
   };
 
-  const downloadTemplate = (tipo: string) => {
-    let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<?mso-application progid="Excel.Sheet"?>\n';
-    xml += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\n';
-    xml += '<Styles><Style ss:ID="hdr"><Font ss:Bold="1" ss:Size="11"/><Interior ss:Color="#1E293B" ss:Pattern="Solid"/><Font ss:Color="#FFFFFF" ss:Bold="1" ss:Size="11"/></Style></Styles>\n';
-    xml += `<Worksheet ss:Name="Plantilla ${tipo}"><Table>\n`;
-    [300, 200, 150, 400].forEach(w => { xml += `<Column ss:Width="${w}"/>\n`; });
-    xml += '<Row>';
-    ['Concepto', 'Categoría', 'Importe', 'Observaciones'].forEach(h => {
-      xml += `<Cell ss:StyleID="hdr"><Data ss:Type="String">${h}</Data></Cell>`;
-    });
-    xml += '</Row>\n';
-    xml += '</Table></Worksheet></Workbook>';
-    const blob = new Blob([xml], { type: 'application/vnd.ms-excel' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Plantilla_Importacion_${tipo}.xls`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+
 
   const [error, setError] = useState('');
   
@@ -84,6 +65,51 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
   const [searchTermRRHH, setSearchTermRRHH] = useState('');
   const [estadoCierre, setEstadoCierre] = useState<any>(null);
 
+  const [showAjustesModal, setShowAjustesModal] = useState(false);
+  const [ajustesList, setAjustesList] = useState<any[]>([]);
+  const [loadingAjustes, setLoadingAjustes] = useState(false);
+
+  const fetchAjustes = useCallback(async () => {
+    setLoadingAjustes(true);
+    try {
+      const res = await fetch('/api/config/ajustes-excel', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const filtered = (json || []).filter((a: any) => 
+           a.tipo_movimiento === 'COSTO' &&
+           a.unidad_negocio === unidad &&
+           a.periodo === periodoStr
+        );
+        setAjustesList(filtered);
+      }
+    } catch(err) {
+      console.error(err);
+    }
+    setLoadingAjustes(false);
+  }, [unidad, periodoStr, token]);
+
+  useEffect(() => {
+    if (showAjustesModal) {
+      fetchAjustes();
+    }
+  }, [showAjustesModal, fetchAjustes]);
+
+  const handleDeleteAjuste = async (id: number) => {
+    if (!window.confirm("¿Estás seguro de eliminar este registro importado? Esto modificará los indicadores.")) return;
+    try {
+      const res = await fetch(`/api/config/ajustes-excel/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error("Error en servidor");
+      fetchAjustes();
+      loadInforme();
+    } catch(err: any) {
+      alert("Error al eliminar: " + err.message);
+    }
+  };
   useEffect(() => {
     if (defaultUnidad) {
       setUnidad(defaultUnidad);
@@ -339,14 +365,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
               )}
               {mode === 'costos' && (
                 <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => downloadTemplate('COSTO')}
-                    className="flex items-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm"
-                    title="Descargar plantilla Excel vacía para importar costos"
-                  >
-                    <Download size={14} />
-                    Descargar Plantilla
-                  </button>
+
                   <div className="relative">
                     <input type="file" id="upload-costos" className="hidden" accept=".xlsx,.xls" onChange={(e) => handleFileUpload(e, 'COSTO')} />
                     <label htmlFor="upload-costos" className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm cursor-pointer">
@@ -355,6 +374,13 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
                     </label>
                     {uploadMsg && <span className="absolute top-full mt-1 right-0 text-xs font-medium bg-white px-2 py-1 shadow-sm rounded text-slate-700 whitespace-nowrap z-50">{uploadMsg}</span>}
                   </div>
+                  <button
+                    onClick={() => setShowAjustesModal(true)}
+                    className="flex items-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm"
+                  >
+                    <Settings size={14} />
+                    Ver Ajustes
+                  </button>
                   <button onClick={exportCostosToxlsx} className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-all shadow-sm">
                     <Download size={16} /> Exportar a Excel
                   </button>
@@ -362,6 +388,60 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
               )}
             </div>
           </div>
+          
+          {/* Modal Ver Ajustes Importados (Costos) */}
+          {showAjustesModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[80vh]">
+                <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                  <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                    <Settings size={18} className="text-emerald-600" />
+                    Ajustes Importados (Costos)
+                  </h3>
+                  <button onClick={() => setShowAjustesModal(false)} className="text-slate-400 hover:text-slate-600">
+                    <X size={20} />
+                  </button>
+                </div>
+                <div className="p-4 overflow-auto flex-1">
+                  {loadingAjustes ? (
+                    <div className="flex items-center justify-center py-8 text-slate-500 gap-2"><Loader2 className="animate-spin" size={20}/> Cargando...</div>
+                  ) : ajustesList.length === 0 ? (
+                    <div className="text-center py-8 text-slate-500">No hay ajustes importados para este periodo y unidad.</div>
+                  ) : (
+                    <table className="w-full text-left border-collapse text-sm">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200">
+                          <th className="p-3 font-semibold text-slate-600">Fecha Carga</th>
+                          <th className="p-3 font-semibold text-slate-600">Concepto</th>
+                          <th className="p-3 font-semibold text-slate-600">Categoría</th>
+                          <th className="p-3 font-semibold text-slate-600 text-right">Importe</th>
+                          <th className="p-3 font-semibold text-slate-600 text-center">Acción</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ajustesList.map(a => (
+                          <tr key={a.id} className="border-b border-slate-100 hover:bg-slate-50">
+                            <td className="p-3 text-slate-600">{new Date(a.fecha_carga).toLocaleDateString()}</td>
+                            <td className="p-3 text-slate-800 font-medium">{a.concepto}</td>
+                            <td className="p-3 text-slate-600">{a.categoria}</td>
+                            <td className="p-3 text-right font-mono font-medium text-slate-800">
+                              {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(a.importe)}
+                            </td>
+                            <td className="p-3 text-center">
+                              <button onClick={() => handleDeleteAjuste(a.id)} className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-colors" title="Eliminar">
+                                <Trash2 size={16} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+          
           {mode === 'dashboard' && data && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

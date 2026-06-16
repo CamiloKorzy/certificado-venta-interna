@@ -227,25 +227,49 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
     e.target.value = '';
   };
 
-  const downloadTemplate = () => {
-    let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<?mso-application progid="Excel.Sheet"?>\n';
-    xml += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\n';
-    xml += '<Styles><Style ss:ID="hdr"><Font ss:Bold="1" ss:Size="11"/><Interior ss:Color="#1E293B" ss:Pattern="Solid"/><Font ss:Color="#FFFFFF" ss:Bold="1" ss:Size="11"/></Style></Styles>\n';
-    xml += `<Worksheet ss:Name="Plantilla INGRESO"><Table>\n`;
-    [300, 200, 150, 400].forEach(w => { xml += `<Column ss:Width="${w}"/>\n`; });
-    xml += '<Row>';
-    ['Concepto', 'Categoría', 'Importe', 'Observaciones'].forEach(h => {
-      xml += `<Cell ss:StyleID="hdr"><Data ss:Type="String">${h}</Data></Cell>`;
-    });
-    xml += '</Row>\n';
-    xml += '</Table></Worksheet></Workbook>';
-    const blob = new Blob([xml], { type: 'application/vnd.ms-excel' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Plantilla_Importacion_Ingresos.xls`;
-    a.click();
-    URL.revokeObjectURL(url);
+
+
+  const [showAjustesModal, setShowAjustesModal] = useState(false);
+  const [ajustesList, setAjustesList] = useState<any[]>([]);
+  const [loadingAjustes, setLoadingAjustes] = useState(false);
+
+  const fetchAjustes = useCallback(async () => {
+    setLoadingAjustes(true);
+    try {
+      const res = await apiFetch('/api/config/ajustes-excel', token);
+      const currentUnidad = appliedFilters.empresa.includes('Todas') ? (defaultUnidad || '') : appliedFilters.empresa[0];
+      const currentPer = appliedFilters.periodo.includes('Todos') ? currentPeriod : appliedFilters.periodo[0];
+      
+      const filtered = (res || []).filter((a: any) => 
+         a.tipo_movimiento === 'INGRESO' &&
+         a.unidad_negocio === currentUnidad &&
+         a.periodo === currentPer
+      );
+      setAjustesList(filtered);
+    } catch(err) {
+      console.error(err);
+    }
+    setLoadingAjustes(false);
+  }, [appliedFilters.empresa, appliedFilters.periodo, defaultUnidad, currentPeriod, token]);
+
+  useEffect(() => {
+    if (showAjustesModal) {
+      fetchAjustes();
+    }
+  }, [showAjustesModal, fetchAjustes]);
+
+  const handleDeleteAjuste = async (id: number) => {
+    if (!window.confirm("¿Estás seguro de eliminar este registro importado? Esto modificará los indicadores.")) return;
+    try {
+      await apiFetch(`/api/config/ajustes-excel/${id}`, token, { method: 'DELETE' });
+      fetchAjustes();
+      apiFetch('/api/indicadores', token).then(res_json => {
+          setRawData(res_json.data || []);
+          setColumns(res_json.columns || []);
+      });
+    } catch(err: any) {
+      alert("Error al eliminar: " + err.message);
+    }
   };
 
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
@@ -826,7 +850,6 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
               <span className="text-xs font-bold text-slate-400 bg-slate-200 px-3 py-1 rounded-full">{filteredGridData.length} resultados</span>
               <button
                 onClick={() => {
-                  // Generar Excel XML Spreadsheet
                   const rows = filteredGridData.map((comp: any) => ({
                     'Fecha': comp.fecha,
                     'Comprobante': comp.id,
@@ -839,41 +862,10 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
                     'IVA 21%': comp.total - (comp.total / 1.21),
                     'Total': comp.total,
                   }));
-                  const headers = Object.keys(rows[0] || {});
-                  const escXml = (v: any) => String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-                  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<?mso-application progid="Excel.Sheet"?>\n';
-                  xml += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\n';
-                  xml += '<Styles><Style ss:ID="hdr"><Font ss:Bold="1" ss:Size="11"/><Interior ss:Color="#1E293B" ss:Pattern="Solid"/><Font ss:Color="#FFFFFF" ss:Bold="1" ss:Size="11"/></Style>';
-                  xml += '<Style ss:ID="cur"><NumberFormat ss:Format="$#,##0.00"/></Style>';
-                  xml += '<Style ss:ID="def"><Font ss:Size="10"/></Style></Styles>\n';
-                  xml += '<Worksheet ss:Name="Comprobantes Emitidos"><Table>\n';
-                  // Column widths
-                  [100, 180, 300, 200, 280, 280, 140, 150, 150, 150].forEach(w => { xml += `<Column ss:Width="${w}"/>\n`; });
-                  // Header row
-                  xml += '<Row ss:Height="30">';
-                  headers.forEach(h => { xml += `<Cell ss:StyleID="hdr"><Data ss:Type="String">${escXml(h)}</Data></Cell>`; });
-                  xml += '</Row>\n';
-                  // Data rows
-                  rows.forEach(row => {
-                    xml += '<Row>';
-                    headers.forEach(h => {
-                      const val = (row as any)[h];
-                      if (typeof val === 'number') {
-                        xml += `<Cell ss:StyleID="cur"><Data ss:Type="Number">${val.toFixed(2)}</Data></Cell>`;
-                      } else {
-                        xml += `<Cell ss:StyleID="def"><Data ss:Type="String">${escXml(val)}</Data></Cell>`;
-                      }
-                    });
-                    xml += '</Row>\n';
-                  });
-                  xml += '</Table></Worksheet></Workbook>';
-                  const blob = new Blob([xml], { type: 'application/vnd.ms-excel' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = `Comprobantes_Emitidos_${new Date().toISOString().slice(0,10)}.xls`;
-                  a.click();
-                  URL.revokeObjectURL(url);
+                  const ws = XLSX.utils.json_to_sheet(rows);
+                  const wb = XLSX.utils.book_new();
+                  XLSX.utils.book_append_sheet(wb, ws, "Comprobantes Emitidos");
+                  XLSX.writeFile(wb, `Comprobantes_Emitidos_${new Date().toISOString().slice(0,10)}.xlsx`);
                 }}
                 className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm"
               >
@@ -881,14 +873,7 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
                 Descargar XLSX
               </button>
               
-              <button
-                onClick={downloadTemplate}
-                className="flex items-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm"
-                title="Descargar plantilla Excel vacía para importar ingresos"
-              >
-                <Download size={14} />
-                Descargar Plantilla
-              </button>
+
 
               <div className="relative">
                 <input type="file" id="upload-ingresos" className="hidden" accept=".xlsx,.xls" onChange={handleFileUpload} />
@@ -898,8 +883,68 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
                 </label>
                 {uploadMsg && <span className="absolute top-full mt-1 right-0 text-xs font-medium bg-white px-2 py-1 shadow-sm rounded text-slate-700 whitespace-nowrap z-50">{uploadMsg}</span>}
               </div>
+              <button
+                onClick={() => setShowAjustesModal(true)}
+                className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm"
+              >
+                <Settings size={14} />
+                Ver Ajustes
+              </button>
             </div>
           </div>
+          
+          {/* Modal Ver Ajustes Importados */}
+          {showAjustesModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[80vh]">
+                <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                  <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                    <Settings size={18} className="text-blue-600" />
+                    Ajustes Importados (Ingresos)
+                  </h3>
+                  <button onClick={() => setShowAjustesModal(false)} className="text-slate-400 hover:text-slate-600">
+                    <X size={20} />
+                  </button>
+                </div>
+                <div className="p-4 overflow-auto flex-1">
+                  {loadingAjustes ? (
+                    <div className="flex items-center justify-center py-8 text-slate-500 gap-2"><Loader2 className="animate-spin" size={20}/> Cargando...</div>
+                  ) : ajustesList.length === 0 ? (
+                    <div className="text-center py-8 text-slate-500">No hay ajustes importados para este periodo y unidad.</div>
+                  ) : (
+                    <table className="w-full text-left border-collapse text-sm">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200">
+                          <th className="p-3 font-semibold text-slate-600">Fecha Carga</th>
+                          <th className="p-3 font-semibold text-slate-600">Concepto</th>
+                          <th className="p-3 font-semibold text-slate-600">Categoría</th>
+                          <th className="p-3 font-semibold text-slate-600 text-right">Importe</th>
+                          <th className="p-3 font-semibold text-slate-600 text-center">Acción</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ajustesList.map(a => (
+                          <tr key={a.id} className="border-b border-slate-100 hover:bg-slate-50">
+                            <td className="p-3 text-slate-600">{new Date(a.fecha_carga).toLocaleDateString()}</td>
+                            <td className="p-3 text-slate-800 font-medium">{a.concepto}</td>
+                            <td className="p-3 text-slate-600">{a.categoria}</td>
+                            <td className="p-3 text-right font-mono font-medium text-slate-800">
+                              {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(a.importe)}
+                            </td>
+                            <td className="p-3 text-center">
+                              <button onClick={() => handleDeleteAjuste(a.id)} className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-colors" title="Eliminar">
+                                <Trash2 size={16} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
           
           {/* Filtros Locales de la Grilla */}
           <div className="p-4 border-b border-slate-100 bg-white grid grid-cols-1 md:grid-cols-5 gap-4">
