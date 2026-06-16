@@ -214,6 +214,22 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
     XLSX.writeFile(wb, `Egresos_${unidad}_${periodoStr.replace('/', '-')}.xlsx`);
   };
 
+  const exportAsientosToxlsx = () => {
+    if (!asientosData || asientosData.length === 0) {
+      alert("No hay asientos para exportar");
+      return;
+    }
+    const wb = XLSX.utils.book_new();
+    const wsAsientos = XLSX.utils.json_to_sheet(asientosData.map((a: any) => ({
+      Fecha: a.fecha?.substring(0, 10),
+      Cuenta: a.cuenta_codigo + ' - ' + a.cuenta_nombre,
+      Descripción: a.descripcion || '-',
+      Importe: a.importe
+    })));
+    XLSX.utils.book_append_sheet(wb, wsAsientos, "Asientos");
+    XLSX.writeFile(wb, `Asientos_${unidad}_${periodoStr.replace('/', '-')}.xlsx`);
+  };
+
   const agrupadoPorRubro = (items: any[]) => {
     const agrupado: Record<string, number> = {};
     if (!items) return [];
@@ -293,6 +309,16 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
               )}
               {mode === 'rrhh' && (
                 <button onClick={exportRRHHToxlsx} className="px-4 py-2 bg-green-600 text-white rounded shadow hover:bg-green-700 transition flex items-center gap-2">
+                  <Download size={16} /> Exportar XLSX
+                </button>
+              )}
+              {mode === 'gastos' && data && (
+                <button onClick={exportGastosToxlsx} className="px-4 py-2 bg-red-600 text-white rounded shadow hover:bg-red-700 transition flex items-center gap-2">
+                  <Download size={16} /> Exportar XLSX
+                </button>
+              )}
+              {mode === 'asientos' && asientosData && (
+                <button onClick={exportAsientosToxlsx} className="px-4 py-2 bg-blue-600 text-white rounded shadow hover:bg-blue-700 transition flex items-center gap-2">
                   <Download size={16} /> Exportar XLSX
                 </button>
               )}
