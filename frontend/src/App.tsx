@@ -1442,7 +1442,9 @@ export default function App() {
   const [user, setUser] = useState<any>(() => {
     try { return JSON.parse(localStorage.getItem('cert_user') || 'null'); } catch { return null; }
   });
-  const [view, setView] = useState<'dashboard' | 'ingresos' | 'gastos' | 'asientos' | 'rrhh' | 'config'>('ingresos');
+  const [view, setView] = useState<'proyectos' | 'dashboard' | 'ingresos' | 'gastos' | 'asientos' | 'rrhh' | 'config'>('proyectos');
+  const [globalUnidad, setGlobalUnidad] = useState<string | undefined>(undefined);
+  const [globalPeriodo, setGlobalPeriodo] = useState<string | undefined>(undefined);
   const [showAbout, setShowAbout] = useState(false);
 
   const handleLogin = (t: string, u: any) => {
