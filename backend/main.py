@@ -2300,7 +2300,7 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
     # Nota: Corregimos los nombres de columnas para evitar el error "column producto does not exist"
     # Usamos comprobante (ej: 'CI-0001-00000003'), productonombre (ej: 'Servicio...'), y equiposolicitantenombre (ej: 'Arena-K')
     sql_ingresos = """
-    SELECT fecha, comprobante, productonombre, equiposolicitantenombre, total
+    SELECT fecha, comprobante, productonombre, equiposolicitantenombre, total, gravado
     FROM ceesa_cee_certificados_ventas_internas
     WHERE EXTRACT(YEAR FROM CAST(fecha AS TIMESTAMP)) = %s 
       AND EXTRACT(MONTH FROM CAST(fecha AS TIMESTAMP)) = %s
@@ -2309,8 +2309,8 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
     
     # Aplicar filtro de unidad
     if sucursales:
-        sucs_str = ",".join(f"'{s}'" for s in sucursales)
-        sql_ingresos += f" AND empresa IN ({sucs_str})" # 'empresa' es el prestador
+        sucs_upper = ",".join(f"UPPER('{s}')" for s in sucursales)
+        sql_ingresos += f" AND UPPER(empresa) IN ({sucs_upper})" # 'empresa' es el prestador
         
     # Aplicar filtro de subtipos de comprobante de ingresos si hay configurados para esta sucursal
     if ingresos_subtipos:
