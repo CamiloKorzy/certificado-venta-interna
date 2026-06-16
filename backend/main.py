@@ -2471,9 +2471,9 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
         conn_supa = get_supabase()
         cur_supa = conn_supa.cursor()
         if unidad_negocio == "Todas":
-            cur_supa.execute("SELECT tipo_movimiento, categoria, fecha, concepto, observaciones, importe, unidad_negocio FROM cert_ajustes_excel WHERE periodo = %s", (periodo,))
+            cur_supa.execute("SELECT tipo_movimiento, categoria, fecha_carga, concepto, observaciones, importe, unidad_negocio FROM cert_ajustes_excel WHERE periodo = %s", (periodo,))
         else:
-            cur_supa.execute("SELECT tipo_movimiento, categoria, fecha, concepto, observaciones, importe, unidad_negocio FROM cert_ajustes_excel WHERE unidad_negocio = %s AND periodo = %s", (unidad_negocio, periodo))
+            cur_supa.execute("SELECT tipo_movimiento, categoria, fecha_carga, concepto, observaciones, importe, unidad_negocio FROM cert_ajustes_excel WHERE unidad_negocio = %s AND periodo = %s", (unidad_negocio, periodo))
             
         rows_ajustes = cur_supa.fetchall()
         for r in rows_ajustes:

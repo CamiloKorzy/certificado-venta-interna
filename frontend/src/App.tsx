@@ -153,7 +153,7 @@ const HorizontalBarChart = ({ title, data, icon: Icon, colorTheme = "blue", show
   );
 };
 
-function Dashboard({ token, onLogout, defaultUnidad }: { token: string, onLogout: () => void, defaultUnidad?: string }) {
+function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: string, onLogout: () => void, defaultUnidad?: string, defaultPeriodo?: string }) {
   const [rawData, setRawData] = useState<any[]>([]);
   const [columns, setColumns] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -165,10 +165,10 @@ function Dashboard({ token, onLogout, defaultUnidad }: { token: string, onLogout
 
   // Filters state (Pending - modified by UI)
   const [pendingFilters, setPendingFilters] = useState({
-    periodo: [currentPeriod],
-    empresa: ['Todas'],
+    periodo: [defaultPeriodo || currentPeriod],
+    empresa: [defaultUnidad || 'Todas'],
     cliente: ['Todos'],
-    unidad: [defaultUnidad || 'Todas'],
+    unidad: ['Todas'],
     concepto: ['Todos'],
     estado: ['Todos'],
     fechaDesde: '',
@@ -1517,7 +1517,7 @@ export default function App() {
       {/* Content */}
       {view === 'proyectos' && <GestorInformes token={token} user={user} onOpenReport={(u: string, p: string) => { setGlobalUnidad(u); setGlobalPeriodo(p); setView('dashboard'); }} />}
       {view === 'dashboard' && <MainDashboard token={token} defaultUnidad={globalUnidad || user?.sucursales?.[0]} defaultPeriodo={globalPeriodo} />}
-      {view === 'ingresos' && <Dashboard token={token} onLogout={handleLogout} defaultUnidad={globalUnidad || user?.sucursales?.[0]} />}
+      {view === 'ingresos' && <Dashboard token={token} onLogout={handleLogout} defaultUnidad={globalUnidad || user?.sucursales?.[0]} defaultPeriodo={globalPeriodo} />}
       {view === 'gastos' && <Gastos token={token} defaultUnidad={globalUnidad || user?.sucursales?.[0]} defaultPeriodo={globalPeriodo} />}
       {view === 'asientos' && <Asientos token={token} defaultUnidad={globalUnidad || user?.sucursales?.[0]} defaultPeriodo={globalPeriodo} />}
       {view === 'rrhh' && <RRHH token={token} defaultUnidad={globalUnidad || user?.sucursales?.[0]} defaultPeriodo={globalPeriodo} />}
