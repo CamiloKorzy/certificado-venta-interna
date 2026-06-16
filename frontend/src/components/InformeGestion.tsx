@@ -327,6 +327,71 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
                   </div>
                 </div>
               </div>
+
+              {/* Tablas de detalle en Dashboard */}
+              <div className="mt-8 space-y-8">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-700 mb-4 border-b pb-2">Detalle de Ingresos</h3>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200 border">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Concepto</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Comprobante</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Cliente</th>
+                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Importe</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {data.ingresos.map((i: any, idx: number) => (
+                          <tr key={idx} className="hover:bg-gray-50">
+                            <td className="px-4 py-2 text-sm">{i.fecha?.substring(0, 10)}</td>
+                            <td className="px-4 py-2 text-sm">{i.concepto}</td>
+                            <td className="px-4 py-2 text-sm">{i.comprobante}</td>
+                            <td className="px-4 py-2 text-sm">{i.proveedor || '-'}</td>
+                            <td className="px-4 py-2 text-sm text-right text-green-700">$ {i.importe.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
+                          </tr>
+                        ))}
+                        {data.ingresos.length === 0 && (
+                          <tr><td colSpan={5} className="px-4 py-4 text-center text-gray-500">No hay ingresos detallados en este periodo</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-700 mb-4 border-b pb-2">Detalle de Gastos</h3>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200 border">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Concepto</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Comprobante</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Proveedor</th>
+                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Importe</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {data.gastos.map((i: any, idx: number) => (
+                          <tr key={idx} className="hover:bg-gray-50">
+                            <td className="px-4 py-2 text-sm">{i.fecha?.substring(0, 10)}</td>
+                            <td className="px-4 py-2 text-sm">{i.concepto}</td>
+                            <td className="px-4 py-2 text-sm">{i.comprobante}</td>
+                            <td className="px-4 py-2 text-sm">{i.proveedor || '-'}</td>
+                            <td className="px-4 py-2 text-sm text-right text-red-700">$ {i.importe.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
+                          </tr>
+                        ))}
+                        {data.gastos.length === 0 && (
+                          <tr><td colSpan={5} className="px-4 py-4 text-center text-gray-500">No hay gastos detallados en este periodo</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
