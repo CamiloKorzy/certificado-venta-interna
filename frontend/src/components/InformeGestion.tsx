@@ -179,31 +179,39 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
     XLSX.writeFile(wb, `RRHH_${unidad}_${periodoStr.replace('/', '-')}.xlsx`);
   };
 
-  const exportDashboardToxlsx = () => {
-    if (!data) return;
+  const exportIngresosToxlsx = () => {
+    if (!data || !data.ingresos || data.ingresos.length === 0) {
+      alert("No hay ingresos para exportar");
+      return;
+    }
     const wb = XLSX.utils.book_new();
-    if (data.ingresos && data.ingresos.length > 0) {
-      const wsIngresos = XLSX.utils.json_to_sheet(data.ingresos.map((i: any) => ({
-        Fecha: i.fecha?.substring(0, 10),
-        Concepto: i.concepto,
-        Comprobante: i.comprobante,
-        Solicitante: i.proveedor || '-',
-        Cantidad: i.cantidad || 0,
-        Importe: i.importe
-      })));
-      XLSX.utils.book_append_sheet(wb, wsIngresos, "Ingresos");
+    const wsIngresos = XLSX.utils.json_to_sheet(data.ingresos.map((i: any) => ({
+      Fecha: i.fecha?.substring(0, 10),
+      Concepto: i.concepto,
+      Comprobante: i.comprobante,
+      Solicitante: i.proveedor || '-',
+      Cantidad: i.cantidad || 0,
+      Importe: i.importe
+    })));
+    XLSX.utils.book_append_sheet(wb, wsIngresos, "Ingresos");
+    XLSX.writeFile(wb, `Ingresos_${unidad}_${periodoStr.replace('/', '-')}.xlsx`);
+  };
+
+  const exportGastosToxlsx = () => {
+    if (!data || !data.gastos || data.gastos.length === 0) {
+      alert("No hay gastos para exportar");
+      return;
     }
-    if (data.gastos && data.gastos.length > 0) {
-      const wsGastos = XLSX.utils.json_to_sheet(data.gastos.map((g: any) => ({
-        Fecha: g.fecha?.substring(0, 10),
-        Concepto: g.concepto,
-        Comprobante: g.comprobante,
-        Proveedor: g.proveedor || '-',
-        Importe: g.importe
-      })));
-      XLSX.utils.book_append_sheet(wb, wsGastos, "Gastos");
-    }
-    XLSX.writeFile(wb, `Dashboard_${unidad}_${periodoStr.replace('/', '-')}.xlsx`);
+    const wb = XLSX.utils.book_new();
+    const wsGastos = XLSX.utils.json_to_sheet(data.gastos.map((g: any) => ({
+      Fecha: g.fecha?.substring(0, 10),
+      Concepto: g.concepto,
+      Comprobante: g.comprobante,
+      Proveedor: g.proveedor || '-',
+      Importe: g.importe
+    })));
+    XLSX.utils.book_append_sheet(wb, wsGastos, "Gastos");
+    XLSX.writeFile(wb, `Egresos_${unidad}_${periodoStr.replace('/', '-')}.xlsx`);
   };
 
   const agrupadoPorRubro = (items: any[]) => {
@@ -289,9 +297,14 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
                 </button>
               )}
               {mode === 'dashboard' && data && (
-                <button onClick={exportDashboardToxlsx} className="px-4 py-2 bg-green-600 text-white rounded shadow hover:bg-green-700 transition flex items-center gap-2">
-                  <Download size={16} /> Exportar XLSX
-                </button>
+                <div className="flex gap-2">
+                  <button onClick={exportIngresosToxlsx} className="px-4 py-2 bg-green-600 text-white rounded shadow hover:bg-green-700 transition flex items-center gap-2">
+                    <Download size={16} /> Exportar Ingresos
+                  </button>
+                  <button onClick={exportGastosToxlsx} className="px-4 py-2 bg-red-600 text-white rounded shadow hover:bg-red-700 transition flex items-center gap-2">
+                    <Download size={16} /> Exportar Egresos
+                  </button>
+                </div>
               )}
             </div>
           </div>
