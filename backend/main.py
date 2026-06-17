@@ -2211,8 +2211,8 @@ def get_indicadores(user=Depends(get_current_user)):
                     fecha = str(r[3]) if r[3] else ""
                     if fecha and len(fecha) >= 10:
                         try:
-                            import datetime
-                            fecha = datetime.datetime.strptime(fecha[:10], '%Y-%m-%d').strftime('%d/%m/%Y')
+                            # Ya tenemos from datetime import datetime importado a nivel global
+                            fecha = datetime.strptime(fecha[:10], '%Y-%m-%d').strftime('%d/%m/%Y')
                         except:
                             pass
                             
