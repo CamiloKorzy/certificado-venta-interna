@@ -940,13 +940,6 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
                   Eliminar seleccionados ({selectedAjustes.size})
                 </button>
               )}
-              <button
-                onClick={downloadTemplate}
-                className="flex items-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm"
-              >
-                <Download size={14} />
-                Descargar Plantilla
-              </button>
 
               <div className="relative">
                 <input type="file" id="upload-ingresos" className="hidden" accept=".xlsx,.xls" onChange={handleFileUpload} />
@@ -1077,17 +1070,17 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-white border-b border-slate-200">
-                  <th className="px-6 py-4 w-12 text-center"></th>
-                  <th className="px-4 py-4 w-10 text-center bg-slate-50/50">
+                  <th className="px-3 py-3 w-8 text-center"></th>
+                  <th className="px-3 py-3 w-10 text-center bg-slate-50/50">
                     <input type="checkbox" onChange={handleSelectAllAjustes} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" />
                   </th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50">Fecha</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50">Comprobante</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50">Descripción</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50">Unidad de Negocio</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50">Prestador</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50">Estado</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50 text-right pl-12">Total Consolidado</th>
+                  <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50 whitespace-nowrap">Fecha</th>
+                  <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50 whitespace-nowrap">Comprobante</th>
+                  <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50">Descripción</th>
+                  <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50 whitespace-nowrap">Unidad de Negocio</th>
+                  <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50 whitespace-nowrap">Prestador</th>
+                  <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50">Estado</th>
+                  <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50 text-right pr-6 whitespace-nowrap">Total Consolidado</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -1104,10 +1097,10 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
                           }
                         }}
                       >
-                        <td className="px-6 py-4 text-slate-400 text-center">
+                        <td className="px-3 py-3 text-slate-400 text-center">
                           {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                         </td>
-                        <td className="px-4 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                        <td className="px-3 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                           {comp.origen === 'AJUSTE EXCEL' && comp.id_ajuste && (
                             <input 
                               type="checkbox" 
@@ -1117,19 +1110,19 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
                             />
                           )}
                         </td>
-                        <td className="px-6 py-4 text-sm text-slate-600">{comp.fecha}</td>
-                        <td className="px-6 py-4 text-sm"><span className="text-slate-900 font-bold bg-slate-100 px-2 py-1 rounded text-xs border border-slate-200">{comp.id}</span></td>
-                        <td className="px-6 py-4 text-sm text-slate-600 truncate max-w-[200px]" title={comp.descripcion}>{comp.descripcion}</td>
-                        <td className="px-6 py-4 text-sm text-slate-700 font-bold" title={comp.unidad}>{comp.unidad}</td>
-                        <td className="px-6 py-4 text-sm text-slate-700 font-medium truncate max-w-xs">{comp.cliente}</td>
-                        <td className="px-6 py-4 text-sm"><span className={`px-2 py-1 rounded text-xs font-bold border ${comp.estado === 'Autorizado' ? 'text-emerald-700 bg-emerald-50 border-emerald-100' : 'text-amber-700 bg-amber-50 border-amber-100'}`}>{comp.estado}</span></td>
-                        <td className="px-6 py-4 text-sm font-bold text-slate-800 text-right pl-12 whitespace-nowrap">${comp.total.toLocaleString('es-AR', {minimumFractionDigits: 2})}</td>
+                        <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">{comp.fecha}</td>
+                        <td className="px-4 py-3 text-sm"><span className="text-slate-900 font-bold bg-slate-100 px-2 py-1 rounded text-xs border border-slate-200 whitespace-nowrap">{comp.id}</span></td>
+                        <td className="px-4 py-3 text-sm text-slate-600 truncate max-w-[200px]" title={comp.descripcion}>{comp.descripcion}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700 font-bold whitespace-nowrap" title={comp.unidad}>{comp.unidad}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700 font-medium truncate max-w-xs">{comp.cliente}</td>
+                        <td className="px-4 py-3 text-sm whitespace-nowrap"><span className={`px-2 py-1 rounded text-xs font-bold border ${comp.estado === 'Autorizado' ? 'text-emerald-700 bg-emerald-50 border-emerald-100' : 'text-amber-700 bg-amber-50 border-amber-100'}`}>{comp.estado}</span></td>
+                        <td className="px-4 py-3 text-sm font-bold text-slate-800 text-right pr-6 whitespace-nowrap">${comp.total.toLocaleString('es-AR', {minimumFractionDigits: 2})}</td>
                       </tr>
                       
                       {/* Fila Expandible con Detalle */}
                       {isExpanded && (
                         <tr>
-                          <td colSpan={8} className="bg-slate-50/80 p-0 border-b border-slate-200">
+                          <td colSpan={9} className="bg-slate-50/80 p-0 border-b border-slate-200">
                             <div className="px-14 py-4">
                               <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
                                 <PackageCheck size={14} /> Ítems del Comprobante
@@ -1173,7 +1166,7 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
                 })}
                 {filteredGridData.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-6 py-16 text-center text-slate-400 font-medium">
+                    <td colSpan={9} className="px-6 py-16 text-center text-slate-400 font-medium">
                       <Search size={40} className="mx-auto text-slate-300 mb-3" />
                       Sin resultados. Ajuste los filtros para ver más información.
                     </td>
