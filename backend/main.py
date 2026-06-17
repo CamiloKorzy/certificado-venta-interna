@@ -593,23 +593,34 @@ async def upload_ajustes_excel(
     for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
         if not row or not any(row): continue
         
-        # If parameters were sent via form (new UI), the Excel file has 4 columns: Concepto, Categoría, Importe, Observaciones
-        if unidad and periodo and tipo:
-            unidad_negocio = str(unidad).strip()
-            periodo_val = str(periodo).strip()
-            tipo_mov = str(tipo).strip().upper()
-            concepto = str(row[0] or "").strip()
-            categoria = str(row[1] or "").strip()
-            importe_val = row[2]
-            observaciones = str(row[3] or "").strip() if len(row) > 3 else ""
-        else:
-            # Old format fallback just in case
+        # Detectar dinámicamente si es el formato viejo (7 columnas) o el nuevo (4 columnas)
+        # El formato viejo tiene INGRESO/COSTO en la columna 4 (índice 3)
+        if len(row) >= 6 and str(row[3] or "").strip().upper() in ["INGRESO", "GASTO", "COSTO"]:
+            # Formato viejo
             unidad_negocio = str(row[0] or "").strip()
             periodo_val = str(row[1] or "").strip()
             concepto = str(row[2] or "").strip()
             tipo_mov = str(row[3] or "").strip().upper()
             categoria = str(row[4] or "").strip()
             importe_val = row[5]
+            observaciones = str(row[6] or "").strip() if len(row) > 6 else ""
+        elif unidad and periodo and tipo:
+            # Formato nuevo (4 columnas) y parámetros recibidos
+            unidad_negocio = str(unidad).strip()
+            periodo_val = str(periodo).strip()
+            tipo_mov = str(tipo).strip().upper()
+            concepto = str(row[0] or "").strip()
+            categoria = str(row[1] or "").strip()
+            importe_val = row[2] if len(row) > 2 else None
+            observaciones = str(row[3] or "").strip() if len(row) > 3 else ""
+        else:
+            # Fallback
+            unidad_negocio = str(row[0] or "").strip()
+            periodo_val = str(row[1] or "").strip()
+            concepto = str(row[2] or "").strip()
+            tipo_mov = str(row[3] or "").strip().upper()
+            categoria = str(row[4] or "").strip()
+            importe_val = row[5] if len(row) > 5 else None
             observaciones = str(row[6] or "").strip() if len(row) > 6 else ""
         
         if not unidad_negocio or not periodo_val or not tipo_mov or importe_val is None:
