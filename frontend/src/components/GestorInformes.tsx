@@ -40,10 +40,13 @@ export default function GestorInformes({ token, onOpenReport, user }: any) {
       });
       if (res.ok) {
         const json = await res.json();
-        setInformes(json);
+        console.log('[GestorInformes] Informes cargados:', json);
+        setInformes(Array.isArray(json) ? json : []);
+      } else {
+        console.error('[GestorInformes] Error HTTP:', res.status, await res.text());
       }
     } catch (e) {
-      console.error(e);
+      console.error('[GestorInformes] Fetch error:', e);
     }
     setLoading(false);
   };
