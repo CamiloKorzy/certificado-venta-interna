@@ -2104,7 +2104,7 @@ function Configuracion({ token }: { token: string }) {
 // ═══════════════════════════════════════════════════════
 function MainDashboard({ token, defaultUnidad, defaultPeriodo }: { token: string, defaultUnidad?: string, defaultPeriodo?: string }) {
   return (
-    <div className="bg-slate-50 min-h-[80vh]">
+    <div className="bg-slate-50 min-h-screen pb-12 overflow-x-hidden">
       <InformeGestion token={token} mode="dashboard" defaultUnidad={defaultUnidad} defaultPeriodo={defaultPeriodo} />
     </div>
   );
@@ -2112,7 +2112,7 @@ function MainDashboard({ token, defaultUnidad, defaultPeriodo }: { token: string
 
 function Costos({ token, defaultUnidad, defaultPeriodo }: { token: string, defaultUnidad?: string, defaultPeriodo?: string }) {
   return (
-    <div className="bg-slate-50 min-h-[80vh]">
+    <div className="bg-slate-50 min-h-screen pb-12 overflow-x-hidden">
       <InformeGestion token={token} mode="costos" defaultUnidad={defaultUnidad} defaultPeriodo={defaultPeriodo} />
     </div>
   );
@@ -2120,7 +2120,7 @@ function Costos({ token, defaultUnidad, defaultPeriodo }: { token: string, defau
 
 function Asientos({ token, defaultUnidad, defaultPeriodo }: { token: string, defaultUnidad?: string, defaultPeriodo?: string }) {
   return (
-    <div className="bg-slate-50 min-h-[80vh]">
+    <div className="bg-slate-50 min-h-screen pb-12 overflow-x-hidden">
       <InformeGestion token={token} mode="asientos" defaultUnidad={defaultUnidad} defaultPeriodo={defaultPeriodo} />
     </div>
   );
@@ -2128,7 +2128,7 @@ function Asientos({ token, defaultUnidad, defaultPeriodo }: { token: string, def
 
 function RRHH({ token, defaultUnidad, defaultPeriodo }: { token: string, defaultUnidad?: string, defaultPeriodo?: string }) {
   return (
-    <div className="bg-slate-50 min-h-[80vh]">
+    <div className="bg-slate-50 min-h-screen pb-12 overflow-x-hidden">
       <InformeGestion token={token} mode="rrhh" defaultUnidad={defaultUnidad} defaultPeriodo={defaultPeriodo} />
     </div>
   );
