@@ -28,6 +28,14 @@ const getDefaultPeriod = () => {
 };
 
 export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Activos', defaultPeriodo = getDefaultPeriod(), mode = 'dashboard' }: { token: string, defaultUnidad?: string, defaultPeriodo?: string, mode?: 'dashboard' | 'costos' | 'asientos' | 'rrhh' }) {
+  const user = React.useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem('cert_user') || 'null');
+    } catch {
+      return null;
+    }
+  }, []);
+
   const [customDialog, setCustomDialog] = useState<{
     isOpen: boolean;
     type: 'alert' | 'confirm';
@@ -620,9 +628,9 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
                       Presentar Período
                     </button>
                   )}
-                  {estadoCierre?.estado === 'CERRADO' && (
+                  {estadoCierre?.estado === 'CERRADO' && user?.rol === 'admin' && (
                     <button onClick={handleReabrir} className="px-4 py-2 border border-red-600 text-red-600 rounded shadow hover:bg-red-50 transition">
-                      Reabrir (Solo Admin)
+                      Reabrir Período
                     </button>
                   )}
                 </>

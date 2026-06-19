@@ -1,8 +1,165 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { FileText, Plus, FolderLock, FolderOpen, Calendar, Building, Loader2 } from 'lucide-react';
+import { FileText, Plus, FolderLock, FolderOpen, Calendar, Building, Loader2, Info, AlertCircle } from 'lucide-react';
 import { MultiSelect } from './MultiSelect';
 
 export default function GestorInformes({ token, onOpenReport, user }: any) {
+  const [customDialog, setCustomDialog] = useState<{
+    isOpen: boolean;
+    type: 'alert' | 'confirm';
+    title?: string;
+    message: string;
+    onConfirm?: () => void;
+    onCancel?: () => void;
+  }>({ isOpen: false, type: 'alert', message: '' });
+
+  const showConfirm = (message: string, title: string = 'Confirmación') => {
+    return new Promise<boolean>((resolve) => {
+      setCustomDialog({
+        isOpen: true,
+        type: 'confirm',
+        title,
+        message,
+        onConfirm: () => {
+          setCustomDialog(prev => ({ ...prev, isOpen: false }));
+          resolve(true);
+        },
+        onCancel: () => {
+          setCustomDialog(prev => ({ ...prev, isOpen: false }));
+          resolve(false);
+        }
+      });
+    });
+  };
+
+  const showAlert = (message: string, title: string = 'Mensaje') => {
+    return new Promise<void>((resolve) => {
+      setCustomDialog({
+        isOpen: true,
+        type: 'alert',
+        title,
+        message,
+        onConfirm: () => {
+          setCustomDialog(prev => ({ ...prev, isOpen: false }));
+          resolve();
+        }
+      });
+    });
+  };
+
+  const renderCustomDialog = () => {
+    if (!customDialog.isOpen) return null;
+    return (
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-2xl w-full max-w-md flex flex-col overflow-hidden transform transition-all scale-100">
+          <div className="p-6 flex flex-col items-center text-center space-y-4">
+            <div className={`p-3 rounded-full ${customDialog.type === 'confirm' ? 'bg-amber-50 text-amber-500 border border-amber-100' : 'bg-blue-50 text-blue-600 border border-blue-100'}`}>
+              {customDialog.type === 'confirm' ? (
+                <AlertCircle size={28} />
+              ) : (
+                <Info size={28} />
+              )}
+            </div>
+            <div className="space-y-2">
+              <h3 className="font-bold text-slate-800 text-lg">
+                {customDialog.title || (customDialog.type === 'confirm' ? 'Confirmación' : 'Mensaje')}
+              </h3>
+              <p className="text-sm text-slate-500 leading-relaxed whitespace-pre-line">
+                {customDialog.message}
+              </p>
+            </div>
+          </div>
+          <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-center gap-3">
+            {customDialog.type === 'confirm' ? (
+              <>
+                <button
+                  onClick={() => {
+                    if (customDialog.onCancel) customDialog.onCancel();
+                  }}
+                  className="flex-grow bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold py-2.5 px-4 rounded-xl text-sm transition-colors shadow-sm"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    if (customDialog.onConfirm) customDialog.onConfirm();
+                  }}
+                  className="flex-grow bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition-colors shadow-sm"
+                >
+                  Aceptar
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => {
+                  if (customDialog.onConfirm) customDialog.onConfirm();
+                }}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition-colors shadow-sm"
+              >
+                Aceptar
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const handlePresentar = async (inf: any) => {
+    const [y, m] = inf.periodo.split('-');
+    const confirmed = await showConfirm(`¿Estás seguro de presentar el período ${m}/${y} para ${inf.unidad_negocio}?`);
+    if (!confirmed) return;
+    try {
+      const res = await fetch('/api/informes/cerrar', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          unidad_negocio: inf.unidad_negocio,
+          periodo: inf.periodo,
+          usuario: user?.email || 'Usuario'
+        })
+      });
+      if (!res.ok) {
+         const j = await res.json();
+         throw new Error(j.detail || "Error al presentar periodo");
+      }
+      await showAlert("Periodo presentado correctamente", "Éxito");
+      fetchInformes();
+    } catch(e: any) {
+      await showAlert(e.message, "Error");
+    }
+  };
+
+  const handleReabrir = async (inf: any) => {
+    const [y, m] = inf.periodo.split('-');
+    const confirmed = await showConfirm(`¿Seguro que deseas reabrir el período ${m}/${y} para ${inf.unidad_negocio}?`);
+    if (!confirmed) return;
+    try {
+      const res = await fetch('/api/informes/reabrir', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          unidad_negocio: inf.unidad_negocio,
+          periodo: inf.periodo,
+          usuario: user?.email || 'Usuario'
+        })
+      });
+      if (!res.ok) {
+         const j = await res.json();
+         throw new Error(j.detail || "Error al reabrir periodo");
+      }
+      await showAlert("Periodo reabierto correctamente", "Éxito");
+      fetchInformes();
+    } catch(e: any) {
+      await showAlert(e.message, "Error");
+    }
+  };
+
   const [informes, setInformes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [unidades, setUnidades] = useState<any[]>([]);
@@ -160,10 +317,26 @@ export default function GestorInformes({ token, onOpenReport, user }: any) {
                     }
                   </td>
                   <td className="p-4 text-sm text-slate-500">{inf.usuario_apertura}</td>
-                  <td className="p-4">
-                    <button onClick={() => onOpenReport(inf.unidad_negocio, perStr)} className="text-blue-600 hover:underline text-sm font-semibold">
+                  <td className="p-4 flex items-center gap-4">
+                    <button onClick={() => onOpenReport(inf.unidad_negocio, perStr)} className="text-blue-600 hover:text-blue-800 text-sm font-bold">
                       Abrir Proyecto
                     </button>
+                    {inf.estado === 'ABIERTO' && (
+                      <button 
+                        onClick={() => handlePresentar(inf)}
+                        className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-bold transition shadow-sm"
+                      >
+                        Presentar Período
+                      </button>
+                    )}
+                    {inf.estado === 'CERRADO' && user?.rol === 'admin' && (
+                      <button 
+                        onClick={() => handleReabrir(inf)}
+                        className="px-3 py-1 border border-red-600 text-red-600 hover:bg-red-50 rounded text-xs font-bold transition shadow-sm"
+                      >
+                        Reabrir
+                      </button>
+                    )}
                   </td>
                 </tr>
               )
@@ -186,6 +359,7 @@ export default function GestorInformes({ token, onOpenReport, user }: any) {
           </tbody>
         </table>
       </div>
+      {renderCustomDialog()}
     </div>
   );
 }
