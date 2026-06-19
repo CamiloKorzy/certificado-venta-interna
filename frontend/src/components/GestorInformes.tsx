@@ -106,7 +106,10 @@ export default function GestorInformes({ token, onOpenReport, user }: any) {
 
   const handlePresentar = async (inf: any) => {
     const [y, m] = inf.periodo.split('-');
-    const confirmed = await showConfirm(`¿Estás seguro de presentar el período ${m}/${y} para ${inf.unidad_negocio}?`);
+    const confirmed = await showConfirm(
+      `¿Estás seguro de presentar el período ${m}/${y} para la sucursal "${inf.unidad_negocio}"?\n\nUna vez presentado, no podrás incorporar ni modificar datos de este período y sucursal.`,
+      "Confirmar Cierre"
+    );
     if (!confirmed) return;
     try {
       const res = await fetch('/api/informes/cerrar', {

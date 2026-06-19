@@ -482,57 +482,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
     loadInforme();
   }, [unidad, periodoStr, token]);
 
-  const handlePresentar = async () => {
-    const p = parsePeriodo(periodoStr);
-    try {
-      const res = await authFetch(`/api/informes/cerrar`, token, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          unidad_negocio: unidad,
-          periodo: p,
-          usuario: JSON.parse(localStorage.getItem('cert_user') || '{}')?.email || 'Usuario'
-        })
-      });
-      if (!res.ok) {
-         const j = await res.json();
-         throw new Error(j.detail || "Error al presentar periodo");
-      }
-      await showAlert("Periodo presentado correctamente", "Éxito");
-      loadInforme();
-    } catch(e: any) {
-      await showAlert(e.message, "Error");
-    }
-  };
 
-  const handleReabrir = async () => {
-    const confirmed = await showConfirm("¿Seguro que deseas reabrir el periodo?");
-    if (!confirmed) return;
-    const p = parsePeriodo(periodoStr);
-    try {
-      const res = await authFetch(`/api/informes/reabrir`, token, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          unidad_negocio: unidad,
-          periodo: p,
-          usuario: JSON.parse(localStorage.getItem('cert_user') || '{}')?.email || 'Usuario'
-        })
-      });
-      if (!res.ok) {
-         const j = await res.json();
-         throw new Error(j.detail || "Error al reabrir periodo");
-      }
-      await showAlert("Periodo reabierto correctamente", "Éxito");
-      loadInforme();
-    } catch(e: any) {
-      await showAlert(e.message, "Error");
-    }
-  };
 
   const exportRRHHToxlsx = () => {
     if (!rrhhData || !rrhhData.legajos) return;
@@ -623,16 +573,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
                       el: {new Date(estadoCierre?.fecha_cierre).toLocaleString()}
                     </div>
                   )}
-                  {estadoCierre?.estado === 'ABIERTO' && (
-                    <button onClick={handlePresentar} className="px-4 py-2 bg-blue-600 text-white rounded shadow hover:bg-blue-700 transition">
-                      Presentar Período
-                    </button>
-                  )}
-                  {estadoCierre?.estado === 'CERRADO' && user?.rol === 'admin' && (
-                    <button onClick={handleReabrir} className="px-4 py-2 border border-red-600 text-red-600 rounded shadow hover:bg-red-50 transition">
-                      Reabrir Período
-                    </button>
-                  )}
+
                 </>
               )}
               {mode === 'rrhh' && (
