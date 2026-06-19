@@ -46,7 +46,16 @@ def check_informe_cerrado(empresa: str, periodo: str, modulo: str):
         cur.close()
         conn.close()
         if row and row[0] == 'CERRADO' and row[1]:
-            return row[1].get(modulo)
+            data = row[1].get(modulo)
+            if data and isinstance(data, list):
+                for item in data:
+                    if isinstance(item, dict) and "categoria" in item:
+                        db_cat = item.get("categoria") or "Ajuste Manual"
+                        if db_cat == "Ajuste Excel":
+                            item["categoria"] = "Ingresos adicionales" if item.get("tipo_movimiento") == "INGRESO" else "Egresos adicionales"
+                        elif db_cat == "Gastos de Compra":
+                            item["categoria"] = "Costos"
+            return data
     except:
         pass
     return None
@@ -676,7 +685,10 @@ async def upload_ajustes_excel(
                 errors.append(f"Fila {row_idx}: Importe '{importe_val}' no es un número.")
                 continue
                 
-            categoria = "Ajuste Excel"
+            if tipo_mov == "INGRESO":
+                categoria = "Ingresos adicionales"
+            else:
+                categoria = "Egresos adicionales"
             observaciones = comprobante
             fecha_carga = parsed_fecha
         else:
@@ -752,11 +764,20 @@ def list_ajustes_excel(current_user = Depends(get_current_user)):
     cur_supa.close()
     conn_supa.close()
     
-    return [{
-        "id": r[0], "unidad_negocio": r[1], "periodo": r[2], "concepto": r[3],
-        "tipo_movimiento": r[4], "categoria": r[5], "importe": float(r[6]),
-        "observaciones": r[7], "fecha_carga": str(r[8]), "usuario_carga": r[9]
-    } for r in rows]
+    ajustes = []
+    for r in rows:
+        db_cat = r[5] or "Ajuste Manual"
+        if db_cat == "Ajuste Excel":
+            categoria_label = "Ingresos adicionales" if r[4] == "INGRESO" else "Egresos adicionales"
+        else:
+            categoria_label = db_cat
+            
+        ajustes.append({
+            "id": r[0], "unidad_negocio": r[1], "periodo": r[2], "concepto": r[3],
+            "tipo_movimiento": r[4], "categoria": categoria_label, "importe": float(r[6]),
+            "observaciones": r[7], "fecha_carga": str(r[8]), "usuario_carga": r[9]
+        })
+    return ajustes
 
 @app.delete("/api/config/ajustes-excel/{id}")
 def delete_ajuste_excel(id: int, current_user = Depends(get_current_user)):
@@ -2493,7 +2514,7 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
         item = {
             "origen": "EXCEL",
             "tipo_movimiento": ex[0],
-            "categoria": "Ajuste Excel",
+            "categoria": "Ingresos adicionales" if ex[0].upper() == 'INGRESO' else "Egresos adicionales",
             "fecha": str(ex[1]),
             "concepto": ex[2],
             "comprobante": "EXCEL",
@@ -2676,7 +2697,7 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
                     gastos.append({
                         "origen": "FINNEGANS",
                         "tipo_movimiento": "EGRESO",
-                        "categoria": "Gastos de Compra",  # O r[1] si queremos que sea el tipo de documento
+                        "categoria": "Costos",  # O r[1] si queremos que sea el tipo de documento
                         "fecha": str(r[0]) if r[0] else None,
                         "concepto": f"{r[1]} - {r[2] or 'Sin Proveedor'}",
                         "comprobante": r[3] or "S/N",
@@ -2707,11 +2728,18 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
             
         rows_ajustes = cur_supa.fetchall()
         for r in rows_ajustes:
+            db_cat = r[2] or "Ajuste Manual"
+            if db_cat == "Ajuste Excel":
+                categoria_label = "Ingresos adicionales" if r[1] == "INGRESO" else "Egresos adicionales"
+            elif db_cat == "Gastos de Compra":
+                categoria_label = "Costos"
+            else:
+                categoria_label = db_cat
             item = {
                 "origen": "AJUSTE EXCEL",
                 "id_ajuste": r[0],
                 "tipo_movimiento": "INGRESO" if r[1] == "INGRESO" else "EGRESO",
-                "categoria": r[2] or "Ajuste Manual",
+                "categoria": categoria_label,
                 "fecha": str(r[3]) if r[3] else None,
                 "concepto": f"[{r[7]}] {r[4]}",
                 "comprobante": r[5] or "-",
@@ -2786,10 +2814,17 @@ def get_informe_mensual(unidad_negocio: str, periodo: str, current_user = Depend
             ingresos = []
             gastos = []
             for r in rows:
+                db_cat = r[2] or "Ajuste Manual"
+                if db_cat == "Ajuste Excel":
+                    categoria_label = "Ingresos adicionales" if r[1] == "INGRESO" else "Egresos adicionales"
+                elif db_cat == "Gastos de Compra":
+                    categoria_label = "Costos"
+                else:
+                    categoria_label = db_cat
                 item = {
                     "origen": r[0],
                     "tipo_movimiento": r[1],
-                    "categoria": r[2],
+                    "categoria": categoria_label,
                     "fecha": str(r[3]) if r[3] else None,
                     "concepto": r[4],
                     "comprobante": r[5],
