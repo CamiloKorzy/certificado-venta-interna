@@ -15,7 +15,7 @@ except ImportError:
 
 JWT_SECRET = os.environ.get("JWT_SECRET", "cert_ventas_interno_secret_2026")
 JWT_ALGORITHM = "HS256"
-JWT_EXPIRATION_HOURS = 24
+JWT_EXPIRATION_HOURS = 72
 
 # Salt para el hash de contraseñas
 SALT = os.environ.get("HASH_SALT", "cee_cert_2026_salt")

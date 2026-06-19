@@ -20,6 +20,12 @@ export default function GestorInformes({ token, onOpenReport, user }: any) {
       const res = await fetch('/api/mis-unidades', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      if (res.status === 401) {
+        localStorage.removeItem('cert_token');
+        localStorage.removeItem('cert_user');
+        window.location.reload();
+        return;
+      }
       if (res.ok) {
         const json = await res.json();
         setUnidades(json);
@@ -37,6 +43,12 @@ export default function GestorInformes({ token, onOpenReport, user }: any) {
       const res = await fetch('/api/informes/lista', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      if (res.status === 401) {
+        localStorage.removeItem('cert_token');
+        localStorage.removeItem('cert_user');
+        window.location.reload();
+        return;
+      }
       if (res.ok) {
         const json = await res.json();
         setInformes(Array.isArray(json) ? json : []);
@@ -121,8 +133,8 @@ export default function GestorInformes({ token, onOpenReport, user }: any) {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-        <table className="w-full text-left">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-x-auto">
+        <table className="w-full min-w-[800px] text-left">
           <thead className="bg-slate-50 text-slate-600 text-sm border-b border-slate-200">
             <tr>
               <th className="p-4">Periodo</th>

@@ -3,6 +3,23 @@ import { MultiSelect } from './MultiSelect';
 import { Download, Search, UploadCloud, Loader2, Settings, X, Trash2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
+const authFetch = async (url: string, token: string, options: RequestInit = {}) => {
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      ...(options.headers || {})
+    }
+  });
+  if (res.status === 401) {
+    localStorage.removeItem('cert_token');
+    localStorage.removeItem('cert_user');
+    window.location.reload();
+    throw new Error('Sesión expirada');
+  }
+  return res;
+};
+
 const getDefaultPeriod = () => {
   const d = new Date();
   const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -41,9 +58,9 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
     
     setUploading(true);
     try {
-      await fetch('/api/config/ajustes-excel/bulk', {
+      await authFetch('/api/config/ajustes-excel/bulk', token, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: Array.from(selectedAjustes) })
       });
       setSelectedAjustes(new Set());
@@ -83,9 +100,8 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
     formData.append("tipo", tipoMovimiento);
 
     try {
-      const res = await fetch('/api/config/ajustes-excel', {
+      const res = await authFetch('/api/config/ajustes-excel', token, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
         body: formData
       });
       if (!res.ok) {
@@ -125,9 +141,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
   const fetchAjustes = useCallback(async () => {
     setLoadingAjustes(true);
     try {
-      const res = await fetch('/api/config/ajustes-excel', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const res = await authFetch('/api/config/ajustes-excel', token);
       if (res.ok) {
         const json = await res.json();
         const filtered = (json || []).filter((a: any) => 
@@ -152,9 +166,8 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
   const handleDeleteAjuste = async (id: number) => {
     if (!window.confirm("¿Estás seguro de eliminar este registro importado? Esto modificará los indicadores.")) return;
     try {
-      const res = await fetch(`/api/config/ajustes-excel/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
+      const res = await authFetch(`/api/config/ajustes-excel/${id}`, token, {
+        method: 'DELETE'
       });
       if (!res.ok) throw new Error("Error en servidor");
       fetchAjustes();
@@ -182,9 +195,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
   useEffect(() => {
     const fetchUnidades = async () => {
       try {
-        const res = await fetch('/api/mis-unidades', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const res = await authFetch('/api/mis-unidades', token);
         if (res.ok) {
           const json = await res.json();
           setUnidades(json);
@@ -214,9 +225,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
     setError('');
     try {
       const pStr = parsePeriodo(periodoStr);
-      const estadoRes = await fetch(`/api/informes/estado?unidad_negocio=${encodeURIComponent(unidad)}&periodo=${encodeURIComponent(pStr!)}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const estadoRes = await authFetch(`/api/informes/estado?unidad_negocio=${encodeURIComponent(unidad)}&periodo=${encodeURIComponent(pStr!)}`, token);
       if (estadoRes.ok) {
         const estadoJson = await estadoRes.json();
         setEstadoCierre(estadoJson);
@@ -227,21 +236,15 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
         const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
         const fecha_desde = `${p}-01`;
         const fecha_hasta = `${p}-${lastDay}`;
-        const res = await fetch(`/api/asientos?empresa=${encodeURIComponent(unidad)}&fecha_desde=${encodeURIComponent(fecha_desde)}&fecha_hasta=${encodeURIComponent(fecha_hasta)}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const res = await authFetch(`/api/asientos?empresa=${encodeURIComponent(unidad)}&fecha_desde=${encodeURIComponent(fecha_desde)}&fecha_hasta=${encodeURIComponent(fecha_hasta)}`, token);
         if (!res.ok) throw new Error("Error al obtener asientos");
         setAsientosData(await res.json());
       } else if (mode === 'rrhh') {
-        const res = await fetch(`/api/rrhh?empresa=${encodeURIComponent(unidad)}&periodo=${encodeURIComponent(p)}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const res = await authFetch(`/api/rrhh?empresa=${encodeURIComponent(unidad)}&periodo=${encodeURIComponent(p)}`, token);
         if (!res.ok) throw new Error("Error al obtener RRHH");
         setRrhhData(await res.json());
       } else {
-        const res = await fetch(`/api/informes/mensual?unidad_negocio=${encodeURIComponent(unidad)}&periodo=${encodeURIComponent(p)}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const res = await authFetch(`/api/informes/mensual?unidad_negocio=${encodeURIComponent(unidad)}&periodo=${encodeURIComponent(p)}`, token);
         if (!res.ok) throw new Error("Error al obtener informe");
         const json = await res.json();
         setData(json);
@@ -260,11 +263,10 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
   const handlePresentar = async () => {
     const p = parsePeriodo(periodoStr);
     try {
-      const res = await fetch(`/api/informes/cerrar`, {
+      const res = await authFetch(`/api/informes/cerrar`, token, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           unidad_negocio: unidad,
@@ -287,11 +289,10 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
     if (!window.confirm("¿Seguro que deseas reabrir el periodo?")) return;
     const p = parsePeriodo(periodoStr);
     try {
-      const res = await fetch(`/api/informes/reabrir`, {
+      const res = await authFetch(`/api/informes/reabrir`, token, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           unidad_negocio: unidad,
@@ -590,7 +591,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
               </div>
               <div>
                 <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200 border">
+                  <table className="w-full min-w-[800px] divide-y divide-gray-200 border">
                     <thead className="bg-gray-50">
                       <tr>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
@@ -623,7 +624,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
           {mode === 'asientos' && asientosData && (
             <div className="space-y-6 mt-8">
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 border">
+                <table className="w-full min-w-[800px] divide-y divide-gray-200 border">
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
@@ -694,7 +695,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
               </div>
 
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 border">
+                <table className="w-full min-w-[1200px] divide-y divide-gray-200 border">
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Legajo</th>

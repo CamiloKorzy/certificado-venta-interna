@@ -1066,10 +1066,10 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
             </div>
           </div>
 
-          <div className="overflow-x-auto w-full">
-            <table className="w-full text-left border-collapse">
+          <div className="overflow-x-auto w-full border border-slate-200 rounded-2xl shadow-sm bg-white">
+            <table className="w-full min-w-[1200px] text-left border-collapse">
               <thead>
-                <tr className="bg-white border-b border-slate-200">
+                <tr className="bg-slate-50 border-b border-slate-200">
                   <th className="px-3 py-3 w-8 text-center"></th>
                   <th className="px-3 py-3 w-10 text-center bg-slate-50/50">
                     <input type="checkbox" onChange={handleSelectAllAjustes} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" />
@@ -1112,9 +1112,15 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
                         </td>
                         <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">{comp.fecha}</td>
                         <td className="px-4 py-3 text-sm"><span className="text-slate-900 font-bold bg-slate-100 px-2 py-1 rounded text-xs border border-slate-200 whitespace-nowrap">{comp.id}</span></td>
-                        <td className="px-4 py-3 text-sm text-slate-600 truncate max-w-[200px]" title={comp.descripcion}>{comp.descripcion}</td>
-                        <td className="px-4 py-3 text-sm text-slate-700 font-bold whitespace-nowrap" title={comp.unidad}>{comp.unidad}</td>
-                        <td className="px-4 py-3 text-sm text-slate-700 font-medium truncate max-w-xs">{comp.cliente}</td>
+                        <td className="px-4 py-3 text-sm text-slate-600 max-w-[200px]" title={comp.descripcion}>
+                          <div className="truncate">{comp.descripcion}</div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-700 font-bold max-w-[220px]" title={comp.unidad}>
+                          <div className="truncate">{comp.unidad}</div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-700 font-medium max-w-[200px]" title={comp.cliente}>
+                          <div className="truncate">{comp.cliente}</div>
+                        </td>
                         <td className="px-4 py-3 text-sm whitespace-nowrap"><span className={`px-2 py-1 rounded text-xs font-bold border ${comp.estado === 'Autorizado' ? 'text-emerald-700 bg-emerald-50 border-emerald-100' : 'text-amber-700 bg-amber-50 border-amber-100'}`}>{comp.estado}</span></td>
                         <td className="px-4 py-3 text-sm font-bold text-slate-800 text-right pr-6 whitespace-nowrap">${comp.total.toLocaleString('es-AR', {minimumFractionDigits: 2})}</td>
                       </tr>
