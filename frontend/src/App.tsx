@@ -155,6 +155,107 @@ const HorizontalBarChart = ({ title, data, icon: Icon, colorTheme = "blue", show
 };
 
 function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: string, onLogout: () => void, defaultUnidad?: string, defaultPeriodo?: string }) {
+  const [customDialog, setCustomDialog] = useState<{
+    isOpen: boolean;
+    type: 'alert' | 'confirm';
+    title?: string;
+    message: string;
+    onConfirm?: () => void;
+    onCancel?: () => void;
+  }>({ isOpen: false, type: 'alert', message: '' });
+
+  const showConfirm = (message: string, title: string = 'Confirmación') => {
+    return new Promise<boolean>((resolve) => {
+      setCustomDialog({
+        isOpen: true,
+        type: 'confirm',
+        title,
+        message,
+        onConfirm: () => {
+          setCustomDialog(prev => ({ ...prev, isOpen: false }));
+          resolve(true);
+        },
+        onCancel: () => {
+          setCustomDialog(prev => ({ ...prev, isOpen: false }));
+          resolve(false);
+        }
+      });
+    });
+  };
+
+  const showAlert = (message: string, title: string = 'Mensaje') => {
+    return new Promise<void>((resolve) => {
+      setCustomDialog({
+        isOpen: true,
+        type: 'alert',
+        title,
+        message,
+        onConfirm: () => {
+          setCustomDialog(prev => ({ ...prev, isOpen: false }));
+          resolve();
+        }
+      });
+    });
+  };
+
+  const renderCustomDialog = () => {
+    if (!customDialog.isOpen) return null;
+    return (
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-2xl w-full max-w-md flex flex-col overflow-hidden transform transition-all scale-100">
+          <div className="p-6 flex flex-col items-center text-center space-y-4">
+            <div className={`p-3 rounded-full ${customDialog.type === 'confirm' ? 'bg-amber-50 text-amber-500 border border-amber-100' : 'bg-blue-50 text-blue-600 border border-blue-100'}`}>
+              {customDialog.type === 'confirm' ? (
+                <AlertCircle size={28} />
+              ) : (
+                <Info size={28} />
+              )}
+            </div>
+            <div className="space-y-2">
+              <h3 className="font-bold text-slate-800 text-lg">
+                {customDialog.title || (customDialog.type === 'confirm' ? 'Confirmación' : 'Mensaje')}
+              </h3>
+              <p className="text-sm text-slate-500 leading-relaxed whitespace-pre-line">
+                {customDialog.message}
+              </p>
+            </div>
+          </div>
+          <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-center gap-3">
+            {customDialog.type === 'confirm' ? (
+              <>
+                <button
+                  onClick={() => {
+                    if (customDialog.onCancel) customDialog.onCancel();
+                  }}
+                  className="flex-grow bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold py-2.5 px-4 rounded-xl text-sm transition-colors shadow-sm"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    if (customDialog.onConfirm) customDialog.onConfirm();
+                  }}
+                  className="flex-grow bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition-colors shadow-sm"
+                >
+                  Aceptar
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => {
+                  if (customDialog.onConfirm) customDialog.onConfirm();
+                }}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition-colors shadow-sm"
+              >
+                Aceptar
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const [rawData, setRawData] = useState<any[]>([]);
   const [columns, setColumns] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -205,7 +306,8 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
   
   const handleDeleteSelected = async () => {
     if (selectedAjustes.size === 0) return;
-    if (!confirm(`¿Eliminar ${selectedAjustes.size} ajustes seleccionados?`)) return;
+    const confirmed = await showConfirm(`¿Eliminar ${selectedAjustes.size} ajustes seleccionados?`);
+    if (!confirmed) return;
     
     setUploading(true);
     try {
@@ -220,7 +322,7 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
       });
     } catch (e) {
       console.error(e);
-      alert('Error eliminando ajustes');
+      await showAlert('Error eliminando ajustes');
     } finally {
       setUploading(false);
     }
@@ -427,7 +529,8 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
   }, [showAjustesModal, fetchAjustes]);
 
   const handleDeleteAjuste = async (id: number) => {
-    if (!window.confirm("¿Estás seguro de eliminar este registro importado? Esto modificará los indicadores.")) return;
+    const confirmed = await showConfirm("¿Estás seguro de eliminar este registro importado? Esto modificará los indicadores.");
+    if (!confirmed) return;
     try {
       await apiFetch(`/api/config/ajustes-excel/${id}`, token, { method: 'DELETE' });
       fetchAjustes();
@@ -436,7 +539,7 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
           setColumns(res_json.columns || []);
       });
     } catch(err: any) {
-      alert("Error al eliminar: " + err.message);
+      await showAlert("Error al eliminar: " + err.message);
     }
   };
 
@@ -1435,6 +1538,7 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
         </div>
 
       </div>
+      {renderCustomDialog()}
     </div>
   );
 }
@@ -1511,6 +1615,107 @@ function LoginScreen({ onLogin }: { onLogin: (token: string, user: any) => void 
 const ROLES_MAP: Record<string, string> = { admin: 'Administrador', responsable_un: 'Responsable U.N.', consulta: 'Solo Consulta' };
 
 function Configuracion({ token }: { token: string }) {
+  const [customDialog, setCustomDialog] = useState<{
+    isOpen: boolean;
+    type: 'alert' | 'confirm';
+    title?: string;
+    message: string;
+    onConfirm?: () => void;
+    onCancel?: () => void;
+  }>({ isOpen: false, type: 'alert', message: '' });
+
+  const showConfirm = (message: string, title: string = 'Confirmación') => {
+    return new Promise<boolean>((resolve) => {
+      setCustomDialog({
+        isOpen: true,
+        type: 'confirm',
+        title,
+        message,
+        onConfirm: () => {
+          setCustomDialog(prev => ({ ...prev, isOpen: false }));
+          resolve(true);
+        },
+        onCancel: () => {
+          setCustomDialog(prev => ({ ...prev, isOpen: false }));
+          resolve(false);
+        }
+      });
+    });
+  };
+
+  const showAlert = (message: string, title: string = 'Mensaje') => {
+    return new Promise<void>((resolve) => {
+      setCustomDialog({
+        isOpen: true,
+        type: 'alert',
+        title,
+        message,
+        onConfirm: () => {
+          setCustomDialog(prev => ({ ...prev, isOpen: false }));
+          resolve();
+        }
+      });
+    });
+  };
+
+  const renderCustomDialog = () => {
+    if (!customDialog.isOpen) return null;
+    return (
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-2xl w-full max-w-md flex flex-col overflow-hidden transform transition-all scale-100">
+          <div className="p-6 flex flex-col items-center text-center space-y-4">
+            <div className={`p-3 rounded-full ${customDialog.type === 'confirm' ? 'bg-amber-50 text-amber-500 border border-amber-100' : 'bg-blue-50 text-blue-600 border border-blue-100'}`}>
+              {customDialog.type === 'confirm' ? (
+                <AlertCircle size={28} />
+              ) : (
+                <Info size={28} />
+              )}
+            </div>
+            <div className="space-y-2">
+              <h3 className="font-bold text-slate-800 text-lg">
+                {customDialog.title || (customDialog.type === 'confirm' ? 'Confirmación' : 'Mensaje')}
+              </h3>
+              <p className="text-sm text-slate-500 leading-relaxed whitespace-pre-line">
+                {customDialog.message}
+              </p>
+            </div>
+          </div>
+          <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-center gap-3">
+            {customDialog.type === 'confirm' ? (
+              <>
+                <button
+                  onClick={() => {
+                    if (customDialog.onCancel) customDialog.onCancel();
+                  }}
+                  className="flex-grow bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold py-2.5 px-4 rounded-xl text-sm transition-colors shadow-sm"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    if (customDialog.onConfirm) customDialog.onConfirm();
+                  }}
+                  className="flex-grow bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition-colors shadow-sm"
+                >
+                  Aceptar
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => {
+                  if (customDialog.onConfirm) customDialog.onConfirm();
+                }}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition-colors shadow-sm"
+              >
+                Aceptar
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const [usuarios, setUsuarios] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<any>({ id: null, nombre: '', email: '', password: '', rol: 'consulta', telegram_chat_id: '', activo: 1 });
@@ -1560,7 +1765,8 @@ function Configuracion({ token }: { token: string }) {
   };
 
   const deleteUser = async (id: number) => {
-    if (!confirm('¿Eliminar este usuario?')) return;
+    const confirmed = await showConfirm('¿Eliminar este usuario?');
+    if (!confirmed) return;
     await apiFetch(`/api/usuarios/${id}`, token, { method: 'DELETE' }).catch(console.error);
     load();
   };
@@ -1865,6 +2071,7 @@ function Configuracion({ token }: { token: string }) {
           </div>
         );
       })()}
+      {renderCustomDialog()}
     </div>
   );
 }
