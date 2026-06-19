@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { MultiSelect } from './MultiSelect';
-import { Download, Search, UploadCloud, Loader2, Settings, X, Trash2, AlertCircle, FileText, Info } from 'lucide-react';
+import { Download, Search, UploadCloud, Loader2, Settings, X, Trash2, AlertCircle, FileText, Info, Building2, Calendar } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 const authFetch = async (url: string, token: string, options: RequestInit = {}) => {
@@ -404,6 +403,12 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
     }
   }, [defaultUnidad]);
 
+  useEffect(() => {
+    if (defaultPeriodo) {
+      setPeriodoStr(defaultPeriodo);
+    }
+  }, [defaultPeriodo]);
+
   // Format of periodo: MM/YYYY -> YYYY-MM
   const parsePeriodo = (p: string) => {
     if (!p || p === 'Desconocido' || !p.includes('/')) return null;
@@ -526,25 +531,23 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
   return (
     <div className="p-6 max-w-[1600px] mx-auto">
       
-      {/* Controles */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-visible p-6 mb-8 flex flex-col md:flex-row gap-4 items-start md:items-end">
-        <div className="w-full md:w-64 relative">
-            <MultiSelect 
-              label="Unidad de Negocio" 
-              options={unidades.map(u => u.nombre)} 
-              selected={[unidad]} 
-              onChange={v => setUnidad(v[0])} 
-              singleSelection={true}
-            />
+      {/* Active Project Information Header */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-8 flex flex-wrap gap-6 items-center justify-between">
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2 text-slate-600">
+            <Building2 className="text-blue-600 shrink-0" size={18} />
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Sucursal:</span>
+            <span className="text-sm font-bold text-slate-800">{unidad || defaultUnidad}</span>
+          </div>
+          <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
+          <div className="flex items-center gap-2 text-slate-600">
+            <Calendar className="text-blue-600 shrink-0" size={18} />
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Período:</span>
+            <span className="text-sm font-bold text-slate-800">{periodoStr || defaultPeriodo}</span>
+          </div>
         </div>
-        <div className="w-full md:w-64">
-            <MultiSelect 
-              label="Periodo" 
-              options={['06/2026', '05/2026', '04/2026', '03/2026', '02/2026', '01/2026', '12/2025', '11/2025', '10/2025']} 
-              selected={[periodoStr]} 
-              onChange={v => setPeriodoStr(v[0])} 
-              singleSelection={true}
-            />
+        <div className="text-xs text-slate-400 font-medium">
+          Selección administrada desde la solapa Proyectos
         </div>
       </div>
 

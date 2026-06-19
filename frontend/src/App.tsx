@@ -284,6 +284,21 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
     setAppliedFilters(pendingFilters);
   };
 
+  useEffect(() => {
+    if (defaultUnidad && defaultPeriodo) {
+      setPendingFilters(prev => ({
+        ...prev,
+        empresa: [defaultUnidad],
+        periodo: [defaultPeriodo]
+      }));
+      setAppliedFilters(prev => ({
+        ...prev,
+        empresa: [defaultUnidad],
+        periodo: [defaultPeriodo]
+      }));
+    }
+  }, [defaultUnidad, defaultPeriodo]);
+
   const [uploading, setUploading] = useState(false);
 
   const [selectedAjustes, setSelectedAjustes] = useState<Set<number>>(new Set());
@@ -962,28 +977,36 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
       <div className="max-w-7xl mx-auto px-6 py-8 space-y-6">
         
 
+        {/* Active Project Information Header */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-wrap gap-6 items-center justify-between">
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2 text-slate-600">
+              <Building2 className="text-blue-600 shrink-0" size={18} />
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Sucursal:</span>
+              <span className="text-sm font-bold text-slate-800">{(pendingFilters.empresa?.[0]) || defaultUnidad}</span>
+            </div>
+            <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
+            <div className="flex items-center gap-2 text-slate-600">
+              <Calendar className="text-blue-600 shrink-0" size={18} />
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Período:</span>
+              <span className="text-sm font-bold text-slate-800">{(pendingFilters.periodo?.[0]) || defaultPeriodo}</span>
+            </div>
+          </div>
+          <div className="text-xs text-slate-400 font-medium">
+            Selección administrada desde la solapa Proyectos
+          </div>
+        </div>
+
         {/* Filters Section */}
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center gap-2 mb-5">
             <div className="p-1.5 bg-blue-50 text-blue-600 rounded-md">
               <Filter size={18} strokeWidth={2.5} />
             </div>
-            <h2 className="text-lg font-bold text-slate-800">Criterios de Análisis</h2>
+            <h2 className="text-lg font-bold text-slate-800">Filtros de Análisis</h2>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
-            <MultiSelect 
-              label="Periodo" 
-              options={options.periodos} 
-              selected={pendingFilters.periodo} 
-              onChange={v => setPendingFilters({...pendingFilters, periodo: v})} 
-            />
-            <MultiSelect 
-              label="Prestador/Sucursal" 
-              options={options.empresas} 
-              selected={pendingFilters.empresa} 
-              onChange={v => setPendingFilters({...pendingFilters, empresa: v})} 
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
             <MultiSelect 
               label="Cliente Empresa" 
               options={options.clientes} 
@@ -2155,26 +2178,30 @@ export default function App() {
                 <span className="flex items-center gap-1.5"><FileText size={15} /> Proyectos</span>
               </button>
 
-              <button onClick={() => setView('dashboard')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'dashboard' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
-                <span className="flex items-center gap-1.5"><LayoutDashboard size={15} /> Dashboard</span>
-              </button>
-              <button onClick={() => setView('ingresos')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'ingresos' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
-                <span className="flex items-center gap-1.5"><TrendingUp size={15} /> Ingresos</span>
-              </button>
-              <button onClick={() => setView('costos')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'costos' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
-                <span className="flex items-center gap-1.5"><Wallet size={15} /> Costos</span>
-              </button>
-              <button onClick={() => setView('asientos')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'asientos' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
-                <span className="flex items-center gap-1.5"><FileText size={15} /> Asientos</span>
-              </button>
-              <button onClick={() => setView('rrhh')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'rrhh' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
-                <span className="flex items-center gap-1.5"><Users size={15} /> RRHH</span>
-              </button>
+              {globalUnidad && globalPeriodo && (
+                <>
+                  <button onClick={() => setView('dashboard')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'dashboard' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
+                    <span className="flex items-center gap-1.5"><LayoutDashboard size={15} /> Dashboard</span>
+                  </button>
+                  <button onClick={() => setView('ingresos')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'ingresos' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
+                    <span className="flex items-center gap-1.5"><TrendingUp size={15} /> Ingresos</span>
+                  </button>
+                  <button onClick={() => setView('costos')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'costos' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
+                    <span className="flex items-center gap-1.5"><Wallet size={15} /> Costos</span>
+                  </button>
+                  <button onClick={() => setView('asientos')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'asientos' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
+                    <span className="flex items-center gap-1.5"><FileText size={15} /> Asientos</span>
+                  </button>
+                  <button onClick={() => setView('rrhh')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'rrhh' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
+                    <span className="flex items-center gap-1.5"><Users size={15} /> RRHH</span>
+                  </button>
+                </>
+              )}
               {user?.rol === 'admin' && (
                 <button onClick={() => setView('config')}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'config' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
@@ -2193,11 +2220,11 @@ export default function App() {
 
       {/* Content */}
       {view === 'proyectos' && <GestorInformes token={token} user={user} onOpenReport={(u: string, p: string) => { setGlobalUnidad(u); setGlobalPeriodo(p); setView('dashboard'); }} />}
-      {view === 'dashboard' && <MainDashboard token={token} defaultUnidad={globalUnidad || user?.sucursales?.[0]} defaultPeriodo={globalPeriodo} />}
-      {view === 'ingresos' && <Dashboard token={token} onLogout={handleLogout} defaultUnidad={globalUnidad || user?.sucursales?.[0]} defaultPeriodo={globalPeriodo} />}
-      {view === 'costos' && <Costos token={token} defaultUnidad={globalUnidad || user?.sucursales?.[0]} defaultPeriodo={globalPeriodo} />}
-      {view === 'asientos' && <Asientos token={token} defaultUnidad={globalUnidad || user?.sucursales?.[0]} defaultPeriodo={globalPeriodo} />}
-      {view === 'rrhh' && <RRHH token={token} defaultUnidad={globalUnidad || user?.sucursales?.[0]} defaultPeriodo={globalPeriodo} />}
+      {view === 'dashboard' && <MainDashboard token={token} defaultUnidad={globalUnidad} defaultPeriodo={globalPeriodo} />}
+      {view === 'ingresos' && <Dashboard token={token} onLogout={handleLogout} defaultUnidad={globalUnidad} defaultPeriodo={globalPeriodo} />}
+      {view === 'costos' && <Costos token={token} defaultUnidad={globalUnidad} defaultPeriodo={globalPeriodo} />}
+      {view === 'asientos' && <Asientos token={token} defaultUnidad={globalUnidad} defaultPeriodo={globalPeriodo} />}
+      {view === 'rrhh' && <RRHH token={token} defaultUnidad={globalUnidad} defaultPeriodo={globalPeriodo} />}
       {view === 'config' && user?.rol === 'admin' && <Configuracion token={token} />}
 
       {/* Modal Acerca de */}
