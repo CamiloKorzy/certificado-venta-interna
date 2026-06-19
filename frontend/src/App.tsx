@@ -957,7 +957,7 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
     <div className="min-h-screen bg-slate-100 text-slate-800 font-sans pb-12 overflow-x-hidden">
       {/* Top Navbar */}
       <nav className="bg-slate-900 text-white shadow-md">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="max-w-[1800px] w-full mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="bg-white p-2 rounded-xl h-14 w-14 flex items-center justify-center shadow-sm">
               <img src="/logo_cee.png" alt="CEE ENRIQUEZ" className="h-full w-full object-contain" />
@@ -974,7 +974,7 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
         </div>
       </nav>
 
-      <div className="max-w-7xl mx-auto px-6 py-8 space-y-6">
+      <div className="max-w-[1800px] w-full mx-auto px-6 py-8 space-y-6">
         
 
         {/* Active Project Information Header */}
@@ -1879,7 +1879,7 @@ function Configuracion({ token }: { token: string }) {
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-6">
+    <div className="max-w-[1800px] w-full mx-auto p-6 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl"><Settings size={28} /></div>
@@ -2165,7 +2165,7 @@ export default function App() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-100">
       {/* Top Nav */}
       <div className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-40">
-        <div className="max-w-[1600px] mx-auto px-6 flex items-center justify-between h-14">
+        <div className="max-w-[1800px] w-full mx-auto px-6 flex items-center justify-between h-14">
           <div className="flex items-center gap-6">
             <h1 className="font-bold text-slate-800 text-sm flex items-center gap-2">
               <img src="/logo_cee.png" alt="CEE" className="h-8 w-8 rounded-md object-contain" />

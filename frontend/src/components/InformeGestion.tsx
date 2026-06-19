@@ -529,7 +529,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
   const resultado = data ? data.totales.ingresos - data.totales.gastos : 0;
 
   return (
-    <div className="p-6 max-w-[1600px] mx-auto">
+    <div className="p-6 max-w-[1800px] w-full mx-auto">
       
       {/* Active Project Information Header */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-8 flex flex-wrap gap-6 items-center justify-between">
