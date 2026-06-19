@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { MultiSelect } from './MultiSelect';
-import { Download, Search, UploadCloud, Loader2, Settings, X, Trash2 } from 'lucide-react';
+import { Download, Search, UploadCloud, Loader2, Settings, X, Trash2, AlertCircle, FileText } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 const authFetch = async (url: string, token: string, options: RequestInit = {}) => {
@@ -78,26 +78,138 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
   
   const downloadTemplate = (tipo: string) => {
     const ws_data = [
-      ['Concepto', 'Categoría', 'Importe', 'Observaciones']
+      ['Fecha', 'Comprobante', 'Concepto', 'Importe'],
+      ['04/05/2026', 'A-0002-0002343', 'Gastos adicionales', 1500.50]
     ];
     const ws = XLSX.utils.aoa_to_sheet(ws_data);
-    const wscols = [{wch:30}, {wch:20}, {wch:15}, {wch:40}];
+    const wscols = [{wch:15}, {wch:20}, {wch:35}, {wch:15}];
     ws['!cols'] = wscols;
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Plantilla_Ajustes");
-    XLSX.writeFile(wb, `Plantilla_Ajustes_${tipo}.xlsx`);
+    XLSX.writeFile(wb, `Plantilla_${tipo === 'COSTO' ? 'Costos' : 'Ingresos'}.xlsx`);
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, tipoMovimiento: 'INGRESO' | 'COSTO') => {
+  const [previewRows, setPreviewRows] = useState<any[]>([]);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [uploadTipo, setUploadTipo] = useState<'INGRESO' | 'COSTO'>('COSTO');
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, tipoMovimiento: 'INGRESO' | 'COSTO') => {
     if (!e.target.files || e.target.files.length === 0) return;
     const file = e.target.files[0];
+    setPendingFile(file);
+    setPreviewError(null);
+    setPreviewRows([]);
+    setUploadTipo(tipoMovimiento);
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary', cellDates: true });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const rawRows = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[];
+
+        if (rawRows.length === 0) {
+          throw new Error("El archivo Excel está vacío.");
+        }
+
+        const headers = (rawRows[0] || []).map((h: any) => String(h || "").trim().toLowerCase());
+        
+        const idxFecha = headers.indexOf("fecha");
+        const idxComprobante = headers.indexOf("comprobante");
+        const idxConcepto = headers.indexOf("concepto");
+        const idxImporte = headers.indexOf("importe");
+
+        if (idxFecha === -1 || idxComprobante === -1 || idxConcepto === -1 || idxImporte === -1) {
+          throw new Error("Estructura de columnas inválida. Debe tener exactamente las columnas: Fecha, Comprobante, Concepto, Importe.");
+        }
+
+        const parsed: any[] = [];
+        for (let i = 1; i < rawRows.length; i++) {
+          const row = rawRows[i];
+          if (!row || row.length === 0 || row.every((cell: any) => cell === null || cell === undefined || cell === '')) {
+            continue; // fila vacia
+          }
+
+          const rawFecha = row[idxFecha];
+          const rawComprobante = row[idxComprobante];
+          const rawConcepto = row[idxConcepto];
+          const rawImporte = row[idxImporte];
+
+          // Validar Fecha
+          let displayFecha = "";
+          let isFechaValid = true;
+          if (rawFecha instanceof Date) {
+            const d = rawFecha;
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
+            displayFecha = `${day}/${month}/${year}`;
+          } else if (rawFecha) {
+            const strF = String(rawFecha).trim();
+            displayFecha = strF;
+            isFechaValid = /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(strF) || /^\d{4}-\d{2}-\d{2}$/.test(strF);
+          } else {
+            isFechaValid = false;
+          }
+
+          // Validar Comprobante (max 15)
+          const compStr = String(rawComprobante || "").trim();
+          const displayComprobante = compStr.length > 15 ? compStr.substring(0, 15) : compStr;
+          const isCompWarning = compStr.length > 15;
+
+          // Validar Concepto (max 30)
+          const conceptStr = String(rawConcepto || "").trim();
+          const displayConcepto = conceptStr.length > 30 ? conceptStr.substring(0, 30) : conceptStr;
+          const isConceptWarning = conceptStr.length > 30;
+
+          // Validar Importe
+          const parsedImporte = parseFloat(String(rawImporte).replace(/[^0-9.-]/g, ''));
+          const isImporteValid = !isNaN(parsedImporte);
+
+          parsed.push({
+            rowIdx: i + 1,
+            fecha: displayFecha,
+            isFechaValid,
+            comprobante: displayComprobante,
+            isCompWarning,
+            concepto: displayConcepto,
+            isConceptWarning,
+            importe: isImporteValid ? parsedImporte : 0,
+            isImporteValid,
+            rawRow: row
+          });
+        }
+
+        setPreviewRows(parsed);
+        setShowPreview(true);
+      } catch (err: any) {
+        setPreviewError(err.message);
+        setShowPreview(true);
+      }
+    };
+    reader.onerror = () => {
+      setPreviewError("Error al leer el archivo.");
+      setShowPreview(true);
+    };
+    reader.readAsBinaryString(file);
+    e.target.value = ''; // reset
+  };
+
+  const confirmImport = async () => {
+    if (!pendingFile) return;
     setUploading(true);
     setUploadMsg('');
+    setShowPreview(false);
+
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append("file", pendingFile);
     formData.append("unidad", unidad);
     formData.append("periodo", periodoStr);
-    formData.append("tipo", tipoMovimiento);
+    formData.append("tipo", uploadTipo);
 
     try {
       const res = await authFetch('/api/config/ajustes-excel', token, {
@@ -112,7 +224,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
       if (json.status === 'ok') {
         setUploadMsg(`✅ Importado exitosamente (${json.inserted} filas)`);
         setTimeout(() => setUploadMsg(''), 5000);
-        // Refresh component state or dashboard here if possible
+        loadInforme(); // recargar
       } else {
         setUploadMsg(`⚠️ Importado con errores. ${json.inserted} filas creadas.`);
       }
@@ -120,10 +232,9 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
       setUploadMsg('❌ Error al subir: ' + err.message);
     }
     setUploading(false);
-    e.target.value = '';
+    setPendingFile(null);
+    setPreviewRows([]);
   };
-
-
 
   const [error, setError] = useState('');
   
@@ -439,7 +550,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
                   </button>
 
                   <div className="relative">
-                    <input type="file" id="upload-costos" className="hidden" accept=".xlsx,.xls" onChange={(e) => handleFileUpload(e, 'COSTO')} />
+                    <input type="file" id="upload-costos" className="hidden" accept=".xlsx,.xls" onChange={(e) => handleFileSelect(e, 'COSTO')} />
                     <label htmlFor="upload-costos" className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm cursor-pointer">
                       {uploading ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
                       Importar adicionales de Costos
@@ -461,7 +572,6 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
             </div>
           </div>
           
-          {/* Modal Ver Ajustes Importados (Costos) */}
           {showAjustesModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
               <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[80vh]">
@@ -509,6 +619,129 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
                       </tbody>
                     </table>
                   )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showPreview && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden">
+                {/* Header */}
+                <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                  <div>
+                    <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2">
+                      <FileText className="text-blue-600" />
+                      Vista Previa de Importación ({uploadTipo === 'INGRESO' ? 'Ingresos' : 'Costos'})
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">Verifica los datos de la planilla antes de confirmar la carga.</p>
+                  </div>
+                  <button 
+                    onClick={() => { setShowPreview(false); setPendingFile(null); }}
+                    className="text-slate-400 hover:text-slate-600 p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                {/* Content */}
+                <div className="p-6 overflow-y-auto flex-1 space-y-4">
+                  {previewError ? (
+                    <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3 text-red-700">
+                      <AlertCircle className="shrink-0 mt-0.5" size={20} />
+                      <div>
+                        <h4 className="font-bold text-sm">Error de Validación</h4>
+                        <p className="text-sm mt-1">{previewError}</p>
+                      </div>
+                    </div>
+                  ) : previewRows.length === 0 ? (
+                    <div className="text-center py-12 text-slate-400">
+                      No se encontraron filas de datos para importar.
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                        <div className="overflow-x-auto max-h-[45vh]">
+                          <table className="w-full text-left border-collapse text-sm">
+                            <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 z-10">
+                              <tr>
+                                <th className="px-4 py-3 text-slate-500 font-bold text-xs uppercase tracking-wider w-16">Fila</th>
+                                <th className="px-4 py-3 text-slate-500 font-bold text-xs uppercase tracking-wider">Fecha</th>
+                                <th className="px-4 py-3 text-slate-500 font-bold text-xs uppercase tracking-wider">Comprobante</th>
+                                <th className="px-4 py-3 text-slate-500 font-bold text-xs uppercase tracking-wider">Concepto</th>
+                                <th className="px-4 py-3 text-slate-500 font-bold text-xs uppercase tracking-wider text-right">Importe</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {previewRows.map((r, idx) => (
+                                <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                                  <td className="px-4 py-3 text-slate-400 font-mono text-xs">{r.rowIdx}</td>
+                                  <td className="px-4 py-3">
+                                    <span className={r.isFechaValid ? "text-slate-700" : "text-red-600 font-semibold bg-red-50 px-2 py-0.5 rounded border border-red-200 text-xs"}>
+                                      {r.fecha || 'Vacío'} {!r.isFechaValid && '⚠️'}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <span className="text-slate-900 font-medium">
+                                      {r.comprobante || 'S/N'}
+                                    </span>
+                                    {r.isCompWarning && (
+                                      <span className="ml-1 text-[10px] bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded border border-amber-200" title="Se truncará a 15 caracteres">
+                                        Truncado
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <span className="text-slate-700">
+                                      {r.concepto}
+                                    </span>
+                                    {r.isConceptWarning && (
+                                      <span className="ml-1 text-[10px] bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded border border-amber-200" title="Se truncará a 30 caracteres">
+                                        Truncado
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-3 text-right font-mono font-bold text-slate-900">
+                                    <span className={r.isImporteValid ? "text-slate-900" : "text-red-600 font-semibold"}>
+                                      ${r.importe.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                      
+                      {/* Resumen */}
+                      <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-4 flex justify-between items-center text-sm">
+                        <span className="text-slate-500 font-medium">Total a importar: <strong className="text-slate-700">{previewRows.length}</strong> registros</span>
+                        <span className="text-slate-700 font-bold flex items-center gap-1.5">
+                          Suma Total: 
+                          <span className="text-base text-blue-700 font-black">
+                            ${previewRows.reduce((sum, r) => sum + r.importe, 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                          </span>
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3">
+                  <button
+                    onClick={() => { setShowPreview(false); setPendingFile(null); }}
+                    className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-bold py-2 px-4 rounded-lg text-sm transition-colors shadow-sm"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={confirmImport}
+                    disabled={!!previewError || previewRows.length === 0}
+                    className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-2 px-5 rounded-lg text-sm transition-all shadow-sm flex items-center gap-1.5"
+                  >
+                    Confirmar Importación
+                  </button>
                 </div>
               </div>
             </div>

@@ -565,6 +565,7 @@ async def upload_ajustes_excel(
     tipo: Optional[str] = Form(None),
     current_user = Depends(get_current_user)
 ):
+    from datetime import datetime, date
     contents = await file.read()
     wb = openpyxl.load_workbook(filename=io.BytesIO(contents), data_only=True)
     ws = wb.active
@@ -590,70 +591,145 @@ async def upload_ajustes_excel(
     inserted_count = 0
     suggestions = {}
     
+    # Leer headers de la fila 1 para determinar dinámicamente si es el nuevo formato de 4 columnas
+    headers = [str(cell.value or "").strip().lower() for cell in ws[1]]
+    is_new_format = False
+    
+    if "fecha" in headers and "comprobante" in headers:
+        is_new_format = True
+        idx_fecha = headers.index("fecha")
+        idx_comprobante = headers.index("comprobante")
+        idx_concepto = headers.index("concepto") if "concepto" in headers else 2
+        idx_importe = headers.index("importe") if "importe" in headers else 3
+    else:
+        # Fallback si tiene 4 columnas o menos y se proveen los parámetros del form
+        if len(headers) <= 4 and unidad and periodo and tipo:
+            is_new_format = True
+            idx_fecha = 0
+            idx_comprobante = 1
+            idx_concepto = 2
+            idx_importe = 3
+
     for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
         if not row or not any(row): continue
         
-        # Detectar dinámicamente si es el formato viejo (7 columnas) o el nuevo (4 columnas)
-        # El formato viejo tiene INGRESO/COSTO en la columna 4 (índice 3)
-        if len(row) >= 6 and str(row[3] or "").strip().upper() in ["INGRESO", "GASTO", "COSTO"]:
-            # Formato viejo
-            unidad_negocio = str(row[0] or "").strip()
-            periodo_val = str(row[1] or "").strip()
-            concepto = str(row[2] or "").strip()
-            tipo_mov = str(row[3] or "").strip().upper()
-            categoria = str(row[4] or "").strip()
-            importe_val = row[5]
-            observaciones = str(row[6] or "").strip() if len(row) > 6 else ""
-        elif unidad and periodo and tipo:
-            # Formato nuevo (4 columnas) y parámetros recibidos
-            unidad_negocio = str(unidad).strip()
-            periodo_val = str(periodo).strip()
-            tipo_mov = str(tipo).strip().upper()
-            concepto = str(row[0] or "").strip()
-            categoria = str(row[1] or "").strip()
-            importe_val = row[2] if len(row) > 2 else None
-            observaciones = str(row[3] or "").strip() if len(row) > 3 else ""
-        else:
-            # Fallback
-            unidad_negocio = str(row[0] or "").strip()
-            periodo_val = str(row[1] or "").strip()
-            concepto = str(row[2] or "").strip()
-            tipo_mov = str(row[3] or "").strip().upper()
-            categoria = str(row[4] or "").strip()
-            importe_val = row[5] if len(row) > 5 else None
-            observaciones = str(row[6] or "").strip() if len(row) > 6 else ""
-        
-        if not unidad_negocio or not periodo_val or not tipo_mov or importe_val is None:
-            errors.append(f"Fila {row_idx}: Faltan datos (Unidad, Periodo, Tipo o Importe).")
-            continue
+        if is_new_format:
+            fecha_val = row[idx_fecha] if len(row) > idx_fecha else None
+            comprobante_val = row[idx_comprobante] if len(row) > idx_comprobante else ""
+            concepto_val = row[idx_concepto] if len(row) > idx_concepto else ""
+            importe_val = row[idx_importe] if len(row) > idx_importe else None
             
-        if unidad_negocio not in valid_sucursales:
-            matches = difflib.get_close_matches(unidad_negocio, valid_sucursales, n=1, cutoff=0.6)
-            if matches:
-                suggestions[unidad_negocio] = matches[0]
-                unidad_negocio = matches[0]
-            else:
-                errors.append(f"Fila {row_idx}: Unidad '{unidad_negocio}' no encontrada.")
+            # Parsear Fecha
+            parsed_fecha = None
+            if isinstance(fecha_val, datetime):
+                parsed_fecha = fecha_val
+            elif isinstance(fecha_val, date):
+                parsed_fecha = datetime.combine(fecha_val, datetime.min.time())
+            elif fecha_val:
+                fecha_str = str(fecha_val).strip()
+                for fmt in ('%d/%m/%Y', '%d-%m-%Y', '%Y-%m-%d', '%Y/%m/%d'):
+                    try:
+                        parsed_fecha = datetime.strptime(fecha_str, fmt)
+                        break
+                    except ValueError:
+                        continue
+            
+            if not parsed_fecha:
+                errors.append(f"Fila {row_idx}: Fecha '{fecha_val}' no es válida (debe ser DD/MM/AAAA).")
                 continue
                 
-        if tipo_mov not in ["INGRESO", "GASTO", "COSTO"]:
-            errors.append(f"Fila {row_idx}: Tipo '{tipo_mov}' inválido. Use INGRESO o COSTO.")
-            continue
+            # Determinar periodo a partir de la fecha (MM/YYYY)
+            periodo_val = f"{parsed_fecha.month:02d}/{parsed_fecha.year}"
             
-        # Convert GASTO to COSTO if imported from old files
-        if tipo_mov == "GASTO":
-            tipo_mov = "COSTO"
+            # Determinar unidad de negocio
+            unidad_negocio = str(unidad or "").strip()
+            if not unidad_negocio:
+                errors.append(f"Fila {row_idx}: No se especificó la Unidad de Negocio.")
+                continue
+                
+            tipo_mov = str(tipo or "").strip().upper()
+            if tipo_mov not in ["INGRESO", "COSTO", "GASTO"]:
+                errors.append(f"Fila {row_idx}: Tipo de movimiento '{tipo_mov}' inválido.")
+                continue
+            if tipo_mov == "GASTO":
+                tipo_mov = "COSTO"
+                
+            # Validar y truncar Comprobante
+            comprobante = str(comprobante_val or "").strip()
+            if len(comprobante) > 15:
+                comprobante = comprobante[:15]
+            if not comprobante:
+                comprobante = "S/N"
+                
+            # Validar y truncar Concepto
+            concepto = str(concepto_val or "").strip()
+            if len(concepto) > 30:
+                concepto = concepto[:30]
+            if not concepto:
+                errors.append(f"Fila {row_idx}: El Concepto está vacío.")
+                continue
+                
+            # Validar Importe
+            try:
+                importe = float(importe_val)
+            except (ValueError, TypeError):
+                errors.append(f"Fila {row_idx}: Importe '{importe_val}' no es un número.")
+                continue
+                
+            categoria = "Ajuste Excel"
+            observaciones = comprobante
+            fecha_carga = parsed_fecha
+        else:
+            # Formato viejo
+            if len(row) >= 6 and str(row[3] or "").strip().upper() in ["INGRESO", "GASTO", "COSTO"]:
+                unidad_negocio = str(row[0] or "").strip()
+                periodo_val = str(row[1] or "").strip()
+                concepto = str(row[2] or "").strip()
+                tipo_mov = str(row[3] or "").strip().upper()
+                categoria = str(row[4] or "").strip()
+                importe_val = row[5]
+                observaciones = str(row[6] or "").strip() if len(row) > 6 else ""
+            else:
+                unidad_negocio = str(row[0] or "").strip()
+                periodo_val = str(row[1] or "").strip()
+                concepto = str(row[2] or "").strip()
+                tipo_mov = str(row[3] or "").strip().upper()
+                categoria = str(row[4] or "").strip()
+                importe_val = row[5] if len(row) > 5 else None
+                observaciones = str(row[6] or "").strip() if len(row) > 6 else ""
             
-        try:
-            importe = float(importe_val)
-        except ValueError:
-            errors.append(f"Fila {row_idx}: Importe '{importe_val}' no es un número.")
-            continue
+            if not unidad_negocio or not periodo_val or not tipo_mov or importe_val is None:
+                errors.append(f"Fila {row_idx}: Faltan datos (Unidad, Periodo, Tipo o Importe).")
+                continue
+                
+            if unidad_negocio not in valid_sucursales:
+                matches = difflib.get_close_matches(unidad_negocio, valid_sucursales, n=1, cutoff=0.6)
+                if matches:
+                    suggestions[unidad_negocio] = matches[0]
+                    unidad_negocio = matches[0]
+                else:
+                    errors.append(f"Fila {row_idx}: Unidad '{unidad_negocio}' no encontrada.")
+                    continue
+                    
+            if tipo_mov not in ["INGRESO", "GASTO", "COSTO"]:
+                errors.append(f"Fila {row_idx}: Tipo '{tipo_mov}' inválido. Use INGRESO o COSTO.")
+                continue
+                
+            if tipo_mov == "GASTO":
+                tipo_mov = "COSTO"
+                
+            try:
+                importe = float(importe_val)
+            except (ValueError, TypeError):
+                errors.append(f"Fila {row_idx}: Importe '{importe_val}' no es un número.")
+                continue
+                
+            fecha_carga = datetime.now()
             
         cur_supa.execute("""
-            INSERT INTO cert_ajustes_excel (unidad_negocio, periodo, concepto, tipo_movimiento, categoria, importe, observaciones, usuario_carga)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        """, (unidad_negocio, periodo_val, concepto, tipo_mov, categoria, importe, observaciones, user_email))
+            INSERT INTO cert_ajustes_excel (unidad_negocio, periodo, concepto, tipo_movimiento, categoria, importe, observaciones, usuario_carga, fecha_carga)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (unidad_negocio, periodo_val, concepto, tipo_mov, categoria, importe, observaciones, user_email, fecha_carga))
         inserted_count += 1
         
     conn_supa.commit()
@@ -2222,25 +2298,27 @@ def get_indicadores(user=Depends(get_current_user)):
                 
                 record_ajuste = {
                     'Fecha': fecha,
-                    'Comprobante': f"EXCEL-{id_ajuste}",
+                    'Comprobante': r[5] if r[5] else f"EXCEL-{id_ajuste}",
                     'id_ajuste': id_ajuste,
                     'Empresa': r[7],  # unidad_negocio
                     'Cliente': '-',
-                    'Descripción': observaciones,
-                    'Solicitante': '-',
+                    'Descripción': r[4], # concepto
+                    'Solicitante': r[7], # unidad_negocio
                     'EstadoAutorizacion': 'Ajuste',
                     'Total Bruto': str(importe_val),
                     'Neto Gravado': str(importe_val),
                     'IVA': '0.0',
                     'UnidadNegocio': r[7],
-                    'Concepto': categoria,
+                    'Concepto': r[4], # concepto
                     'origen': 'AJUSTE EXCEL',
                     'items': [{
                         'id': f'item-{id_ajuste}',
-                        'descripcion': observaciones,
+                        'producto': r[4],
+                        'descripcion': r[4],
                         'precio': importe_val,
                         'cantidad': 1,
-                        'total': importe_val
+                        'total': importe_val,
+                        'Importe': importe_val
                     }]
                 }
                 records.append(record_ajuste)
@@ -2615,10 +2693,17 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
     try:
         conn_supa = get_supabase()
         cur_supa = conn_supa.cursor()
+        
+        # Convertir periodo YYYY-MM a MM/YYYY para consultar cert_ajustes_excel
+        periodo_mmyyyy = periodo
+        if "-" in periodo:
+            y_part, m_part = periodo.split('-')
+            periodo_mmyyyy = f"{m_part}/{y_part}"
+            
         if unidad_negocio == "Todas":
-            cur_supa.execute("SELECT id, tipo_movimiento, categoria, fecha_carga, concepto, observaciones, importe, unidad_negocio FROM cert_ajustes_excel WHERE periodo = %s", (periodo,))
+            cur_supa.execute("SELECT id, tipo_movimiento, categoria, fecha_carga, concepto, observaciones, importe, unidad_negocio FROM cert_ajustes_excel WHERE periodo = %s", (periodo_mmyyyy,))
         else:
-            cur_supa.execute("SELECT id, tipo_movimiento, categoria, fecha_carga, concepto, observaciones, importe, unidad_negocio FROM cert_ajustes_excel WHERE unidad_negocio = %s AND periodo = %s", (unidad_negocio, periodo))
+            cur_supa.execute("SELECT id, tipo_movimiento, categoria, fecha_carga, concepto, observaciones, importe, unidad_negocio FROM cert_ajustes_excel WHERE unidad_negocio = %s AND periodo = %s", (unidad_negocio, periodo_mmyyyy))
             
         rows_ajustes = cur_supa.fetchall()
         for r in rows_ajustes:
