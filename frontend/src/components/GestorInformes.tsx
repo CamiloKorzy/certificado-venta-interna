@@ -1,25 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { FileText, Plus, FolderLock, FolderOpen, Calendar, Building } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { FileText, Plus, FolderLock, FolderOpen, Calendar, Building, Loader2 } from 'lucide-react';
 import { MultiSelect } from './MultiSelect';
 
 export default function GestorInformes({ token, onOpenReport, user }: any) {
   const [informes, setInformes] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [unidades, setUnidades] = useState<any[]>([]);
   const [nuevaUnidad, setNuevaUnidad] = useState<string>('');
   const [nuevoPeriodo, setNuevoPeriodo] = useState<string>('');
   const [error, setError] = useState('');
+  const [fetchError, setFetchError] = useState('');
 
   const currentMonth = (new Date().getMonth() + 1).toString().padStart(2, '0');
   const currentYear = new Date().getFullYear();
   const defaultPeriod = `${currentMonth}/${currentYear}`;
 
-  useEffect(() => {
-    fetchUnidades();
-    fetchInformes();
-  }, [token]);
-
-  const fetchUnidades = async () => {
+  const fetchUnidades = useCallback(async () => {
     try {
       const res = await fetch('/api/mis-unidades', {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -29,27 +25,37 @@ export default function GestorInformes({ token, onOpenReport, user }: any) {
         setUnidades(json);
         if (json.length > 0) setNuevaUnidad(json[0].nombre);
       }
-    } catch (e) {}
-  };
+    } catch (e) {
+      console.error('[GestorInformes] Error cargando unidades:', e);
+    }
+  }, [token]);
 
-  const fetchInformes = async () => {
+  const fetchInformes = useCallback(async () => {
     setLoading(true);
+    setFetchError('');
     try {
       const res = await fetch('/api/informes/lista', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
         const json = await res.json();
-        console.log('[GestorInformes] Informes cargados:', json);
         setInformes(Array.isArray(json) ? json : []);
       } else {
-        console.error('[GestorInformes] Error HTTP:', res.status, await res.text());
+        const errorText = await res.text();
+        setFetchError(`Error ${res.status}: ${errorText}`);
       }
-    } catch (e) {
-      console.error('[GestorInformes] Fetch error:', e);
+    } catch (e: any) {
+      setFetchError(`Error de conexión: ${e.message}`);
     }
     setLoading(false);
-  };
+  }, [token]);
+
+  useEffect(() => {
+    if (token) {
+      fetchUnidades();
+      fetchInformes();
+    }
+  }, [token, fetchUnidades, fetchInformes]);
 
   const handleIniciarInforme = async () => {
     if (!nuevaUnidad || !nuevoPeriodo) {
@@ -150,7 +156,19 @@ export default function GestorInformes({ token, onOpenReport, user }: any) {
                 </tr>
               )
             })}
-            {informes.length === 0 && !loading && (
+            {loading && (
+              <tr><td colSpan={5} className="p-8 text-center text-slate-400">
+                <Loader2 size={24} className="mx-auto animate-spin text-blue-500 mb-2" />
+                Cargando informes...
+              </td></tr>
+            )}
+            {!loading && fetchError && (
+              <tr><td colSpan={5} className="p-8 text-center">
+                <p className="text-red-600 font-medium mb-2">{fetchError}</p>
+                <button onClick={fetchInformes} className="text-blue-600 hover:underline text-sm">Reintentar</button>
+              </td></tr>
+            )}
+            {!loading && !fetchError && informes.length === 0 && (
               <tr><td colSpan={5} className="p-8 text-center text-slate-500">No hay informes creados</td></tr>
             )}
           </tbody>
