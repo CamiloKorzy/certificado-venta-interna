@@ -2640,10 +2640,42 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
         conn_supa.close()
     except Exception as e:
         print("Error Ajustes Excel:", e)
+        
+    # === 4. Incorporar Sueldos de RRHH ===
+    try:
+        rrhh_data = get_rrhh(empresa=unidad_negocio, periodo=periodo)
+        costo_empresa = rrhh_data.get("totales", {}).get("costo_empresa", 0.0)
+        if costo_empresa > 0:
+            gastos.append({
+                "origen": "RRHH",
+                "tipo_movimiento": "EGRESO",
+                "categoria": "Sueldos y Cargas Sociales",
+                "fecha": f"{periodo}-28",
+                "concepto": "Liquidación de Sueldos - RRHH",
+                "comprobante": f"RRHH-{periodo}",
+                "proveedor": "Recursos Humanos",
+                "importe": float(costo_empresa)
+            })
+    except Exception as e:
+        print("Error al incorporar sueldos de RRHH en calculo vivo:", e)
     
     return {
         "ingresos": ingresos,
         "gastos": gastos
+    }
+
+def get_informe_mensual_ingresos(unidad_negocio: str, periodo: str):
+    data = get_informe_mensual_calculo_vivo(unidad_negocio, periodo)
+    return data["ingresos"]
+
+def get_informe_totales(unidad_negocio: str, periodo: str):
+    data = get_informe_mensual_calculo_vivo(unidad_negocio, periodo)
+    ingresos = data["ingresos"]
+    gastos = data["gastos"]
+    return {
+        "ingresos": sum(i["importe"] for i in ingresos),
+        "gastos": sum(g["importe"] for g in gastos),
+        "neto": sum(i["importe"] for i in ingresos) - sum(g["importe"] for g in gastos)
     }
 
 @app.get("/api/informes/mensual")
@@ -2781,11 +2813,19 @@ def iniciar_informe(action: InformeAction):
 def cerrar_informe(action: InformeAction):
     try:
         # Extraer snapshot de todos los módulos!
-        ingresos_data = get_informe_mensual_ingresos(action.unidad_negocio, action.periodo)
+        # Usamos calculo vivo que ya incluye ingresos, gastos con RRHH, etc.
+        vivo_data = get_informe_mensual_calculo_vivo(action.unidad_negocio, action.periodo)
+        ingresos_data = vivo_data["ingresos"]
+        gastos_data = vivo_data["gastos"]
+        
         rrhh_data = get_rrhh(action.unidad_negocio, action.periodo)
-        gastos_data = get_gastos(action.unidad_negocio, action.periodo, action.periodo)
         asientos_data = get_asientos(action.unidad_negocio, action.periodo)
-        totales_data = get_informe_totales(action.unidad_negocio, action.periodo)
+        
+        totales_data = {
+            "ingresos": sum(i["importe"] for i in ingresos_data),
+            "gastos": sum(g["importe"] for g in gastos_data),
+            "neto": sum(i["importe"] for i in ingresos_data) - sum(g["importe"] for g in gastos_data)
+        }
 
         snapshot = {
             "ingresos": ingresos_data,
@@ -2814,6 +2854,26 @@ def cerrar_informe(action: InformeAction):
             conn.close()
             raise Exception("No se encontró el informe abierto. Primero inícielo.")
             
+        # También insertar en cert_cierres_mensuales y cert_cierres_detalle para retrocompatibilidad
+        # Borrar previo si existiera
+        cur.execute("SELECT id FROM cert_cierres_mensuales WHERE unidad_negocio = %s AND periodo = %s", (action.unidad_negocio, action.periodo))
+        old_cierre = cur.fetchone()
+        if old_cierre:
+            cur.execute("DELETE FROM cert_cierres_detalle WHERE cierre_id = %s", (old_cierre[0],))
+            cur.execute("DELETE FROM cert_cierres_mensuales WHERE id = %s", (old_cierre[0],))
+            
+        cur.execute(
+            "INSERT INTO cert_cierres_mensuales (unidad_negocio, periodo, usuario_cierre, fecha_cierre) VALUES (%s, %s, %s, NOW()) RETURNING id",
+            (action.unidad_negocio, action.periodo, action.usuario)
+        )
+        cierre_id = cur.fetchone()[0]
+        
+        for item in ingresos_data + gastos_data:
+            cur.execute(
+                "INSERT INTO cert_cierres_detalle (cierre_id, origen, tipo_movimiento, categoria, fecha, concepto, comprobante, proveedor, importe) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                (cierre_id, item["origen"], item["tipo_movimiento"], item["categoria"], item["fecha"] if item["fecha"] else None, item["concepto"], item["comprobante"], item.get("proveedor"), item["importe"])
+            )
+            
         conn.commit()
         cur.close()
         conn.close()
@@ -2838,6 +2898,15 @@ def reabrir_informe(action: InformeAction):
                 snapshot_data = NULL
             WHERE unidad_negocio = %s AND periodo = %s
         """, (action.unidad_negocio, action.periodo))
+        
+        # También borrar de cert_cierres_mensuales y cert_cierres_detalle
+        cur.execute("SELECT id FROM cert_cierres_mensuales WHERE unidad_negocio = %s AND periodo = %s", (action.unidad_negocio, action.periodo))
+        row = cur.fetchone()
+        if row:
+            cierre_id = row[0]
+            cur.execute("DELETE FROM cert_cierres_detalle WHERE cierre_id = %s", (cierre_id,))
+            cur.execute("DELETE FROM cert_cierres_mensuales WHERE id = %s", (cierre_id,))
+
         conn.commit()
         cur.close()
         conn.close()
