@@ -36,8 +36,21 @@ def safe_float(val):
     except:
         return 0.0
 
+def normalize_periodo(periodo: str) -> str:
+    if not periodo:
+        return periodo
+    periodo = str(periodo).replace("/", "-").strip()
+    parts = periodo.split('-')
+    if len(parts) == 2:
+        if len(parts[0]) == 4:
+            return f"{parts[0]}-{parts[1].zfill(2)}"
+        elif len(parts[1]) == 4:
+            return f"{parts[1]}-{parts[0].zfill(2)}"
+    return periodo
+
 def check_informe_cerrado(empresa: str, periodo: str, modulo: str):
     try:
+        periodo = normalize_periodo(periodo)
         if not empresa or not periodo: return None
         conn = get_supabase()
         cur = conn.cursor()
@@ -612,6 +625,8 @@ async def upload_ajustes_excel(
     tipo: Optional[str] = Form(None),
     current_user = Depends(get_current_user)
 ):
+    if periodo:
+        periodo = normalize_periodo(periodo)
     from datetime import datetime, date
     contents = await file.read()
     wb = openpyxl.load_workbook(filename=io.BytesIO(contents), data_only=True)
@@ -1311,6 +1326,7 @@ def get_rrhh(
     periodo: Optional[str] = None
 ):
     try:
+        periodo = normalize_periodo(periodo)
         cerrado = check_informe_cerrado(empresa, periodo, 'rrhh')
         if cerrado is not None: return cerrado
         empty_response = {
@@ -2564,6 +2580,7 @@ class PresentarPeriodoReq(BaseModel):
 def presentar_periodo(req: PresentarPeriodoReq, current_user = Depends(get_current_user)):
     """Toma la info en vivo y la guarda en las tablas de snapshot."""
     try:
+        req.periodo = normalize_periodo(req.periodo)
         # Calcular en vivo usando la misma logica (reutilizamos la que usaremos para get_informe_mensual)
         informe = get_informe_mensual_calculo_vivo(req.unidad_negocio, req.periodo)
         
@@ -2606,6 +2623,7 @@ def reabrir_periodo(req: ReabrirPeriodoReq, current_user = Depends(get_current_u
     if current_user.get("role", "admin") != "admin":
          raise HTTPException(status_code=403, detail="Solo un administrador puede reabrir periodos presentados.")
     try:
+        req.periodo = normalize_periodo(req.periodo)
         conn_supa = get_supabase()
         cur_supa = conn_supa.cursor()
         
@@ -2628,6 +2646,7 @@ def reabrir_periodo(req: ReabrirPeriodoReq, current_user = Depends(get_current_u
         raise HTTPException(status_code=500, detail=str(e))
 
 def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
+    periodo = normalize_periodo(periodo)
     conn_supa = get_supabase()
     cur_supa = conn_supa.cursor()
     
@@ -2956,6 +2975,27 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
             })
     except Exception as e:
         print("Error al incorporar sueldos de RRHH en calculo vivo:", e)
+        
+    # === 5. Incorporar Certificados de Obras (en Ingresos) ===
+    try:
+        obras = get_certificados_obras_live(unidad_negocio, periodo)
+        for ob in obras:
+            if ob.get("estado") == "CONFIRMADO":
+                # Sumar el total de la columna parcial_presente de todos los ítems del certificado
+                total_parcial_presente = sum(float(item.get("parcial_presente") or 0.0) for item in ob.get("items", []))
+                if total_parcial_presente > 0:
+                    ingresos.append({
+                        "origen": "OBRAS",
+                        "tipo_movimiento": "INGRESO",
+                        "categoria": "Certificados de Obras",
+                        "fecha": ob.get("fecha_certificado")[:10] if ob.get("fecha_certificado") else f"{periodo}-01",
+                        "concepto": f"Certificado de Obra: {ob.get('obra') or 'Sin nombre'}",
+                        "comprobante": f"Certificado #{ob.get('numero_interno')}",
+                        "proveedor": ob.get("comitente") or "-",
+                        "importe": total_parcial_presente
+                    })
+    except Exception as e:
+        print("Error al incorporar certificados de obras en calculo vivo:", e)
     
     return {
         "ingresos": ingresos,
@@ -2979,6 +3019,7 @@ def get_informe_totales(unidad_negocio: str, periodo: str):
 @app.get("/api/informes/mensual")
 def get_informe_mensual(unidad_negocio: str, periodo: str, current_user = Depends(get_current_user)):
     try:
+        periodo = normalize_periodo(periodo)
         conn_supa = get_supabase()
         cur_supa = conn_supa.cursor()
         
@@ -3069,6 +3110,7 @@ class InformeAction(BaseModel):
 @app.get("/api/informes/estado")
 def get_informe_estado(unidad_negocio: str, periodo: str):
     try:
+        periodo = normalize_periodo(periodo)
         conn = get_supabase()
         cur = conn.cursor()
         cur.execute("""
@@ -3100,6 +3142,7 @@ def get_informe_estado(unidad_negocio: str, periodo: str):
 @app.post("/api/informes/iniciar")
 def iniciar_informe(action: InformeAction):
     try:
+        action.periodo = normalize_periodo(action.periodo)
         conn = get_supabase()
         cur = conn.cursor()
         cur.execute("""
@@ -3117,6 +3160,7 @@ def iniciar_informe(action: InformeAction):
 @app.post("/api/informes/cerrar")
 def cerrar_informe(action: InformeAction):
     try:
+        action.periodo = normalize_periodo(action.periodo)
         # Extraer snapshot de todos los módulos!
         # Usamos calculo vivo que ya incluye ingresos, gastos con RRHH, etc.
         vivo_data = get_informe_mensual_calculo_vivo(action.unidad_negocio, action.periodo)
@@ -3204,6 +3248,7 @@ def cerrar_informe(action: InformeAction):
 @app.post("/api/informes/reabrir")
 def reabrir_informe(action: InformeAction):
     try:
+        action.periodo = normalize_periodo(action.periodo)
         # Aqui se podria verificar si el usuario es Admin.
         # Por ahora lo controlaremos en Frontend (solo Admin ve el boton).
         conn = get_supabase()
@@ -3235,6 +3280,7 @@ def reabrir_informe(action: InformeAction):
 @app.delete("/api/informes/eliminar")
 def eliminar_informe(unidad_negocio: str, periodo: str, current_user = Depends(get_current_user)):
     try:
+        periodo = normalize_periodo(periodo)
         conn = get_supabase()
         cur = conn.cursor()
         
@@ -3318,6 +3364,7 @@ def get_informes_lista(user=Depends(get_current_user)):
 
 @app.get("/api/respaldos")
 def listar_respaldos(tipo_documento: str, unidad_negocio: str, periodo: str, current_user = Depends(get_current_user)):
+    periodo = normalize_periodo(periodo)
     conn = get_supabase()
     cur = conn.cursor()
     try:
@@ -3350,6 +3397,7 @@ async def upload_respaldo(
     file: UploadFile = File(...),
     current_user = Depends(get_current_user)
 ):
+    periodo = normalize_periodo(periodo)
     import base64
     contents = await file.read()
     encoded = base64.b64encode(contents).decode("utf-8")
@@ -3405,6 +3453,7 @@ def eliminar_respaldo(id: int, current_user = Depends(get_current_user)):
 # ═══════════════════════════════════════════════════════
 
 def get_consumos_inventarios_live(unidad_negocio: str, periodo: str):
+    periodo = normalize_periodo(periodo)
     conn = get_aurora()
     cur = conn.cursor()
     try:
@@ -3461,6 +3510,7 @@ def get_consumos_inventarios_live(unidad_negocio: str, periodo: str):
 
 @app.get("/api/consumos-inventarios")
 def get_consumos_inventarios(unidad_negocio: str, periodo: str, current_user = Depends(get_current_user)):
+    periodo = normalize_periodo(periodo)
     cerrado = check_informe_cerrado(unidad_negocio, periodo, 'consumos')
     if cerrado is not None:
         return cerrado
@@ -3476,6 +3526,7 @@ def get_certificaciones_maquinas_new(unidad_negocio: str, periodo: str):
     import calendar
     import datetime
     
+    periodo = normalize_periodo(periodo)
     y, m = periodo.split('-')
     y_int, m_int = int(y), int(m)
     
@@ -3604,6 +3655,7 @@ def get_certificaciones_maquinas_new(unidad_negocio: str, periodo: str):
     return filtered
 
 def get_equipos_live(unidad_negocio: str, periodo: str):
+    periodo = normalize_periodo(periodo)
     # 1. Planilla
     conn_supa = get_supabase()
     cur_supa = conn_supa.cursor()
@@ -3789,6 +3841,7 @@ def get_equipos_live(unidad_negocio: str, periodo: str):
 
 @app.get("/api/equipos")
 def get_equipos(unidad_negocio: str, periodo: str, current_user = Depends(get_current_user)):
+    periodo = normalize_periodo(periodo)
     cerrado = check_informe_cerrado(unidad_negocio, periodo, 'equipos')
     if cerrado is not None:
         return cerrado
@@ -3804,6 +3857,7 @@ async def upload_equipos(
     periodo: str = Form(...),
     current_user = Depends(get_current_user)
 ):
+    periodo = normalize_periodo(periodo)
     import io
     import openpyxl
     contents = await file.read()
@@ -3888,6 +3942,7 @@ async def upload_equipos(
 
 @app.delete("/api/equipos/bulk")
 def delete_equipos_bulk(unidad_negocio: str, periodo: str, current_user = Depends(get_current_user)):
+    periodo = normalize_periodo(periodo)
     conn = get_supabase()
     cur = conn.cursor()
     try:
@@ -3918,6 +3973,7 @@ def delete_equipo_item(id: int, current_user = Depends(get_current_user)):
 
 
 def get_certificados_obras_live(unidad_negocio: str, periodo: str):
+    periodo = normalize_periodo(periodo)
     conn = get_supabase()
     cur = conn.cursor()
     try:
@@ -3979,6 +4035,7 @@ def get_certificados_obras_live(unidad_negocio: str, periodo: str):
 
 @app.get("/api/certificados-obras")
 def get_certificados_obras(unidad_negocio: str, periodo: str, current_user = Depends(get_current_user)):
+    periodo = normalize_periodo(periodo)
     cerrado = check_informe_cerrado(unidad_negocio, periodo, 'obras')
     if cerrado is not None:
         return cerrado
@@ -3994,6 +4051,7 @@ async def upload_certificado_obra(
     periodo: str = Form(...),
     current_user = Depends(get_current_user)
 ):
+    periodo = normalize_periodo(periodo)
     import io
     import openpyxl
     from datetime import datetime, date
@@ -4121,13 +4179,34 @@ async def upload_certificado_obra(
         precio_unit = get_cell_val(row, idx_precio)
         pres_cert = get_cell_val(row, idx_pres_cert)
         ant_cert = get_cell_val(row, idx_ant_cert)
-        tot_cert = get_cell_val(row, idx_tot_cert)
-        faltante = get_cell_val(row, idx_faltante)
-        parc_pres = get_cell_val(row, idx_parc_pres)
-        parc_ant = get_cell_val(row, idx_parc_ant)
-        parc_tot = get_cell_val(row, idx_parc_tot)
-        monto_aprob = get_cell_val(row, idx_monto_aprob)
-        avance = get_cell_val(row, idx_avance)
+        
+        tot_cert = get_cell_val(row, idx_tot_cert) if idx_tot_cert != -1 else 0.0
+        if idx_tot_cert == -1 or tot_cert == 0.0:
+            tot_cert = pres_cert + ant_cert
+            
+        faltante = get_cell_val(row, idx_faltante) if idx_faltante != -1 else 0.0
+        if idx_faltante == -1 or faltante == 0.0:
+            faltante = cant_aprob - tot_cert
+            
+        parc_pres = get_cell_val(row, idx_parc_pres) if idx_parc_pres != -1 else 0.0
+        if idx_parc_pres == -1 or parc_pres == 0.0:
+            parc_pres = pres_cert * precio_unit
+            
+        parc_ant = get_cell_val(row, idx_parc_ant) if idx_parc_ant != -1 else 0.0
+        if idx_parc_ant == -1 or parc_ant == 0.0:
+            parc_ant = ant_cert * precio_unit
+            
+        parc_tot = get_cell_val(row, idx_parc_tot) if idx_parc_tot != -1 else 0.0
+        if idx_parc_tot == -1 or parc_tot == 0.0:
+            parc_tot = tot_cert * precio_unit
+            
+        monto_aprob = get_cell_val(row, idx_monto_aprob) if idx_monto_aprob != -1 else 0.0
+        if idx_monto_aprob == -1 or monto_aprob == 0.0:
+            monto_aprob = cant_aprob * precio_unit
+            
+        avance = get_cell_val(row, idx_avance) if idx_avance != -1 else 0.0
+        if idx_avance == -1 or avance == 0.0:
+            avance = (tot_cert / cant_aprob * 100.0) if cant_aprob > 0.0 else 0.0
         
         cur.execute("""
             INSERT INTO cert_obras_detalles (
