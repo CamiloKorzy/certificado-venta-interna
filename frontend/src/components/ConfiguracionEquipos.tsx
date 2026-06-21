@@ -26,6 +26,93 @@ export default function ConfiguracionEquipos({ token }: { token: string }) {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   
+  // Custom Dialog state
+  const [customDialog, setCustomDialog] = useState<{
+    isOpen: boolean;
+    type: 'alert' | 'confirm';
+    title?: string;
+    message: string;
+    onConfirm?: () => void;
+    onCancel?: () => void;
+  }>({ isOpen: false, type: 'alert', message: '' });
+
+  const showConfirm = (message: string, title: string = 'Confirmación') => {
+    return new Promise<boolean>((resolve) => {
+      setCustomDialog({
+        isOpen: true,
+        type: 'confirm',
+        title,
+        message,
+        onConfirm: () => {
+          setCustomDialog(prev => ({ ...prev, isOpen: false }));
+          resolve(true);
+        },
+        onCancel: () => {
+          setCustomDialog(prev => ({ ...prev, isOpen: false }));
+          resolve(false);
+        }
+      });
+    });
+  };
+
+  const renderCustomDialog = () => {
+    if (!customDialog.isOpen) return null;
+    return (
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-2xl w-full max-w-md flex flex-col overflow-hidden transform transition-all scale-100">
+          <div className="p-6 flex flex-col items-center text-center space-y-4">
+            <div className={`p-3 rounded-full ${customDialog.type === 'confirm' ? 'bg-amber-50 text-amber-500 border border-amber-100' : 'bg-blue-50 text-blue-600 border border-blue-100'}`}>
+              {customDialog.type === 'confirm' ? (
+                <AlertCircle size={28} />
+              ) : (
+                <Info size={28} />
+              )}
+            </div>
+            <div className="space-y-2">
+              <h3 className="font-bold text-slate-800 text-lg">
+                {customDialog.title || (customDialog.type === 'confirm' ? 'Confirmación' : 'Mensaje')}
+              </h3>
+              <p className="text-sm text-slate-500 leading-relaxed whitespace-pre-line">
+                {customDialog.message}
+              </p>
+            </div>
+          </div>
+          <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-center gap-3">
+            {customDialog.type === 'confirm' ? (
+              <>
+                <button
+                  onClick={() => {
+                    if (customDialog.onCancel) customDialog.onCancel();
+                  }}
+                  className="flex-grow bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold py-2.5 px-4 rounded-xl text-sm transition-colors shadow-sm"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    if (customDialog.onConfirm) customDialog.onConfirm();
+                  }}
+                  className="flex-grow bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition-colors shadow-sm"
+                >
+                  Aceptar
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => {
+                  if (customDialog.onConfirm) customDialog.onConfirm();
+                }}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition-colors shadow-sm"
+              >
+                Aceptar
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+  
   // Form state
   const [eqSearch, setEqSearch] = useState('');
   const [eqOpen, setEqOpen] = useState(false);
@@ -101,7 +188,7 @@ export default function ConfiguracionEquipos({ token }: { token: string }) {
         })
       });
 
-      setSuccessMsg('✅ Asignación creada exitosamente.');
+      setSuccessMsg('Asignación creada exitosamente.');
       
       // Reset form
       setSelectedEquipo(null);
@@ -123,7 +210,9 @@ export default function ConfiguracionEquipos({ token }: { token: string }) {
   };
 
   const handleDelete = async (id: number) => {
-    if (!window.confirm('¿Está seguro de que desea eliminar esta asignación?')) return;
+    const confirmed = await showConfirm('¿Está seguro de que desea eliminar esta asignación?');
+    if (!confirmed) return;
+    
     setErrorMsg('');
     setSuccessMsg('');
     setDeletingId(id);
@@ -132,7 +221,7 @@ export default function ConfiguracionEquipos({ token }: { token: string }) {
       await apiFetch(`/api/config/equipos-asignados/${id}`, token, {
         method: 'DELETE'
       });
-      setSuccessMsg('✅ Asignación eliminada correctamente.');
+      setSuccessMsg('Asignación eliminada correctamente.');
       setAssignments(prev => prev.filter(item => item.id !== id));
       setTimeout(() => setSuccessMsg(''), 4000);
     } catch (e: any) {
@@ -184,6 +273,31 @@ export default function ConfiguracionEquipos({ token }: { token: string }) {
 
   return (
     <div className="space-y-6 max-w-[1800px] mx-auto font-sans">
+      
+      {/* Custom dialog modal */}
+      {renderCustomDialog()}
+
+      {/* Alert Messages at the top of the page (Platform Style) */}
+      {errorMsg && (
+        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-start gap-3 whitespace-pre-line">
+          <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold">Error</p>
+            <p className="text-sm opacity-90">{errorMsg}</p>
+          </div>
+        </div>
+      )}
+      
+      {successMsg && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 p-4 rounded-xl flex items-start gap-3">
+          <Check className="h-5 w-5 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold">Operación exitosa</p>
+            <p className="text-sm opacity-90">{successMsg}</p>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Left Side - Add Assignment Form */}
@@ -202,9 +316,9 @@ export default function ConfiguracionEquipos({ token }: { token: string }) {
                 onChange={(e) => setSelectedSucursal(e.target.value)}
                 className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium text-slate-700"
               >
-                {sucursales.map((s) => (
-                  <option key={s.unidad_negocio} value={s.unidad_negocio}>
-                    {s.display_name || s.unidad_negocio}
+                {sucursales.map((s, idx) => (
+                  <option key={s.sucursal || idx} value={s.sucursal || ''}>
+                    {s.sucursal || 'Sin nombre'}
                   </option>
                 ))}
               </select>
@@ -328,20 +442,6 @@ export default function ConfiguracionEquipos({ token }: { token: string }) {
               />
             </div>
           </div>
-
-          {/* Feedback messages inside listing panel */}
-          {errorMsg && (
-            <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg flex items-start gap-2 mb-3 text-xs">
-              <AlertCircle size={16} className="shrink-0" />
-              <span>{errorMsg}</span>
-            </div>
-          )}
-          {successMsg && (
-            <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 p-3 rounded-lg flex items-start gap-2 mb-3 text-xs">
-              <Check size={16} className="shrink-0" />
-              <span>{successMsg}</span>
-            </div>
-          )}
 
           {/* Table Container */}
           <div className="overflow-y-auto flex-1 border border-slate-100 rounded-xl">
