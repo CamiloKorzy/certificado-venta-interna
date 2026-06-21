@@ -1,65 +1,135 @@
-import re
+import os
 
-def update_informe():
-    with open('frontend/src/components/InformeGestion.tsx', 'r', encoding='utf-8') as f:
-        content = f.read()
+path = 'frontend/src/components/InformeGestion.tsx'
+with open(path, 'r', encoding='utf-8') as f:
+    c = f.read()
 
-    # 1. Update the loadInforme function to also fetch /api/informes/estado
-    if "const fetchEstado = await fetch" not in content:
-        # we will replace `setLoading(true);` with fetching state
-        replacement = """
-    setLoading(true);
-    setError('');
+# 1. Replace Gastos with Costos across the board
+c = c.replace('Total Gastos', 'Total Costos')
+c = c.replace('Gastos por Rubro', 'Costos por Rubro')
+c = c.replace('Detalle de Gastos', 'Detalle de Costos')
+c = c.replace('No hay gastos registrados', 'No hay costos registrados')
+c = c.replace('No hay gastos detallados', 'No hay costos detallados')
+c = c.replace('exportGastosToxlsx', 'exportCostosToxlsx')
+c = c.replace("mode === 'gastos'", "mode === 'costos'")
+c = c.replace("mode?: 'dashboard' | 'gastos' | 'asientos' | 'rrhh'", "mode?: 'dashboard' | 'costos' | 'asientos' | 'rrhh'")
+
+# 2. Add lucide-react imports for buttons
+if 'UploadCloud' not in c:
+    c = c.replace(
+        "import { Download, Search } from 'lucide-react';",
+        "import { Download, Search, UploadCloud, Loader2 } from 'lucide-react';"
+    )
+
+# 3. Inject states and handlers
+state_injection = """  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState('');
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, tipoMovimiento: 'INGRESO' | 'COSTO') => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    setUploading(true);
+    setUploadMsg('');
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("unidad", unidad);
+    formData.append("periodo", periodoStr);
+    formData.append("tipo", tipoMovimiento);
+
     try {
-      const pStr = parsePeriodo(periodoStr);
-      const estadoRes = await fetch(`/api/informes/estado?unidad_negocio=${encodeURIComponent(unidad)}&periodo=${encodeURIComponent(pStr!)}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+      const res = await fetch('/api/config/ajustes-excel', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
       });
-      if (estadoRes.ok) {
-        const estadoJson = await estadoRes.json();
-        setEstadoCierre(estadoJson);
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(err);
       }
+      const json = await res.json();
+      if (json.status === 'ok') {
+        setUploadMsg(`✅ Importado exitosamente (${json.inserted} filas)`);
+        setTimeout(() => setUploadMsg(''), 5000);
+        // Refresh component state or dashboard here if possible
+      } else {
+        setUploadMsg(`⚠️ Importado con errores. ${json.inserted} filas creadas.`);
+      }
+    } catch(err: any) {
+      setUploadMsg('❌ Error al subir: ' + err.message);
+    }
+    setUploading(false);
+    e.target.value = '';
+  };
 """
-        content = content.replace("    setLoading(true);\n    setError('');\n    try {", replacement)
 
-    # Need to add state var for estadoCierre
-    if "const [estadoCierre" not in content:
-        content = content.replace(
-            "const [searchTermRRHH, setSearchTermRRHH] = useState('');",
-            "const [searchTermRRHH, setSearchTermRRHH] = useState('');\n  const [estadoCierre, setEstadoCierre] = useState<any>(null);"
-        )
+if "const [uploading, setUploading]" not in c:
+    c = c.replace(
+        "const [loading, setLoading] = useState(false);",
+        "const [loading, setLoading] = useState(false);\n" + state_injection
+    )
 
-    # 2. Update handlePresentar -> /api/informes/cerrar
-    content = content.replace("/api/cierre/presentar", "/api/informes/cerrar")
-    # Need to send "usuario: 'Usuario'" because it is required
-    # But where do we get the user email? In InformeGestion we don't have it unless passed.
-    # We can fetch it from localStorage here
-    if "usuario: " not in content[content.find("body: JSON.stringify({"):content.find("body: JSON.stringify({")+100]:
-        content = content.replace(
-            "body: JSON.stringify({\n          unidad_negocio: unidad,\n          periodo: p\n        })",
-            "body: JSON.stringify({\n          unidad_negocio: unidad,\n          periodo: p,\n          usuario: JSON.parse(localStorage.getItem('cert_user') || '{}')?.email || 'Usuario'\n        })"
-        )
+# 4. Inject buttons for Costos
+button_costos_html = """              {mode === 'costos' && data && (
+                <div className="flex gap-2 relative">
+                  <button onClick={exportCostosToxlsx} className="px-4 py-2 bg-red-600 text-white rounded shadow hover:bg-red-700 transition flex items-center gap-2">
+                    <Download size={16} /> Exportar XLSX
+                  </button>
+                  <input type="file" id="upload-costos" className="hidden" accept=".xlsx,.xls" onChange={(e) => handleFileUpload(e, 'COSTO')} />
+                  <label htmlFor="upload-costos" className="px-4 py-2 bg-blue-600 text-white rounded shadow hover:bg-blue-700 transition flex items-center gap-2 cursor-pointer">
+                    {uploading ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />} Importar adicionales de Costos
+                  </label>
+                  {uploadMsg && <span className="absolute top-full mt-1 right-0 text-xs font-medium bg-white px-2 py-1 shadow-sm rounded text-slate-700 whitespace-nowrap z-50">{uploadMsg}</span>}
+                </div>
+              )}"""
 
-    # 3. Update handleReabrir -> /api/informes/reabrir
-    content = content.replace("/api/cierre/reabrir", "/api/informes/reabrir")
-    if "usuario: " not in content[content.find("body: JSON.stringify({", content.find("handleReabrir")):content.find("handleReabrir")+300]:
-        content = content.replace(
-            "body: JSON.stringify({\n          unidad_negocio: unidad,\n          periodo: p\n        })",
-            "body: JSON.stringify({\n          unidad_negocio: unidad,\n          periodo: p,\n          usuario: JSON.parse(localStorage.getItem('cert_user') || '{}')?.email || 'Usuario'\n        })",
-            1
-        )
+old_button_gastos = """              {mode === 'costos' && data && (
+                <button onClick={exportCostosToxlsx} className="px-4 py-2 bg-red-600 text-white rounded shadow hover:bg-red-700 transition flex items-center gap-2">
+                  <Download size={16} /> Exportar XLSX
+                </button>
+              )}"""
 
-    # 4. Use estadoCierre for the UI instead of data.estado_cierre
-    content = content.replace("data.estado_cierre", "estadoCierre?.estado")
-    content = content.replace("data.usuario_cierre", "estadoCierre?.usuario_cierre")
-    content = content.replace("data.fecha_cierre", "estadoCierre?.fecha_cierre")
-    
-    # Show "CERRADO" / "ABIERTO" tags based on estadoCierre instead of data
-    content = content.replace("{data && (", "{estadoCierre && (")
+if "Importar adicionales de Costos" not in c:
+    c = c.replace(old_button_gastos, button_costos_html)
 
-    with open('frontend/src/components/InformeGestion.tsx', 'w', encoding='utf-8') as f:
-        f.write(content)
-    print("InformeGestion updated.")
+# 5. Inject buttons for Ingresos
+button_ingresos_html = """              {mode === 'dashboard' && data && (
+                <div className="flex gap-2 relative">
+                  <button onClick={exportIngresosToxlsx} className="px-4 py-2 bg-green-600 text-white rounded shadow hover:bg-green-700 transition flex items-center gap-2">
+                    <Download size={16} /> Exportar XLSX
+                  </button>
+                  <input type="file" id="upload-ingresos" className="hidden" accept=".xlsx,.xls" onChange={(e) => handleFileUpload(e, 'INGRESO')} />
+                  <label htmlFor="upload-ingresos" className="px-4 py-2 bg-blue-600 text-white rounded shadow hover:bg-blue-700 transition flex items-center gap-2 cursor-pointer">
+                    {uploading ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />} Importar adicionales de Ingresos
+                  </label>
+                  {uploadMsg && <span className="absolute top-full mt-1 right-0 text-xs font-medium bg-white px-2 py-1 shadow-sm rounded text-slate-700 whitespace-nowrap z-50">{uploadMsg}</span>}
+                </div>
+              )}"""
 
-if __name__ == '__main__':
-    update_informe()
+old_button_ingresos = """              {mode === 'dashboard' && data && (
+                <div className="flex gap-2">
+                  <button onClick={exportIngresosToxlsx} className="px-4 py-2 bg-green-600 text-white rounded shadow hover:bg-green-700 transition flex items-center gap-2">
+                    <Download size={16} /> Exportar Ingresos (XLSX)
+                  </button>
+                </div>
+              )}"""
+
+# If the old button is slightly different:
+old_button_ingresos_2 = """              {mode === 'dashboard' && data && (
+                <button onClick={exportIngresosToxlsx} className="px-4 py-2 bg-green-600 text-white rounded shadow hover:bg-green-700 transition flex items-center gap-2">
+                  <Download size={16} /> Exportar XLSX
+                </button>
+              )}"""
+
+if "Importar adicionales de Ingresos" not in c:
+    if old_button_ingresos in c:
+        c = c.replace(old_button_ingresos, button_ingresos_html)
+    elif old_button_ingresos_2 in c:
+        c = c.replace(old_button_ingresos_2, button_ingresos_html)
+
+# Ensure data.gastos exists, wait, data.gastos was used instead of data.costos
+# We didn't change the backend JSON format so it's still data.gastos
+
+with open(path, 'w', encoding='utf-8') as f:
+    f.write(c)
+
+print("Patch applied successfully")

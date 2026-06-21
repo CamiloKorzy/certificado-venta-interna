@@ -14,7 +14,7 @@ token = jwt.encode({
 }, JWT_SECRET, algorithm="HS256")
 
 unidad = "Seguridad de Activos"
-periodo = "2026-04"
+periodo = "2026-05"
 
 url = f"https://certificado-venta-interna.vercel.app/api/informes/mensual?unidad_negocio={urllib.parse.quote(unidad)}&periodo={periodo}"
 print("Fetching:", url)

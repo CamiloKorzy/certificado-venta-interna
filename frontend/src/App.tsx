@@ -1171,19 +1171,18 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
                   XLSX.utils.book_append_sheet(wb, ws, "Comprobantes Emitidos");
                   XLSX.writeFile(wb, `Comprobantes_Emitidos_${new Date().toISOString().slice(0,10)}.xlsx`);
                 }}
-                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm"
+                className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold px-4 py-2 rounded-xl transition-all shadow-sm"
               >
                 <Download size={14} />
                 Descargar XLSX
               </button>
               
 
-
               
               {selectedAjustes.size > 0 && (
                 <button
                   onClick={handleDeleteSelected}
-                  className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm"
+                  className="flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-xs font-semibold px-4 py-2 rounded-xl transition-colors shadow-sm"
                 >
                   <Trash2 size={14} />
                   Eliminar seleccionados ({selectedAjustes.size})
@@ -1192,7 +1191,7 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
 
               <button
                 onClick={downloadTemplate}
-                className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm"
+                className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold px-4 py-2 rounded-xl transition-all shadow-sm"
               >
                 <Download size={14} />
                 Descargar Plantilla
@@ -1200,7 +1199,7 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
 
               <div className="relative">
                 <input type="file" id="upload-ingresos" className="hidden" accept=".xlsx,.xls" onChange={(e) => handleFileSelect(e, 'INGRESO')} />
-                <label htmlFor="upload-ingresos" className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm cursor-pointer">
+                <label htmlFor="upload-ingresos" className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-all shadow-sm cursor-pointer border border-blue-600">
                   {uploading ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
                   Importar adicionales de Ingresos
                 </label>
@@ -1208,10 +1207,10 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
               </div>
               <button
                 onClick={() => setShowAjustesModal(true)}
-                className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm"
+                className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold px-4 py-2 rounded-xl transition-all shadow-sm"
               >
                 <Settings size={14} />
-                Ver Ajustes
+                Importaciones Adicionales
               </button>
             </div>
           </div>
@@ -1223,7 +1222,7 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
                 <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
                   <h3 className="font-bold text-slate-800 flex items-center gap-2">
                     <Settings size={18} className="text-blue-600" />
-                    Ajustes Importados (Ingresos)
+                    Importaciones Adicionales (Ingresos)
                   </h3>
                   <button onClick={() => setShowAjustesModal(false)} className="text-slate-400 hover:text-slate-600">
                     <X size={20} />

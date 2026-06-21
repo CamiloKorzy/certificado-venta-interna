@@ -1,11 +1,17 @@
+import sys
 import os
-from dotenv import load_dotenv
-load_dotenv('backend/.env')
-import psycopg2
 
-conn = psycopg2.connect(os.environ['SUPABASE_DB_URL'])
+sys.path.append(r"c:\Datos\Proyectos IT\Certificado_Venta_Interna\backend")
+from main import get_supabase
+
+conn = get_supabase()
 cur = conn.cursor()
-cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='public'")
-tables = cur.fetchall()
-print("Tables:", tables)
+cur.execute("SELECT * FROM cert_ajustes_excel WHERE tipo_movimiento = 'INGRESO'")
+rows = cur.fetchall()
+
+print("Total Ajustes Ingreso:", len(rows))
+for r in rows:
+    print(r)
+    
+cur.close()
 conn.close()

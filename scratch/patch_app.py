@@ -1,90 +1,97 @@
 import re
+import os
 
-def update_app():
-    with open('frontend/src/App.tsx', 'r', encoding='utf-8') as f:
-        content = f.read()
+def patch_app():
+    path = 'frontend/src/App.tsx'
+    with open(path, 'r', encoding='utf-8') as f:
+        c = f.read()
 
-    # 1. Add import GestorInformes
-    if "import GestorInformes" not in content:
-        content = content.replace(
-            "import InformeGestion from './components/InformeGestion';",
-            "import InformeGestion from './components/InformeGestion';\nimport GestorInformes from './components/GestorInformes';"
+    # Add imports
+    if 'UploadCloud' not in c:
+        c = c.replace(
+            "import { Building2, PackageCheck",
+            "import { UploadCloud, Building2, PackageCheck"
         )
 
-    # 2. Add globalUnidad and globalPeriodo state to App
-    # Look for: const currentPeriod = `${currentMonth}/${currentYear}`;
-    # We can inject after `const [fetchError, setFetchError] = useState<string | null>(null);` inside `function App()`
-    # Oh wait, `function App` is at the end? Let's find `export default function App` or `function App`
-    
-    app_func_match = re.search(r'function App\(\) \{.*?(const \[token.*?);', content, re.DOTALL)
-    if not app_func_match:
-        app_func_match = re.search(r'export default function App\(\) \{.*?(const \[token.*?);', content, re.DOTALL)
+    # Add states to Dashboard component (which is the Ingresos tab)
+    # The Dashboard signature is `function Dashboard({ token, onLogout...`
+    state_injection = """  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState('');
 
-    if "const [globalUnidad" not in content:
-        # Actually I can just replace `const [view, setView] = useState('dashboard');` with my states
-        content = content.replace(
-            "const [view, setView] = useState('dashboard');",
-            "const [view, setView] = useState('proyectos');\n  const [globalUnidad, setGlobalUnidad] = useState<string | undefined>(undefined);\n  const [globalPeriodo, setGlobalPeriodo] = useState<string | undefined>(undefined);"
-        )
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    setUploading(true);
+    setUploadMsg('');
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("unidad_negocio", appliedFilters.empresa.includes('Todas') ? (defaultUnidad || '') : appliedFilters.empresa[0]);
+    formData.append("periodo", appliedFilters.periodo.includes('Todos') ? currentPeriod : appliedFilters.periodo[0]);
+    formData.append("tipo", "INGRESO");
 
-    # 3. Add 'Proyectos' to Nav
-    nav_item = """
-              <button onClick={() => setView('proyectos')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'proyectos' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
-                <span className="flex items-center gap-1.5"><FileText size={15} /> Proyectos</span>
+    try {
+      const res = await fetch('/api/config/ajustes-excel', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(err);
+      }
+      const json = await res.json();
+      if (json.status === 'ok') {
+        setUploadMsg(`✅ Importado exitosamente (${json.inserted} filas)`);
+        setTimeout(() => setUploadMsg(''), 5000);
+        // Recargar datos
+        apiFetch('/api/indicadores', token)
+          .then(res_json => {
+            setRawData(res_json.data || []);
+            setColumns(res_json.columns || []);
+          });
+      } else {
+        setUploadMsg(`⚠️ Importado con errores. ${json.inserted} filas creadas.`);
+      }
+    } catch(err: any) {
+      setUploadMsg('❌ Error al subir: ' + err.message);
+    }
+    setUploading(false);
+    e.target.value = '';
+  };
+
+  const [expandedRows, setExpandedRows]"""
+
+    if "const [uploading, setUploading]" not in c:
+        c = c.replace("  const [expandedRows, setExpandedRows]", state_injection)
+
+    # Add button next to Descargar XLSX
+    # Search for:
+    button_html = """                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm"
+              >
+                <Download size={14} />
+                Descargar XLSX
               </button>
-"""
-    if "setView('proyectos')" not in content:
-        content = content.replace(
-            '<nav className="flex gap-1">',
-            '<nav className="flex gap-1">\n' + nav_item
-        )
-
-    # 4. Update the render lines
-    # Old lines:
-    # {view === 'dashboard' && <MainDashboard token={token} defaultUnidad={user?.sucursales?.[0]} />}
-    # {view === 'ingresos' && <Dashboard token={token} onLogout={handleLogout} defaultUnidad={user?.sucursales?.[0]} />}
+              
+              <div className="relative">
+                <input type="file" id="upload-ingresos" className="hidden" accept=".xlsx,.xls" onChange={handleFileUpload} />
+                <label htmlFor="upload-ingresos" className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm cursor-pointer">
+                  {uploading ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
+                  Importar adicionales de Ingresos
+                </label>
+                {uploadMsg && <span className="absolute top-full mt-1 right-0 text-xs font-medium bg-white px-2 py-1 shadow-sm rounded text-slate-700 whitespace-nowrap z-50">{uploadMsg}</span>}
+              </div>"""
     
-    if "<GestorInformes" not in content:
-        # We need to replace `defaultUnidad={user?.sucursales?.[0]}` with `defaultUnidad={globalUnidad || user?.sucursales?.[0]} defaultPeriodo={globalPeriodo}`
-        # Also need to make MainDashboard, Gastos, etc. accept defaultPeriodo!
-        
-        # Patch the functions first
-        funcs = ["MainDashboard", "Gastos", "RRHH", "Asientos"]
-        for fn in funcs:
-            content = re.sub(
-                f"function {fn}\\({{ token, defaultUnidad }}: {{ token: string, defaultUnidad\\?: string }}\\) {{",
-                f"function {fn}({{ token, defaultUnidad, defaultPeriodo }}: {{ token: string, defaultUnidad?: string, defaultPeriodo?: string }}) {{",
-                content
-            )
-            content = re.sub(
-                f"<InformeGestion token={{token}} mode=\"([a-z]+)\" defaultUnidad={{defaultUnidad}} />",
-                f"<InformeGestion token={{token}} mode=\"\\1\" defaultUnidad={{defaultUnidad}} defaultPeriodo={{defaultPeriodo}} />",
-                content
-            )
-
-        # Patch the renders inside App
-        for fn in ["MainDashboard", "Gastos", "RRHH", "Asientos"]:
-            content = content.replace(
-                f"<{fn} token={{token}} defaultUnidad={{user?.sucursales?.[0]}} />",
-                f"<{fn} token={{token}} defaultUnidad={{globalUnidad || user?.sucursales?.[0]}} defaultPeriodo={{globalPeriodo}} />"
-            )
-
-        # Dashboard for ingresos
-        content = content.replace(
-            "<Dashboard token={token} onLogout={handleLogout} defaultUnidad={user?.sucursales?.[0]} />",
-            "<Dashboard token={token} onLogout={handleLogout} defaultUnidad={globalUnidad || user?.sucursales?.[0]} />"
-        )
-        
-        # Inject GestorInformes render
-        content = content.replace(
-            "{view === 'dashboard' && <MainDashboard",
-            "{view === 'proyectos' && <GestorInformes token={token} user={user} onOpenReport={(u: string, p: string) => { setGlobalUnidad(u); setGlobalPeriodo(p); setView('dashboard'); }} />}\n      {view === 'dashboard' && <MainDashboard"
+    if "Importar adicionales de Ingresos" not in c:
+        c = c.replace(
+            """                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm"
+              >
+                <Download size={14} />
+                Descargar XLSX
+              </button>""",
+            button_html
         )
 
-    with open('frontend/src/App.tsx', 'w', encoding='utf-8') as f:
-        f.write(content)
-    print("App.tsx updated.")
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(c)
 
-if __name__ == '__main__':
-    update_app()
+patch_app()

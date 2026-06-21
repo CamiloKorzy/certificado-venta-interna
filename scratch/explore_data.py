@@ -1,35 +1,18 @@
-import psycopg2
+import sys
+import os
 
-DB_HOST = "ceesa.dw.finneg.com"
-DB_PORT = "5432"
-DB_NAME = "finnegansbi"
-DB_USER = "ceesauser"
-DB_PASS = "Lula$$2014"
+sys.path.append(r"c:\Datos\Proyectos IT\Certificado_Venta_Interna\backend")
+from main import get_aurora
 
-def main():
-    conn = psycopg2.connect(host=DB_HOST, port=DB_PORT, database=DB_NAME, user=DB_USER, password=DB_PASS, sslmode="require")
-    cur = conn.cursor()
-        
-    cur.execute("""
-        SELECT periodo, count(*)
-        FROM ceesa_cee_liquidaciones_de_sueldos_
-        GROUP BY periodo
-        ORDER BY count(*) DESC
-        LIMIT 10;
-    """)
-    print("\nPeriods:")
-    for r in cur.fetchall():
-        print(r)
+conn = get_aurora()
+cur = conn.cursor()
 
-    cur.execute("""
-        SELECT tipoconcepto, importe
-        FROM ceesa_cee_liquidaciones_de_sueldos_
-        WHERE importe IS NOT NULL AND importe != ''
-        LIMIT 10;
-    """)
-    print("\nSample Data:")
-    for r in cur.fetchall():
-        print(r)
+cur.execute("SELECT COUNT(*) FROM ceesa_cee_certificados_ventas_internas WHERE empresa LIKE '%Taller%' OR cliente LIKE '%Taller%' OR equiposolicitantenombre LIKE '%Taller%'")
+print("Total rows containing 'Taller':", cur.fetchone()[0])
 
-if __name__ == "__main__":
-    main()
+cur.execute("SELECT DISTINCT empresa, cliente, equiposolicitantenombre FROM ceesa_cee_certificados_ventas_internas WHERE empresa LIKE '%Taller%' OR cliente LIKE '%Taller%' OR equiposolicitantenombre LIKE '%Taller%'")
+for r in cur.fetchall():
+    print(r)
+
+cur.close()
+conn.close()
