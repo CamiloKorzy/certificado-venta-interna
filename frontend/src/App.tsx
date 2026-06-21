@@ -996,7 +996,7 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
             </div>
           </div>
           <div className="text-xs text-slate-400 font-medium">
-            Selección administrada desde la solapa Reportes de Gestión
+            Selección administrada desde la solapa Resultados Gestión
           </div>
         </div>
 
@@ -2230,7 +2230,7 @@ export default function App() {
 
               <button onClick={() => setView('proyectos')}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'proyectos' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
-                <span className="flex items-center gap-1.5"><FileText size={15} /> Reportes de Gestión</span>
+                <span className="flex items-center gap-1.5"><FileText size={15} /> Resultados Gestión</span>
               </button>
 
               {globalUnidad && globalPeriodo && (

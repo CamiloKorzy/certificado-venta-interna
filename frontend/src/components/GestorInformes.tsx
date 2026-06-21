@@ -260,7 +260,7 @@ export default function GestorInformes({ token, onOpenReport, user }: any) {
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-            <FileText className="text-blue-600" /> Reportes de Gestión
+            <FileText className="text-blue-600" /> Resultados Gestión
           </h1>
           <p className="text-slate-500 mt-1 text-sm">Gestiona el ciclo de vida de los informes de gestión</p>
         </div>
