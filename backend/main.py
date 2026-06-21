@@ -2558,7 +2558,7 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
     # Nota: Corregimos los nombres de columnas para evitar el error "column producto does not exist"
     # Usamos documento y comprobante, productonombre, y equiposolicitantenombre
     sql_ingresos = """
-    SELECT DISTINCT fecha, documento, comprobante, productonombre, equiposolicitantenombre, itemimporte, itemimportegravado, itemcantidad
+    SELECT fecha, documento, comprobante, productonombre, equiposolicitantenombre, itemimporte, itemimportegravado, itemcantidad
     FROM ceesa_cee_certificados_ventas_internas
     WHERE EXTRACT(YEAR FROM CAST(fecha AS TIMESTAMP)) = %s 
       AND EXTRACT(MONTH FROM CAST(fecha AS TIMESTAMP)) = %s

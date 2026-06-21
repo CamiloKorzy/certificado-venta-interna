@@ -8,7 +8,8 @@ import InformeGestion from './components/InformeGestion';
 import GestorInformes from './components/GestorInformes';
 import ConsumosInventarios from './components/ConsumosInventarios';
 import Equipos from './components/Equipos';
-// CertificadosObras import removed
+import CertificadosObras from './components/CertificadosObras';
+import { Briefcase } from 'lucide-react';
 // ─── API Helper ───
 const API_URL = '';
 function apiFetch(path: string, token: string, options: any = {}) {
@@ -2126,8 +2127,30 @@ function MainDashboard({ token, defaultUnidad, defaultPeriodo }: { token: string
 }
 
 function Ingresos({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: string, onLogout: () => void, defaultUnidad?: string, defaultPeriodo?: string }) {
+  const [subTab, setSubTab] = useState<'comprobantes' | 'obras'>('comprobantes');
+
   return (
-    <Dashboard token={token} onLogout={onLogout} defaultUnidad={defaultUnidad} defaultPeriodo={defaultPeriodo} />
+    <div className="bg-slate-50 min-h-screen pb-12 overflow-x-hidden font-sans">
+      <div className="bg-white border-b border-slate-200 shadow-sm mb-4">
+        <div className="max-w-[1800px] mx-auto px-6 flex items-center h-10 gap-1 overflow-x-auto whitespace-nowrap scrollbar-none">
+          <button 
+            onClick={() => setSubTab('comprobantes')}
+            className={`px-4 h-full text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'comprobantes' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            <TrendingUp size={13} /> Comprobantes de Ingresos (Ventas Internas)
+          </button>
+          <button 
+            onClick={() => setSubTab('obras')}
+            className={`px-4 h-full text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'obras' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            <Briefcase size={13} /> Certificados de Obras (Soporte)
+          </button>
+        </div>
+      </div>
+
+      {subTab === 'comprobantes' && <Dashboard token={token} onLogout={onLogout} defaultUnidad={defaultUnidad} defaultPeriodo={defaultPeriodo} />}
+      {subTab === 'obras' && <CertificadosObras token={token} unidadNegocio={defaultUnidad!} periodo={defaultPeriodo!} />}
+    </div>
   );
 }
 
