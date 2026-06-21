@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Package, Search, DollarSign, ListCollapse, Layers, AlertCircle, Loader2 } from 'lucide-react';
+import { Package, Search, DollarSign, ListCollapse, Layers, AlertCircle, Loader2, Building2 } from 'lucide-react';
 
 const API_URL = '';
 function apiFetch(path: string, token: string, options: any = {}) {
@@ -33,7 +33,31 @@ interface ConsumoItem {
   total: number;
   orden_produccion: string;
   deposito: string;
+  sucursal?: string;
 }
+
+const getRubro = (insumoName: string): string => {
+  const name = (insumoName || '').toLowerCase();
+  if (name.includes('guante') || name.includes('protector') || name.includes('mascarilla') || name.includes('antiparra') || name.includes('botón') || name.includes('bota') || name.includes('chaleco') || name.includes('faja') || name.includes('casco') || name.includes('grafa') || name.includes('pantalón') || name.includes('camisa')) {
+    return 'Seguridad e Higiene (EPP)';
+  }
+  if (name.includes('agua bid') || name.includes('cebola') || name.includes('cebolla') || name.includes('tomate') || name.includes('zanahoria') || name.includes('papa') || name.includes('morrón') || name.includes('ajo') || name.includes('zapallo') || name.includes('verdeo') || name.includes('perejil') || name.includes('harina') || name.includes('repollo') || name.includes('yerba') || name.includes('huevo') || name.includes('fideo') || name.includes('arroz') || name.includes('carne') || name.includes('pan ') || name.includes('aceite') || name.includes('aguja') || name.includes('vaco') || name.includes('pulpa') || name.includes('pollo')) {
+    return 'Alimentos y Comedor';
+  }
+  if (name.includes('piedra') || name.includes('escollera') || name.includes('arena') || name.includes('estabilizado') || name.includes('binder') || name.includes('suelo')) {
+    return 'Áridos y Cantera';
+  }
+  if (name.includes('cemento') || name.includes('cal ') || name.includes('yeso') || name.includes('hormigón')) {
+    return 'Cemento y Ligantes';
+  }
+  if (name.includes('alambre') || name.includes('hierro') || name.includes('clavo') || name.includes('electrodo') || name.includes('bulón') || name.includes('arandela') || name.includes('chapa') || name.includes('perfil') || name.includes('disco') || name.includes('solda') || name.includes('tornillo') || name.includes('tuerca')) {
+    return 'Hierros y Ferretería';
+  }
+  if (name.includes('gasoil') || name.includes('combustible') || name.includes('nafta') || name.includes('aceite lubricante') || name.includes('grasa') || name.includes('filtro') || name.includes('batería') || name.includes('neumático') || name.includes('cubierta')) {
+    return 'Combustibles y Repuestos';
+  }
+  return 'Otros Insumos';
+};
 
 export default function ConsumosInventarios({
   token,
@@ -88,6 +112,40 @@ export default function ConsumosInventarios({
     const transacciones = filteredData.length;
     const insumosDiferentes = new Set(filteredData.map(item => item.insumo)).size;
     return { totalConsumido, transacciones, insumosDiferentes };
+  }, [filteredData]);
+
+  // Aggregated totals
+  const rubrosTotals = useMemo(() => {
+    const totals: Record<string, number> = {};
+    filteredData.forEach(item => {
+      const rubro = getRubro(item.insumo);
+      totals[rubro] = (totals[rubro] || 0) + (item.total || 0);
+    });
+    return Object.entries(totals)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+  }, [filteredData]);
+
+  const depositosTotals = useMemo(() => {
+    const totals: Record<string, number> = {};
+    filteredData.forEach(item => {
+      const dep = item.deposito || 'Sin Depósito';
+      totals[dep] = (totals[dep] || 0) + (item.total || 0);
+    });
+    return Object.entries(totals)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+  }, [filteredData]);
+
+  const sucursalesTotals = useMemo(() => {
+    const totals: Record<string, number> = {};
+    filteredData.forEach(item => {
+      const suc = item.sucursal || 'Sin Sucursal';
+      totals[suc] = (totals[suc] || 0) + (item.total || 0);
+    });
+    return Object.entries(totals)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
   }, [filteredData]);
 
   // Format helper for Currency
@@ -212,6 +270,66 @@ export default function ConsumosInventarios({
                   <h3 className="text-2xl font-black text-slate-800">{formatNumber(stats.insumosDiferentes)}</h3>
                   <p className="text-xs text-slate-500">Tipos de materiales utilizados</p>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Aggregated Summaries Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Totales por Rubro */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden p-5 flex flex-col space-y-3 hover:shadow-md transition-shadow">
+              <h4 className="text-sm font-bold text-slate-700 flex items-center gap-1.5 border-b pb-2">
+                <Layers className="text-blue-600 h-4.5 w-4.5" /> Totales por Rubro
+              </h4>
+              <div className="overflow-y-auto max-h-[220px] pr-1.5 space-y-2">
+                {rubrosTotals.length === 0 ? (
+                  <p className="text-xs text-slate-400 py-4 text-center">No hay datos de rubros</p>
+                ) : (
+                  rubrosTotals.map((r, idx) => (
+                    <div key={idx} className="flex justify-between items-center text-xs font-semibold hover:bg-slate-50 p-1.5 rounded-lg transition-colors">
+                      <span className="text-slate-600 truncate mr-2" title={r.name}>{r.name}</span>
+                      <span className="font-extrabold text-blue-600 whitespace-nowrap">{formatCurrency(r.value)}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Totales por Depósito */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden p-5 flex flex-col space-y-3 hover:shadow-md transition-shadow">
+              <h4 className="text-sm font-bold text-slate-700 flex items-center gap-1.5 border-b pb-2">
+                <Package className="text-indigo-600 h-4.5 w-4.5" /> Totales por Depósito
+              </h4>
+              <div className="overflow-y-auto max-h-[220px] pr-1.5 space-y-2">
+                {depositosTotals.length === 0 ? (
+                  <p className="text-xs text-slate-400 py-4 text-center">No hay datos de depósitos</p>
+                ) : (
+                  depositosTotals.map((d, idx) => (
+                    <div key={idx} className="flex justify-between items-center text-xs font-semibold hover:bg-slate-50 p-1.5 rounded-lg transition-colors">
+                      <span className="text-slate-600 truncate mr-2" title={d.name}>{d.name}</span>
+                      <span className="font-extrabold text-indigo-600 whitespace-nowrap">{formatCurrency(d.value)}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Totales por Sucursal */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden p-5 flex flex-col space-y-3 hover:shadow-md transition-shadow">
+              <h4 className="text-sm font-bold text-slate-700 flex items-center gap-1.5 border-b pb-2">
+                <Building2 className="text-emerald-600 h-4.5 w-4.5" /> Totales por Sucursal
+              </h4>
+              <div className="overflow-y-auto max-h-[220px] pr-1.5 space-y-2">
+                {sucursalesTotals.length === 0 ? (
+                  <p className="text-xs text-slate-400 py-4 text-center">No hay datos de sucursales</p>
+                ) : (
+                  sucursalesTotals.map((s, idx) => (
+                    <div key={idx} className="flex justify-between items-center text-xs font-semibold hover:bg-slate-50 p-1.5 rounded-lg transition-colors">
+                      <span className="text-slate-600 truncate mr-2" title={s.name}>{s.name}</span>
+                      <span className="font-extrabold text-emerald-600 whitespace-nowrap">{formatCurrency(s.value)}</span>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>

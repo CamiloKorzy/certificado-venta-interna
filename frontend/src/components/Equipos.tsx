@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Wrench, UploadCloud, Trash2, Search, DollarSign, Clock, AlertCircle, Loader2, Check, FileSpreadsheet } from 'lucide-react';
+import { Wrench, UploadCloud, Trash2, Search, DollarSign, Clock, AlertCircle, Loader2, Check, FileSpreadsheet, Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 const API_URL = '';
 function apiFetch(path: string, token: string, options: any = {}) {
@@ -56,6 +57,19 @@ export default function Equipos({
   const [successMsg, setSuccessMsg] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [reportClosed, setReportClosed] = useState(false);
+
+  const downloadTemplate = () => {
+    const ws_data = [
+      ['Equipo', 'Concepto', 'Horas/Kilometros', 'Precio Unitario', 'Total'],
+      ['Pala Cargadora 01', 'Alquiler Mensual', 160, 25000, 4000000]
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(ws_data);
+    const wscols = [{wch:25}, {wch:25}, {wch:18}, {wch:18}, {wch:18}];
+    ws['!cols'] = wscols;
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Plantilla_Equipos");
+    XLSX.writeFile(wb, `Plantilla_Equipos.xlsx`);
+  };
 
   useEffect(() => {
     if (unidadNegocio && periodo) {
@@ -245,6 +259,15 @@ export default function Equipos({
                   Eliminar Planilla Importada
                 </button>
               )}
+
+              {/* Descargar Plantilla */}
+              <button
+                onClick={downloadTemplate}
+                className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 font-bold py-2 px-4 rounded-xl text-sm border border-slate-200 transition-all shadow-sm"
+              >
+                <Download size={16} />
+                Descargar Plantilla
+              </button>
 
               {/* Upload Input */}
               <label className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-xl text-sm transition-all shadow-sm shadow-blue-500/10 cursor-pointer select-none">

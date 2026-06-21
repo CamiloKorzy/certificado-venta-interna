@@ -2707,7 +2707,36 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
         except Exception as e:
             print("Error Gastos Compras:", e)
 
-        
+        # === 3. Consumos de Inventario (Consolidado) ===
+        try:
+            cur.execute("""
+                SELECT 
+                    COUNT(*),
+                    SUM(CASE WHEN importevalorizadoconsumoprod IS NOT NULL AND importevalorizadoconsumoprod != 'NULL' AND importevalorizadoconsumoprod != '' 
+                             THEN CAST(importevalorizadoconsumoprod AS DOUBLE PRECISION) 
+                             ELSE 0.0 END)
+                FROM analisis_de_consumos_de_produccion
+                WHERE (empresa = %s OR depositoorigenconsumoprod ILIKE %s OR depositoorigenconsumoprod = %s)
+                  AND SUBSTRING(fecha, 1, 7) = %s
+            """, (unidad_negocio, f"%{unidad_negocio}%", unidad_negocio, periodo))
+            row_c = cur.fetchone()
+            if row_c and (row_c[0] or 0) > 0:
+                total_consumos = float(row_c[1] or 0.0)
+                y_part, m_part = periodo.split('-')
+                comprobante_label = f"Consumo de Insumos ({m_part}/{y_part})"
+                gastos.append({
+                    "origen": "CONSUMOS",
+                    "tipo_movimiento": "EGRESO",
+                    "categoria": "Materiales",
+                    "fecha": f"{periodo}-01",
+                    "concepto": "Consumo de Insumos de Producción / Inventario (Soporte)",
+                    "comprobante": comprobante_label,
+                    "proveedor": "Consumos de Producción",
+                    "importe": total_consumos
+                })
+        except Exception as e:
+            print("Error calculando total consumos consolidado:", e)
+
     cur.close()
     conn.close()
     
@@ -3106,12 +3135,13 @@ def get_consumos_inventarios_live(unidad_negocio: str, periodo: str):
                 preciounitvalorizadoconsumoprod, 
                 importevalorizadoconsumoprod,
                 ordendeproduccion,
-                depositoorigenconsumoprod
+                depositoorigenconsumoprod,
+                empresa
             FROM analisis_de_consumos_de_produccion
-            WHERE empresa = %s 
+            WHERE (empresa = %s OR depositoorigenconsumoprod ILIKE %s OR depositoorigenconsumoprod = %s)
               AND SUBSTRING(fecha, 1, 7) = %s
             ORDER BY fecha DESC
-        """, (unidad_negocio, periodo))
+        """, (unidad_negocio, f"%{unidad_negocio}%", unidad_negocio, periodo))
         rows = cur.fetchall()
         
         result = []
@@ -3138,7 +3168,8 @@ def get_consumos_inventarios_live(unidad_negocio: str, periodo: str):
                 "precio_unitario": precio,
                 "total": importe,
                 "orden_produccion": r[7] or "",
-                "deposito": r[8] or ""
+                "deposito": r[8] or "",
+                "sucursal": r[9] or ""
             })
         return result
     finally:
