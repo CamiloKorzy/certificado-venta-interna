@@ -303,7 +303,32 @@ def auto_setup_db():
                 IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='cert_cierres_detalle' AND column_name='proveedor') THEN
                     ALTER TABLE cert_cierres_detalle ADD COLUMN proveedor TEXT;
                 END IF;
+                
+                CREATE TABLE IF NOT EXISTS cert_informes_proyecto (
+                    id SERIAL PRIMARY KEY,
+                    unidad_negocio TEXT NOT NULL,
+                    periodo TEXT NOT NULL,
+                    estado TEXT NOT NULL DEFAULT 'ABIERTO',
+                    snapshot_data JSONB,
+                    usuario_apertura TEXT,
+                    fecha_apertura TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    usuario_cierre TEXT,
+                    fecha_cierre TIMESTAMP,
+                    UNIQUE(unidad_negocio, periodo)
+                );
             END $$;
+
+            CREATE TABLE IF NOT EXISTS cert_respaldos (
+                id SERIAL PRIMARY KEY,
+                tipo_documento VARCHAR(100) NOT NULL,
+                unidad_negocio VARCHAR(255) NOT NULL,
+                periodo VARCHAR(7) NOT NULL,
+                nombre_archivo VARCHAR(255) NOT NULL,
+                tipo_mime VARCHAR(255),
+                contenido TEXT,
+                usuario_carga VARCHAR(255),
+                fecha_carga TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
 
         """)
         # Crear admin por defecto si no existe
@@ -3160,6 +3185,89 @@ def get_informes_lista(user=Depends(get_current_user)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/respaldos")
+def listar_respaldos(tipo_documento: str, unidad_negocio: str, periodo: str, current_user = Depends(get_current_user)):
+    conn = get_supabase()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT id, nombre_archivo, tipo_mime, usuario_carga, fecha_carga
+            FROM cert_respaldos
+            WHERE tipo_documento = %s AND unidad_negocio = %s AND periodo = %s
+            ORDER BY fecha_carga DESC
+        """, (tipo_documento, unidad_negocio, periodo))
+        rows = cur.fetchall()
+        result = []
+        for r in rows:
+            result.append({
+                "id": r[0],
+                "nombre_archivo": r[1],
+                "tipo_mime": r[2],
+                "usuario_carga": r[3],
+                "fecha_carga": str(r[4])
+            })
+        return result
+    finally:
+        cur.close()
+        conn.close()
+
+@app.post("/api/respaldos/upload")
+async def upload_respaldo(
+    tipo_documento: str = Form(...),
+    unidad_negocio: str = Form(...),
+    periodo: str = Form(...),
+    file: UploadFile = File(...),
+    current_user = Depends(get_current_user)
+):
+    import base64
+    contents = await file.read()
+    encoded = base64.b64encode(contents).decode("utf-8")
+    
+    conn = get_supabase()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO cert_respaldos (tipo_documento, unidad_negocio, periodo, nombre_archivo, tipo_mime, contenido, usuario_carga)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (tipo_documento, unidad_negocio, periodo, file.filename, file.content_type, encoded, current_user.get("email", "unknown")))
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+    return {"status": "ok", "message": "Archivo adjunto guardado correctamente"}
+
+@app.get("/api/respaldos/descargar/{id}")
+def descargar_respaldo(id: int, current_user = Depends(get_current_user)):
+    conn = get_supabase()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT nombre_archivo, tipo_mime, contenido FROM cert_respaldos WHERE id = %s", (id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Archivo no encontrado")
+        nombre, mime, encoded = row
+        import base64
+        from fastapi import Response
+        decoded = base64.b64decode(encoded)
+        headers = {
+            "Content-Disposition": f"attachment; filename={nombre}"
+        }
+        return Response(content=decoded, media_type=mime, headers=headers)
+    finally:
+        cur.close()
+        conn.close()
+
+@app.delete("/api/respaldos/{id}")
+def eliminar_respaldo(id: int, current_user = Depends(get_current_user)):
+    conn = get_supabase()
+    cur = conn.cursor()
+    try:
+        cur.execute("DELETE FROM cert_respaldos WHERE id = %s", (id,))
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+    return {"status": "ok", "message": "Archivo adjunto eliminado"}
 
 # ═══════════════════════════════════════════════════════
 # NUEVOS MÓDULOS: CONSUMOS, EQUIPOS Y OBRAS

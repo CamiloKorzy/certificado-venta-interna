@@ -2206,9 +2206,17 @@ export default function App() {
       <div className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-40">
         <div className="max-w-[1800px] w-full mx-auto px-6 flex items-center justify-between h-14">
           <div className="flex items-center gap-6">
-            <h1 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+            <h1 className="font-bold text-slate-800 text-sm flex items-center gap-3">
               <img src="/logo_cee.png" alt="CEE" className="h-8 w-8 rounded-md object-contain" />
-              Reporte de Resultados
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                <span>Reporte de Resultados</span>
+                {globalUnidad && globalPeriodo && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-100 shadow-sm animate-pulse">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                    Gestionando: {globalUnidad} ({globalPeriodo})
+                  </span>
+                )}
+              </div>
             </h1>
             <nav className="flex gap-1">
 
@@ -2250,7 +2258,19 @@ export default function App() {
       </div>
 
       {/* Content */}
-      {view === 'proyectos' && <GestorInformes token={token} user={user} onOpenReport={(u: string, p: string) => { setGlobalUnidad(u); setGlobalPeriodo(p); setView('dashboard'); }} />}
+      {view === 'proyectos' && (
+        <GestorInformes 
+          token={token} 
+          user={user} 
+          activeUnidad={globalUnidad} 
+          activePeriodo={globalPeriodo} 
+          onOpenReport={(u: string, p: string) => { 
+            setGlobalUnidad(u); 
+            setGlobalPeriodo(p); 
+            setView('dashboard'); 
+          }} 
+        />
+      )}
       {view === 'dashboard' && <MainDashboard token={token} defaultUnidad={globalUnidad} defaultPeriodo={globalPeriodo} />}
       {view === 'ingresos' && <Ingresos token={token} onLogout={handleLogout} defaultUnidad={globalUnidad} defaultPeriodo={globalPeriodo} />}
       {view === 'costos' && <Costos token={token} defaultUnidad={globalUnidad} defaultPeriodo={globalPeriodo} />}

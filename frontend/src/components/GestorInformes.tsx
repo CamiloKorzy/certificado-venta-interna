@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { FileText, Plus, FolderLock, FolderOpen, Calendar, Building, Loader2, Info, AlertCircle, Trash2 } from 'lucide-react';
 import { MultiSelect } from './MultiSelect';
 
-export default function GestorInformes({ token, onOpenReport, user }: any) {
+export default function GestorInformes({ token, onOpenReport, user, activeUnidad, activePeriodo }: any) {
   const [customDialog, setCustomDialog] = useState<{
     isOpen: boolean;
     type: 'alert' | 'confirm';
@@ -334,20 +334,38 @@ export default function GestorInformes({ token, onOpenReport, user }: any) {
               // inf.periodo is YYYY-MM. Convert to MM/YYYY
               const [y, m] = inf.periodo.split('-');
               const perStr = `${m}/${y}`;
+              const isActive = activeUnidad === inf.unidad_negocio && activePeriodo === perStr;
               return (
-                <tr key={inf.id} className="hover:bg-slate-50">
-                  <td className="p-4 font-medium flex items-center gap-2"><Calendar size={16} className="text-slate-400"/> {perStr}</td>
-                  <td className="p-4"><span className="flex items-center gap-2"><Building size={16} className="text-slate-400"/> {inf.unidad_negocio}</span></td>
+                <tr key={inf.id} className={`transition-all duration-150 ${isActive ? 'bg-blue-50/50 hover:bg-blue-50/70' : 'hover:bg-slate-50'}`}>
+                  <td className={`p-4 font-medium flex items-center gap-2 ${isActive ? 'border-l-4 border-l-blue-600' : ''}`}>
+                    <Calendar size={16} className={isActive ? 'text-blue-500' : 'text-slate-400'}/> {perStr}
+                  </td>
                   <td className="p-4">
-                    {inf.estado === 'CERRADO' 
-                      ? <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold flex items-center w-fit gap-1"><FolderLock size={14}/> CERRADO</span>
-                      : <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold flex items-center w-fit gap-1"><FolderOpen size={14}/> ABIERTO</span>
-                    }
+                    <span className="flex items-center gap-2">
+                      <Building size={16} className={isActive ? 'text-blue-500' : 'text-slate-400'}/> {inf.unidad_negocio}
+                    </span>
+                  </td>
+                  <td className="p-4">
+                    <div className="flex items-center gap-2">
+                      {inf.estado === 'CERRADO' 
+                        ? <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold flex items-center w-fit gap-1"><FolderLock size={14}/> CERRADO</span>
+                        : <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold flex items-center w-fit gap-1"><FolderOpen size={14}/> ABIERTO</span>
+                      }
+                      {isActive && (
+                        <span className="bg-blue-100 text-blue-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold flex items-center w-fit gap-1 border border-blue-200 shadow-sm animate-pulse">
+                          <span className="w-1 h-1 rounded-full bg-blue-600"></span>
+                          En Gestión
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="p-4 text-sm text-slate-500">{inf.usuario_apertura}</td>
                   <td className="p-4 flex items-center gap-4">
-                    <button onClick={() => onOpenReport(inf.unidad_negocio, perStr)} className="text-blue-600 hover:text-blue-800 text-sm font-bold">
-                      Abrir Reporte
+                    <button 
+                      onClick={() => onOpenReport(inf.unidad_negocio, perStr)} 
+                      className={`text-sm font-bold transition-all duration-150 ${isActive ? 'bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-1.5 rounded-xl shadow-sm border border-blue-700' : 'text-blue-600 hover:text-blue-800'}`}
+                    >
+                      {isActive ? 'Continuar Gestión' : 'Abrir Reporte'}
                     </button>
                     {inf.estado === 'ABIERTO' && (
                       <>
