@@ -2112,26 +2112,79 @@ function MainDashboard({ token, defaultUnidad, defaultPeriodo }: { token: string
   );
 }
 
+function Ingresos({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: string, onLogout: () => void, defaultUnidad?: string, defaultPeriodo?: string }) {
+  const [subTab, setSubTab] = useState<'comprobantes' | 'obras'>('comprobantes');
+
+  return (
+    <div className="bg-slate-50 min-h-screen pb-12 overflow-x-hidden font-sans">
+      <div className="bg-white border-b border-slate-200 shadow-sm mb-4">
+        <div className="max-w-[1800px] mx-auto px-6 flex items-center h-10 gap-1">
+          <button 
+            onClick={() => setSubTab('comprobantes')}
+            className={`px-4 h-full text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${subTab === 'comprobantes' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            <TrendingUp size={13} /> Comprobantes de Ingresos
+          </button>
+          <button 
+            onClick={() => setSubTab('obras')}
+            className={`px-4 h-full text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${subTab === 'obras' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            <Building2 size={13} /> Certificados de Obras (Orígenes)
+          </button>
+        </div>
+      </div>
+
+      {subTab === 'comprobantes' && <Dashboard token={token} onLogout={onLogout} defaultUnidad={defaultUnidad} defaultPeriodo={defaultPeriodo} />}
+      {subTab === 'obras' && <CertificadosObras token={token} unidadNegocio={defaultUnidad!} periodo={defaultPeriodo!} />}
+    </div>
+  );
+}
+
 function Costos({ token, defaultUnidad, defaultPeriodo }: { token: string, defaultUnidad?: string, defaultPeriodo?: string }) {
-  return (
-    <div className="bg-slate-50 min-h-screen pb-12 overflow-x-hidden">
-      <InformeGestion token={token} mode="costos" defaultUnidad={defaultUnidad} defaultPeriodo={defaultPeriodo} />
-    </div>
-  );
-}
+  const [subTab, setSubTab] = useState<'resumen' | 'asientos' | 'rrhh' | 'consumos' | 'equipos'>('resumen');
 
-function Asientos({ token, defaultUnidad, defaultPeriodo }: { token: string, defaultUnidad?: string, defaultPeriodo?: string }) {
   return (
-    <div className="bg-slate-50 min-h-screen pb-12 overflow-x-hidden">
-      <InformeGestion token={token} mode="asientos" defaultUnidad={defaultUnidad} defaultPeriodo={defaultPeriodo} />
-    </div>
-  );
-}
+    <div className="bg-slate-50 min-h-screen pb-12 overflow-x-hidden font-sans">
+      <div className="bg-white border-b border-slate-200 shadow-sm mb-4">
+        <div className="max-w-[1800px] mx-auto px-6 flex items-center h-10 gap-1 overflow-x-auto whitespace-nowrap scrollbar-none">
+          <button 
+            onClick={() => setSubTab('resumen')}
+            className={`px-4 h-full text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'resumen' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            <Wallet size={13} /> Resumen de Costos
+          </button>
+          <button 
+            onClick={() => setSubTab('asientos')}
+            className={`px-4 h-full text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'asientos' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            <FileText size={13} /> Asientos Vinculados (Soporte)
+          </button>
+          <button 
+            onClick={() => setSubTab('rrhh')}
+            className={`px-4 h-full text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'rrhh' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            <Users size={13} /> Recursos Humanos (Soporte)
+          </button>
+          <button 
+            onClick={() => setSubTab('consumos')}
+            className={`px-4 h-full text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'consumos' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            <Package size={13} /> Consumos de Inventarios (Soporte)
+          </button>
+          <button 
+            onClick={() => setSubTab('equipos')}
+            className={`px-4 h-full text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'equipos' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            <Wrench size={13} /> Certificaciones de Equipos (Soporte)
+          </button>
+        </div>
+      </div>
 
-function RRHH({ token, defaultUnidad, defaultPeriodo }: { token: string, defaultUnidad?: string, defaultPeriodo?: string }) {
-  return (
-    <div className="bg-slate-50 min-h-screen pb-12 overflow-x-hidden">
-      <InformeGestion token={token} mode="rrhh" defaultUnidad={defaultUnidad} defaultPeriodo={defaultPeriodo} />
+      {subTab === 'resumen' && <InformeGestion token={token} mode="costos" defaultUnidad={defaultUnidad} defaultPeriodo={defaultPeriodo} />}
+      {subTab === 'asientos' && <InformeGestion token={token} mode="asientos" defaultUnidad={defaultUnidad} defaultPeriodo={defaultPeriodo} />}
+      {subTab === 'rrhh' && <InformeGestion token={token} mode="rrhh" defaultUnidad={defaultUnidad} defaultPeriodo={defaultPeriodo} />}
+      {subTab === 'consumos' && <ConsumosInventarios token={token} unidadNegocio={defaultUnidad!} periodo={defaultPeriodo!} />}
+      {subTab === 'equipos' && <Equipos token={token} unidadNegocio={defaultUnidad!} periodo={defaultPeriodo!} />}
     </div>
   );
 }
@@ -2194,26 +2247,6 @@ export default function App() {
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'costos' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
                     <span className="flex items-center gap-1.5"><Wallet size={15} /> Costos</span>
                   </button>
-                  <button onClick={() => setView('asientos')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'asientos' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
-                    <span className="flex items-center gap-1.5"><FileText size={15} /> Asientos</span>
-                  </button>
-                  <button onClick={() => setView('rrhh')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'rrhh' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
-                    <span className="flex items-center gap-1.5"><Users size={15} /> RRHH</span>
-                  </button>
-                  <button onClick={() => setView('consumos')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'consumos' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
-                    <span className="flex items-center gap-1.5"><Package size={15} /> Consumos</span>
-                  </button>
-                  <button onClick={() => setView('equipos')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'equipos' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
-                    <span className="flex items-center gap-1.5"><Wrench size={15} /> Equipos</span>
-                  </button>
-                  <button onClick={() => setView('obras')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'obras' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
-                    <span className="flex items-center gap-1.5"><Building2 size={15} /> Obras</span>
-                  </button>
                 </>
               )}
               {user?.rol === 'admin' && (
@@ -2235,13 +2268,8 @@ export default function App() {
       {/* Content */}
       {view === 'proyectos' && <GestorInformes token={token} user={user} onOpenReport={(u: string, p: string) => { setGlobalUnidad(u); setGlobalPeriodo(p); setView('dashboard'); }} />}
       {view === 'dashboard' && <MainDashboard token={token} defaultUnidad={globalUnidad} defaultPeriodo={globalPeriodo} />}
-      {view === 'ingresos' && <Dashboard token={token} onLogout={handleLogout} defaultUnidad={globalUnidad} defaultPeriodo={globalPeriodo} />}
+      {view === 'ingresos' && <Ingresos token={token} onLogout={handleLogout} defaultUnidad={globalUnidad} defaultPeriodo={globalPeriodo} />}
       {view === 'costos' && <Costos token={token} defaultUnidad={globalUnidad} defaultPeriodo={globalPeriodo} />}
-      {view === 'asientos' && <Asientos token={token} defaultUnidad={globalUnidad} defaultPeriodo={globalPeriodo} />}
-      {view === 'rrhh' && <RRHH token={token} defaultUnidad={globalUnidad} defaultPeriodo={globalPeriodo} />}
-      {view === 'consumos' && <ConsumosInventarios token={token} unidadNegocio={globalUnidad!} periodo={globalPeriodo!} />}
-      {view === 'equipos' && <Equipos token={token} unidadNegocio={globalUnidad!} periodo={globalPeriodo!} />}
-      {view === 'obras' && <CertificadosObras token={token} unidadNegocio={globalUnidad!} periodo={globalPeriodo!} />}
       {view === 'config' && user?.rol === 'admin' && <Configuracion token={token} />}
 
       {/* Modal Acerca de */}
