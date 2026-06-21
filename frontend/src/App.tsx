@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import * as XLSX from 'xlsx';
-import { UploadCloud, Building2, PackageCheck, TrendingUp, FileText, Filter, Calendar, LayoutDashboard, Search, ChevronDown, ChevronUp, ChevronRight, BarChart3, Presentation, Download, LogOut, Settings, Users, Save, X, Trash2, Edit2, Send, Check, Loader2, Shield, Bell, Wallet, Info, AlertCircle, Wrench, Package } from 'lucide-react';
+import { UploadCloud, Building2, PackageCheck, TrendingUp, DollarSign, FileText, Filter, Calendar, LayoutDashboard, Search, ChevronDown, ChevronUp, ChevronRight, BarChart3, Presentation, Download, LogOut, Settings, Users, Save, X, Trash2, Edit2, Send, Check, Loader2, Shield, Bell, Wallet, Info, AlertCircle, Wrench, Package } from 'lucide-react';
 import ConfiguracionAvanzada from './components/ConfiguracionAvanzada';
 import ConfiguracionCentrosCosto from './components/ConfiguracionCentrosCosto';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -8,7 +8,7 @@ import InformeGestion from './components/InformeGestion';
 import GestorInformes from './components/GestorInformes';
 import ConsumosInventarios from './components/ConsumosInventarios';
 import Equipos from './components/Equipos';
-import CertificadosObras from './components/CertificadosObras';
+// CertificadosObras import removed
 // ─── API Helper ───
 const API_URL = '';
 function apiFetch(path: string, token: string, options: any = {}) {
@@ -958,52 +958,39 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 font-sans pb-12 overflow-x-hidden">
-      {/* Top Navbar */}
-      <nav className="bg-slate-900 text-white shadow-md">
-        <div className="max-w-[1800px] w-full mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="bg-white p-2 rounded-xl h-14 w-14 flex items-center justify-center shadow-sm">
-              <img src="/logo_cee.png" alt="CEE ENRIQUEZ" className="h-full w-full object-contain" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold tracking-tight">Certificados de Ventas Internos</h1>
-              <p className="text-blue-300 text-xs font-bold tracking-widest uppercase mt-0.5">Ingresos</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 text-sm text-slate-300 bg-slate-800 px-4 py-2 rounded-full border border-slate-700">
-            <Presentation size={16} className="text-blue-400" />
-            <span className="font-medium">Ingresos</span>
-          </div>
-        </div>
-      </nav>
-
-      <div className="max-w-[1800px] w-full mx-auto px-6 py-8 space-y-6">
+      <div className="max-w-[1800px] w-full mx-auto px-6 py-6 space-y-6">
         
-
-        {/* Active Project Information Header */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-wrap gap-6 items-center justify-between">
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2 text-slate-600">
-              <Building2 className="text-blue-600 shrink-0" size={18} />
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Sucursal:</span>
-              <span className="text-sm font-bold text-slate-800">{(pendingFilters.empresa?.[0]) || defaultUnidad}</span>
-            </div>
-            <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
-            <div className="flex items-center gap-2 text-slate-600">
-              <Calendar className="text-blue-600 shrink-0" size={18} />
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Período:</span>
-              <span className="text-sm font-bold text-slate-800">{(pendingFilters.periodo?.[0]) || defaultPeriodo}</span>
-            </div>
+        {/* Title Header Card */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
+          <div className="space-y-1">
+            <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+              <TrendingUp className="text-blue-600 h-6 w-6" />
+              Ingresos
+            </h2>
+            <p className="text-sm text-slate-500">
+              Detalle de los comprobantes de ingresos valorizados para <span className="font-bold text-slate-700">{(appliedFilters.empresa?.[0] === 'Todas' ? 'Todas las Sucursales' : appliedFilters.empresa?.[0]) || defaultUnidad}</span> en el período <span className="font-bold text-slate-700">{(appliedFilters.periodo?.[0]) || defaultPeriodo}</span>.
+            </p>
           </div>
-          <div className="text-xs text-slate-400 font-medium">
-            Selección administrada desde la solapa Resultados Gestión
+          
+          {/* Search Input in Header */}
+          <div className="relative w-full md:w-80">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-4.5 w-4.5 text-slate-400" />
+            </div>
+            <input
+              type="text"
+              placeholder="Buscar por comprobante o descripción..."
+              value={gridFilters.search}
+              onChange={(e) => setGridFilters({...gridFilters, search: e.target.value})}
+              className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl text-sm bg-slate-50/55 hover:bg-slate-100/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium text-slate-700"
+            />
           </div>
         </div>
 
         {/* Filters Section */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
           <div className="flex items-center gap-2 mb-5">
-            <div className="p-1.5 bg-blue-50 text-blue-600 rounded-md">
+            <div className="p-1.5 bg-blue-50 text-blue-600 rounded-md border border-blue-100">
               <Filter size={18} strokeWidth={2.5} />
             </div>
             <h2 className="text-lg font-bold text-slate-800">Filtros de Análisis</h2>
@@ -1037,14 +1024,14 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
           </div>
           
           <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mt-5">
-            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 flex-1 max-w-lg flex items-center gap-4">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider shrink-0 w-24 border-r border-slate-200 pr-3">Fechas</label>
+            <div className="bg-slate-50/55 p-3 rounded-xl border border-slate-200/60 flex-1 max-w-lg flex items-center gap-4">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider shrink-0 w-24 border-r border-slate-200/80 pr-3">Fechas</label>
               <div className="flex items-center gap-3 w-full">
                 <div className="flex items-center gap-2 flex-1">
                   <label className="text-[10px] font-bold text-slate-400 uppercase">Desde</label>
                   <input 
                     type="date" 
-                    className="w-full border border-slate-300 rounded-lg text-sm bg-white p-2 outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700"
+                    className="w-full border border-slate-200 rounded-lg text-sm bg-white p-2 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium text-slate-700"
                     value={pendingFilters.fechaDesde}
                     onChange={e => setPendingFilters({...pendingFilters, fechaDesde: e.target.value})}
                   />
@@ -1053,7 +1040,7 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
                   <label className="text-[10px] font-bold text-slate-400 uppercase">Hasta</label>
                   <input 
                     type="date" 
-                    className="w-full border border-slate-300 rounded-lg text-sm bg-white p-2 outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700"
+                    className="w-full border border-slate-200 rounded-lg text-sm bg-white p-2 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium text-slate-700"
                     value={pendingFilters.fechaHasta}
                     onChange={e => setPendingFilters({...pendingFilters, fechaHasta: e.target.value})}
                   />
@@ -1063,7 +1050,7 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
             
             <button 
               onClick={applyFilters}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-sm shrink-0"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-sm shrink-0 border border-blue-600 cursor-pointer"
             >
               <Search size={18} />
               Actualizar Resultados
@@ -1071,64 +1058,95 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
           </div>
         </div>
 
-        {/* KPIs Summary - Financial Banner */}
-        <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-2xl shadow-lg text-white relative overflow-hidden">
-          <div className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <TrendingUp size={16} className="text-blue-400" />
-                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Neto Gravado</p>
-              </div>
-              <h3 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">
-                ${kpis.netoGravado.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </h3>
+        {/* Indicators Grid - Financial KPIs */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Neto Gravado */}
+          <div className="bg-gradient-to-br from-white to-blue-50/10 p-6 rounded-2xl border border-slate-200/80 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
+            <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:scale-110 transition-transform">
+              <DollarSign size={80} className="text-blue-600" />
             </div>
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <TrendingUp size={16} className="text-amber-400" />
-                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">IVA (21%)</p>
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-blue-50 text-blue-600 border border-blue-100">
+                  <DollarSign size={20} />
+                </div>
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Neto Gravado</span>
               </div>
-              <h3 className="text-2xl md:text-3xl font-extrabold tracking-tight text-amber-300">
-                ${kpis.iva.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </h3>
-            </div>
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <TrendingUp size={16} className="text-emerald-400" />
-                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Total Consolidado</p>
+              <div className="space-y-0.5">
+                <h3 className="text-2xl font-black text-slate-800">
+                  ${kpis.netoGravado.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </h3>
+                <p className="text-xs text-slate-500">Neto gravado del período</p>
               </div>
-              <h3 className="text-2xl md:text-3xl font-extrabold tracking-tight text-emerald-300">
-                ${kpis.totalConsolidado.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </h3>
             </div>
           </div>
-          <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-white opacity-5 rounded-full blur-2xl"></div>
-          <div className="absolute -left-10 -top-10 w-32 h-32 bg-blue-500 opacity-5 rounded-full blur-2xl"></div>
+
+          {/* IVA (21%) */}
+          <div className="bg-gradient-to-br from-white to-indigo-50/10 p-6 rounded-2xl border border-slate-200/80 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
+            <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:scale-110 transition-transform">
+              <TrendingUp size={80} className="text-indigo-600" />
+            </div>
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-100">
+                  <TrendingUp size={20} />
+                </div>
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">IVA (21%)</span>
+              </div>
+              <div className="space-y-0.5">
+                <h3 className="text-2xl font-black text-slate-800">
+                  ${kpis.iva.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </h3>
+                <p className="text-xs text-slate-500">Impuesto sobre el Valor Añadido</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Total Consolidado */}
+          <div className="bg-gradient-to-br from-white to-emerald-50/10 p-6 rounded-2xl border border-slate-200/80 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
+            <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:scale-110 transition-transform">
+              <DollarSign size={80} className="text-emerald-600" />
+            </div>
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-100">
+                  <DollarSign size={20} />
+                </div>
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Consolidado</span>
+              </div>
+              <div className="space-y-0.5">
+                <h3 className="text-2xl font-black text-slate-800">
+                  ${kpis.totalConsolidado.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </h3>
+                <p className="text-xs text-slate-500">Importe total consolidado</p>
+              </div>
+            </div>
+          </div>
         </div>
         
         {/* KPIs Operativos */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-5 hover:border-blue-200 transition-colors">
-            <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl"><FileText size={32} /></div>
+          <div className="bg-gradient-to-br from-white to-slate-50/10 p-6 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-5 hover:shadow-md transition-all">
+            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl border border-blue-100"><FileText size={24} /></div>
             <div>
-              <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Volumen Operativo</p>
-              <h3 className="text-3xl font-bold text-slate-800">{comprobantesData.length} <span className="text-sm font-medium text-slate-400">comprob.</span></h3>
+              <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-0.5">Volumen Operativo</p>
+              <h3 className="text-2xl font-black text-slate-800">{comprobantesData.length} <span className="text-xs font-semibold text-slate-400">comprob.</span></h3>
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-5 hover:border-blue-200 transition-colors">
-            <div className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl"><Building2 size={32} /></div>
+          <div className="bg-gradient-to-br from-white to-slate-50/10 p-6 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-5 hover:shadow-md transition-all">
+            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100"><Building2 size={24} /></div>
             <div>
-              <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Alcance</p>
-              <h3 className="text-3xl font-bold text-slate-800">{kpis.alcance} <span className="text-sm font-medium text-slate-400">unidades</span></h3>
+              <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-0.5">Alcance</p>
+              <h3 className="text-2xl font-black text-slate-800">{kpis.alcance} <span className="text-xs font-semibold text-slate-400">unidades</span></h3>
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-5 hover:border-amber-200 transition-colors relative overflow-hidden">
-            <div className="p-4 bg-amber-50 text-amber-600 rounded-2xl z-10"><Presentation size={32} /></div>
+          <div className="bg-gradient-to-br from-white to-slate-50/10 p-6 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-5 hover:shadow-md transition-all relative overflow-hidden">
+            <div className="p-3 bg-amber-50 text-amber-600 rounded-xl border border-amber-100 z-10"><Presentation size={24} /></div>
             <div className="z-10">
-              <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Autorizados</p>
-              <h3 className="text-3xl font-bold text-slate-800">{kpis.pctAutorizado.toFixed(0)}% <span className="text-sm font-medium text-slate-400">({kpis.qtyAutorizados})</span></h3>
+              <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-0.5">Autorizados</p>
+              <h3 className="text-2xl font-black text-slate-800">{kpis.pctAutorizado.toFixed(0)}% <span className="text-xs font-semibold text-slate-400">({kpis.qtyAutorizados})</span></h3>
             </div>
             <div className="absolute bottom-0 left-0 h-1 bg-amber-500 transition-all" style={{width: `${kpis.pctAutorizado}%`}}></div>
           </div>
@@ -1144,14 +1162,14 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
         </div>
 
         {/* Data Table - Grilla Detalle */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="p-5 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col">
+          <div className="p-5 border-b border-slate-200/60 bg-slate-50/50 flex flex-wrap items-center justify-between gap-4">
             <h3 className="font-bold text-slate-800 flex items-center gap-2">
               <LayoutDashboard size={20} className="text-blue-600" />
               Comprobantes Emitidos
             </h3>
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-bold text-slate-400 bg-slate-200 px-3 py-1 rounded-full">{filteredGridData.length} resultados</span>
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-full border border-slate-200/50">{filteredGridData.length} resultados</span>
               <button
                 onClick={() => {
                   const rows = filteredGridData.map((comp: any) => ({
@@ -1171,18 +1189,16 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
                   XLSX.utils.book_append_sheet(wb, ws, "Comprobantes Emitidos");
                   XLSX.writeFile(wb, `Comprobantes_Emitidos_${new Date().toISOString().slice(0,10)}.xlsx`);
                 }}
-                className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold px-4 py-2 rounded-xl transition-all shadow-sm"
+                className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold px-4 py-2 rounded-xl transition-all shadow-sm cursor-pointer"
               >
                 <Download size={14} />
                 Descargar XLSX
               </button>
               
-
-              
               {selectedAjustes.size > 0 && (
                 <button
                   onClick={handleDeleteSelected}
-                  className="flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-xs font-semibold px-4 py-2 rounded-xl transition-colors shadow-sm"
+                  className="flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-xs font-semibold px-4 py-2 rounded-xl transition-colors shadow-sm cursor-pointer"
                 >
                   <Trash2 size={14} />
                   Eliminar seleccionados ({selectedAjustes.size})
@@ -1191,7 +1207,7 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
 
               <button
                 onClick={downloadTemplate}
-                className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold px-4 py-2 rounded-xl transition-all shadow-sm"
+                className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold px-4 py-2 rounded-xl transition-all shadow-sm cursor-pointer"
               >
                 <Download size={14} />
                 Descargar Plantilla
@@ -1207,7 +1223,7 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
               </div>
               <button
                 onClick={() => setShowAjustesModal(true)}
-                className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold px-4 py-2 rounded-xl transition-all shadow-sm"
+                className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold px-4 py-2 rounded-xl transition-all shadow-sm cursor-pointer"
               >
                 <Settings size={14} />
                 Importaciones Adicionales
@@ -1224,7 +1240,7 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
                     <Settings size={18} className="text-blue-600" />
                     Importaciones Adicionales (Ingresos)
                   </h3>
-                  <button onClick={() => setShowAjustesModal(false)} className="text-slate-400 hover:text-slate-600">
+                  <button onClick={() => setShowAjustesModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
                     <X size={20} />
                   </button>
                 </div>
@@ -1254,7 +1270,7 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
                               {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(a.importe)}
                             </td>
                             <td className="p-3 text-center">
-                              <button onClick={() => handleDeleteAjuste(a.id)} className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-colors" title="Eliminar">
+                              <button onClick={() => handleDeleteAjuste(a.id)} className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-colors cursor-pointer" title="Eliminar">
                                 <Trash2 size={16} />
                               </button>
                             </td>
@@ -1282,7 +1298,7 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
                   </div>
                   <button 
                     onClick={() => { setShowPreview(false); setPendingFile(null); }}
-                    className="text-slate-400 hover:text-slate-600 p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
+                    className="text-slate-400 hover:text-slate-600 p-1.5 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                   >
                     <X size={20} />
                   </button>
@@ -1375,14 +1391,14 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
                 <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3">
                   <button
                     onClick={() => { setShowPreview(false); setPendingFile(null); }}
-                    className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-bold py-2 px-4 rounded-lg text-sm transition-colors shadow-sm"
+                    className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-bold py-2 px-4 rounded-lg text-sm transition-colors shadow-sm cursor-pointer"
                   >
                     Cancelar
                   </button>
                   <button
                     onClick={confirmImport}
                     disabled={!!previewError || previewRows.length === 0}
-                    className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-2 px-5 rounded-lg text-sm transition-all shadow-sm flex items-center gap-1.5"
+                    className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-2 px-5 rounded-lg text-sm transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
                   >
                     Confirmar Importación
                   </button>
@@ -1392,20 +1408,10 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
           )}
           
           {/* Filtros Locales de la Grilla */}
-          <div className="p-4 border-b border-slate-100 bg-white grid grid-cols-1 md:grid-cols-5 gap-4">
-            <div className="relative">
-              <Search size={16} className="absolute left-3 top-3 text-slate-400" />
-              <input 
-                type="text" 
-                placeholder="Buscar comprobante o descripción..."
-                className="w-full border border-slate-200 rounded-lg text-sm bg-slate-50 py-2.5 pl-9 pr-3 outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700 placeholder-slate-400"
-                value={gridFilters.search}
-                onChange={e => setGridFilters({...gridFilters, search: e.target.value})}
-              />
-            </div>
+          <div className="p-4 border-b border-slate-200/60 bg-white grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
             <div>
               <select 
-                className="w-full border border-slate-200 rounded-lg text-sm bg-slate-50 p-2.5 outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700 cursor-pointer"
+                className="w-full border border-slate-200 rounded-xl text-sm bg-slate-50/55 p-2.5 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium text-slate-700 cursor-pointer"
                 value={gridFilters.unidad}
                 onChange={e => setGridFilters({...gridFilters, unidad: e.target.value})}
               >
@@ -1415,7 +1421,7 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
             </div>
             <div>
               <select 
-                className="w-full border border-slate-200 rounded-lg text-sm bg-slate-50 p-2.5 outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700 cursor-pointer"
+                className="w-full border border-slate-200 rounded-xl text-sm bg-slate-50/55 p-2.5 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium text-slate-700 cursor-pointer"
                 value={gridFilters.empresa}
                 onChange={e => setGridFilters({...gridFilters, empresa: e.target.value})}
               >
@@ -1425,7 +1431,7 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
             </div>
             <div>
               <select 
-                className="w-full border border-slate-200 rounded-lg text-sm bg-slate-50 p-2.5 outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700 cursor-pointer"
+                className="w-full border border-slate-200 rounded-xl text-sm bg-slate-50/55 p-2.5 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium text-slate-700 cursor-pointer"
                 value={gridFilters.cliente}
                 onChange={e => setGridFilters({...gridFilters, cliente: e.target.value})}
               >
@@ -1435,7 +1441,7 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
             </div>
             <div>
               <select 
-                className="w-full border border-slate-200 rounded-lg text-sm bg-slate-50 p-2.5 outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700 cursor-pointer"
+                className="w-full border border-slate-200 rounded-xl text-sm bg-slate-50/55 p-2.5 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium text-slate-700 cursor-pointer"
                 value={gridFilters.estado}
                 onChange={e => setGridFilters({...gridFilters, estado: e.target.value})}
               >
@@ -1445,21 +1451,21 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
             </div>
           </div>
 
-          <div className="overflow-x-auto w-full border border-slate-200 rounded-2xl shadow-sm bg-white">
+          <div className="overflow-x-auto w-full">
             <table className="w-full min-w-[1200px] text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="px-3 py-3 w-8 text-center"></th>
-                  <th className="px-3 py-3 w-10 text-center bg-slate-50/50">
-                    <input type="checkbox" onChange={handleSelectAllAjustes} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" />
+                <tr className="bg-slate-50 border-b border-slate-200/85">
+                  <th className="px-6 py-4 w-8 text-center bg-slate-50/50"></th>
+                  <th className="px-6 py-4 w-10 text-center bg-slate-50/50">
+                    <input type="checkbox" onChange={handleSelectAllAjustes} className="rounded border-slate-350 text-blue-600 focus:ring-blue-500 cursor-pointer" />
                   </th>
-                  <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50 whitespace-nowrap">Fecha</th>
-                  <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50 whitespace-nowrap">Comprobante</th>
-                  <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50">Descripción</th>
-                  <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50 whitespace-nowrap">Unidad de Negocio</th>
-                  <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50 whitespace-nowrap">Prestador</th>
-                  <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50">Estado</th>
-                  <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50 text-right pr-6 whitespace-nowrap">Total Consolidado</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50 whitespace-nowrap">Fecha</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50 whitespace-nowrap">Comprobante</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50">Descripción</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50 whitespace-nowrap">Unidad de Negocio</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50 whitespace-nowrap">Prestador</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50">Estado</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50 text-right pr-6 whitespace-nowrap">Total Consolidado</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -1468,7 +1474,7 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
                   return (
                     <React.Fragment key={comp.id}>
                       <tr 
-                        className={`hover:bg-blue-50/50 transition-colors cursor-pointer ${comp.origen === 'AJUSTE EXCEL' ? 'bg-amber-50/60' : ''} ${isExpanded ? 'bg-blue-50/30' : ''}`}
+                        className={`hover:bg-slate-50/55 transition-colors cursor-pointer group ${comp.origen === 'AJUSTE EXCEL' ? 'bg-amber-50/20 hover:bg-amber-100/20' : ''} ${isExpanded ? 'bg-blue-50/20' : ''}`}
                         onClick={(e) => {
                           // Evitar toggle si se hace click en el checkbox
                           if ((e.target as HTMLElement).tagName !== 'INPUT') {
@@ -1476,32 +1482,32 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
                           }
                         }}
                       >
-                        <td className="px-3 py-3 text-slate-400 text-center">
+                        <td className="px-6 py-3.5 text-slate-400 text-center">
                           {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                         </td>
-                        <td className="px-3 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                        <td className="px-6 py-3.5 text-center" onClick={(e) => e.stopPropagation()}>
                           {comp.origen === 'AJUSTE EXCEL' && comp.id_ajuste && (
                             <input 
                               type="checkbox" 
                               checked={selectedAjustes.has(comp.id_ajuste)}
                               onChange={() => handleSelectAjuste(comp.id_ajuste)}
-                              className="rounded border-amber-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                              className="rounded border-amber-350 text-amber-600 focus:ring-amber-500 cursor-pointer"
                             />
                           )}
                         </td>
-                        <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">{comp.fecha}</td>
-                        <td className="px-4 py-3 text-sm"><span className="text-slate-900 font-bold bg-slate-100 px-2 py-1 rounded text-xs border border-slate-200 whitespace-nowrap">{comp.comprobante}</span></td>
-                        <td className="px-4 py-3 text-sm text-slate-600 max-w-[200px]" title={comp.descripcion}>
+                        <td className="px-6 py-3.5 text-sm text-slate-500 whitespace-nowrap">{comp.fecha}</td>
+                        <td className="px-6 py-3.5 text-sm"><span className="text-slate-900 font-bold bg-slate-100 px-2 py-1 rounded text-xs border border-slate-200 whitespace-nowrap">{comp.comprobante}</span></td>
+                        <td className="px-6 py-3.5 text-sm text-slate-650 max-w-[200px]" title={comp.descripcion}>
                           <div className="truncate">{comp.descripcion}</div>
                         </td>
-                        <td className="px-4 py-3 text-sm text-slate-700 font-bold max-w-[220px]" title={comp.unidad}>
+                        <td className="px-6 py-3.5 text-sm text-slate-700 font-bold max-w-[220px]" title={comp.unidad}>
                           <div className="truncate">{comp.unidad}</div>
                         </td>
-                        <td className="px-4 py-3 text-sm text-slate-700 font-medium max-w-[200px]" title={comp.cliente}>
+                        <td className="px-6 py-3.5 text-sm text-slate-700 font-medium max-w-[200px]" title={comp.cliente}>
                           <div className="truncate">{comp.cliente}</div>
                         </td>
-                        <td className="px-4 py-3 text-sm whitespace-nowrap"><span className={`px-2 py-1 rounded text-xs font-bold border ${comp.estado === 'Autorizado' ? 'text-emerald-700 bg-emerald-50 border-emerald-100' : 'text-amber-700 bg-amber-50 border-amber-100'}`}>{comp.estado}</span></td>
-                        <td className="px-4 py-3 text-sm font-bold text-slate-800 text-right pr-6 whitespace-nowrap">${comp.total.toLocaleString('es-AR', {minimumFractionDigits: 2})}</td>
+                        <td className="px-6 py-3.5 text-sm whitespace-nowrap"><span className={`px-2 py-1 rounded text-xs font-bold border ${comp.estado === 'Autorizado' ? 'text-emerald-700 bg-emerald-50 border-emerald-100' : 'text-amber-700 bg-amber-50 border-amber-100'}`}>{comp.estado}</span></td>
+                        <td className="px-6 py-3.5 text-sm font-extrabold text-blue-600 bg-blue-50/10 group-hover:bg-blue-50/20 text-right pr-6 whitespace-nowrap">${comp.total.toLocaleString('es-AR', {minimumFractionDigits: 2})}</td>
                       </tr>
                       
                       {/* Fila Expandible con Detalle */}
@@ -1559,6 +1565,14 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* Footer summary */}
+          <div className="bg-slate-50 px-6 py-4 border-t border-slate-200/80 flex items-center justify-between text-xs font-bold text-slate-500 tracking-wider">
+            <span>MOSTRANDO {filteredGridData.length} DE {comprobantesData.length} REGISTROS</span>
+            <span className="text-slate-700 font-extrabold text-sm">
+              TOTAL: ${kpis.totalConsolidado.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
           </div>
         </div>
 
@@ -2113,30 +2127,8 @@ function MainDashboard({ token, defaultUnidad, defaultPeriodo }: { token: string
 }
 
 function Ingresos({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: string, onLogout: () => void, defaultUnidad?: string, defaultPeriodo?: string }) {
-  const [subTab, setSubTab] = useState<'comprobantes' | 'obras'>('comprobantes');
-
   return (
-    <div className="bg-slate-50 min-h-screen pb-12 overflow-x-hidden font-sans">
-      <div className="bg-white border-b border-slate-200 shadow-sm mb-4">
-        <div className="max-w-[1800px] mx-auto px-6 flex items-center h-10 gap-1">
-          <button 
-            onClick={() => setSubTab('comprobantes')}
-            className={`px-4 h-full text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${subTab === 'comprobantes' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-          >
-            <TrendingUp size={13} /> Comprobantes de Ingresos
-          </button>
-          <button 
-            onClick={() => setSubTab('obras')}
-            className={`px-4 h-full text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${subTab === 'obras' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-          >
-            <Building2 size={13} /> Certificados de Obras (Orígenes)
-          </button>
-        </div>
-      </div>
-
-      {subTab === 'comprobantes' && <Dashboard token={token} onLogout={onLogout} defaultUnidad={defaultUnidad} defaultPeriodo={defaultPeriodo} />}
-      {subTab === 'obras' && <CertificadosObras token={token} unidadNegocio={defaultUnidad!} periodo={defaultPeriodo!} />}
-    </div>
+    <Dashboard token={token} onLogout={onLogout} defaultUnidad={defaultUnidad} defaultPeriodo={defaultPeriodo} />
   );
 }
 
