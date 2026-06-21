@@ -1154,7 +1154,6 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
 
         {/* Gráficos de Distribución */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-          <HorizontalBarChart title="Estado Autorización" data={agrupaciones.estado} icon={Filter} colorTheme="amber" />
           <HorizontalBarChart title="Por Producto" data={agrupaciones.concepto} icon={PackageCheck} colorTheme="indigo" />
           <HorizontalBarChart title="Por Prestador" data={agrupaciones.empresa} icon={Building2} colorTheme="slate" />
           <HorizontalBarChart title="Por Cliente Empresa" data={agrupaciones.cliente} icon={Building2} colorTheme="blue" />
