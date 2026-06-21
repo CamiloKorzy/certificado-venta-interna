@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Wrench, UploadCloud, Trash2, Search, DollarSign, Clock, AlertCircle, Loader2, Check, FileSpreadsheet, Download } from 'lucide-react';
+import { Wrench, UploadCloud, Trash2, Search, DollarSign, Clock, AlertCircle, Loader2, Check, FileSpreadsheet, Download, Paperclip } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 const API_URL = '';
@@ -26,7 +26,7 @@ function apiFetch(path: string, token: string, options: any = {}) {
 
 interface EquipoItem {
   id: number | null;
-  origen: 'PLANILLA' | 'FINNEGANS';
+  origen: 'PLANILLA' | 'FINNEGANS' | 'SUPABASE_CERT';
   equipo: string;
   concepto: string;
   horas_kilometros: number;
@@ -37,6 +37,11 @@ interface EquipoItem {
   fecha?: string;
   usuario_carga?: string;
   fecha_carga?: string;
+  detalles_trabajos?: string[];
+  operarios?: string[];
+  unidad_de_negocio?: string;
+  mes?: number;
+  anio?: number;
 }
 
 export default function Equipos({
@@ -57,6 +62,7 @@ export default function Equipos({
   const [successMsg, setSuccessMsg] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [reportClosed, setReportClosed] = useState(false);
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
 
   const downloadTemplate = () => {
     const ws_data = [
@@ -210,7 +216,9 @@ export default function Equipos({
     const totalCosto = filteredData.reduce((acc, item) => acc + (item.total || 0), 0);
     const totalFinnegans = filteredData.filter(i => i.origen === 'FINNEGANS').reduce((acc, item) => acc + (item.total || 0), 0);
     const totalPlanilla = filteredData.filter(i => i.origen === 'PLANILLA').reduce((acc, item) => acc + (item.total || 0), 0);
-    return { totalHorasKm, totalCosto, totalFinnegans, totalPlanilla };
+    const totalSupabase = filteredData.filter(i => i.origen === 'SUPABASE_CERT').reduce((acc, item) => acc + (item.total || 0), 0);
+    const countSupabase = filteredData.filter(i => i.origen === 'SUPABASE_CERT').length;
+    return { totalHorasKm, totalCosto, totalFinnegans, totalPlanilla, totalSupabase, countSupabase };
   }, [filteredData]);
 
   // Format helpers
@@ -320,7 +328,7 @@ export default function Equipos({
       ) : (
         <>
           {/* Indicators Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
             {/* Total Equipos */}
             <div className="bg-gradient-to-br from-white to-blue-50/10 p-6 rounded-2xl border border-slate-200/80 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
               <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:scale-110 transition-transform">
@@ -334,8 +342,8 @@ export default function Equipos({
                   <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Costo Total</span>
                 </div>
                 <div className="space-y-0.5">
-                  <h3 className="text-2xl font-black text-slate-800">{formatCurrency(stats.totalCosto)}</h3>
-                  <p className="text-xs text-slate-500">Costo total de equipos en el período</p>
+                  <h3 className="text-xl font-black text-slate-800">{formatCurrency(stats.totalCosto)}</h3>
+                  <p className="text-[11px] text-slate-500">Costo total de equipos en el período</p>
                 </div>
               </div>
             </div>
@@ -353,8 +361,8 @@ export default function Equipos({
                   <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Horas/Km</span>
                 </div>
                 <div className="space-y-0.5">
-                  <h3 className="text-2xl font-black text-slate-800">{formatNumber(stats.totalHorasKm)}</h3>
-                  <p className="text-xs text-slate-500">Volumen registrado</p>
+                  <h3 className="text-xl font-black text-slate-800">{formatNumber(stats.totalHorasKm)}</h3>
+                  <p className="text-[11px] text-slate-500">Volumen registrado</p>
                 </div>
               </div>
             </div>
@@ -366,14 +374,14 @@ export default function Equipos({
               </div>
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-100">
+                  <div className="p-2 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100">
                     <Check size={20} />
                   </div>
                   <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Costo Finnegans</span>
                 </div>
                 <div className="space-y-0.5">
-                  <h3 className="text-2xl font-black text-slate-800">{formatCurrency(stats.totalFinnegans)}</h3>
-                  <p className="text-xs text-slate-500">Taller Central (Ventas Internas)</p>
+                  <h3 className="text-xl font-black text-slate-800">{formatCurrency(stats.totalFinnegans)}</h3>
+                  <p className="text-[11px] text-slate-500">Taller Central (Ventas Internas)</p>
                 </div>
               </div>
             </div>
@@ -385,14 +393,33 @@ export default function Equipos({
               </div>
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-lg bg-amber-50 text-amber-600 border border-amber-100">
+                  <div className="p-2 rounded-lg bg-amber-50 text-amber-700 border border-amber-100">
                     <FileSpreadsheet size={20} />
                   </div>
                   <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Costo Planilla</span>
                 </div>
                 <div className="space-y-0.5">
-                  <h3 className="text-2xl font-black text-slate-800">{formatCurrency(stats.totalPlanilla)}</h3>
-                  <p className="text-xs text-slate-500">Alquileres cargados manualmente</p>
+                  <h3 className="text-xl font-black text-slate-800">{formatCurrency(stats.totalPlanilla)}</h3>
+                  <p className="text-[11px] text-slate-500">Alquileres cargados manualmente</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Supabase (Certificaciones) */}
+            <div className="bg-gradient-to-br from-white to-purple-50/10 p-6 rounded-2xl border border-slate-200/80 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
+              <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:scale-110 transition-transform">
+                <Wrench size={80} className="text-purple-600" />
+              </div>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-purple-50 text-purple-700 border border-purple-100">
+                    <Wrench size={20} />
+                  </div>
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Cert. Supabase</span>
+                </div>
+                <div className="space-y-0.5">
+                  <h3 className="text-xl font-black text-slate-800">{formatCurrency(stats.totalSupabase)}</h3>
+                  <p className="text-[11px] text-slate-500">{stats.countSupabase} {stats.countSupabase === 1 ? 'máquina certificada' : 'máquinas certificadas'}</p>
                 </div>
               </div>
             </div>
@@ -442,51 +469,109 @@ export default function Equipos({
                     </tr>
                   ) : (
                     filteredData.map((item, idx) => (
-                      <tr key={idx} className="hover:bg-slate-55 transition-colors group">
-                        <td className="px-6 py-3.5 whitespace-nowrap">
-                          {item.origen === 'FINNEGANS' ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
-                              FINNEGANS
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100">
-                              PLANILLA
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-6 py-3.5 font-bold text-slate-800">{item.equipo}</td>
-                        <td className="px-6 py-3.5 text-slate-700 font-semibold">{item.concepto}</td>
-                        <td className="px-6 py-3.5 text-right font-bold text-slate-700">{formatNumber(item.horas_kilometros)}</td>
-                        <td className="px-6 py-3.5 text-right text-slate-500">{formatCurrency(item.precio_unitario)}</td>
-                        <td className="px-6 py-3.5 text-right font-extrabold text-blue-600 bg-blue-50/10 group-hover:bg-blue-50/20">{formatCurrency(item.total)}</td>
-                        <td className="px-6 py-3.5 text-xs text-slate-400 max-w-xs truncate">
-                          {item.origen === 'FINNEGANS' ? (
-                            <span title={`Doc: ${item.documento} - Comp: ${item.comprobante} - Fecha: ${item.fecha}`}>
-                              📄 {item.documento || 'Venta Interna'} • {item.fecha}
-                            </span>
-                          ) : (
-                            <span title={`Cargado por: ${item.usuario_carga} - Fecha: ${item.fecha_carga}`}>
-                              👤 {item.usuario_carga} • {item.fecha_carga?.substring(0, 10)}
-                            </span>
-                          )}
-                        </td>
-                        {!reportClosed && (
-                          <td className="px-6 py-3.5 text-center whitespace-nowrap">
-                            {item.origen === 'PLANILLA' && item.id !== null ? (
-                              <button
-                                onClick={() => handleDeleteItem(item.id!)}
-                                disabled={deletingId === item.id}
-                                className="text-red-500 hover:text-red-700 p-1.5 hover:bg-red-50 rounded-lg transition-colors inline-flex items-center justify-center disabled:opacity-50"
-                                title="Eliminar este registro"
-                              >
-                                {deletingId === item.id ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
-                              </button>
+                      <React.Fragment key={idx}>
+                        <tr className="hover:bg-slate-55 transition-colors group">
+                          <td className="px-6 py-3.5 whitespace-nowrap">
+                            {item.origen === 'FINNEGANS' ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                                FINNEGANS
+                              </span>
+                            ) : item.origen === 'PLANILLA' ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                                PLANILLA
+                              </span>
                             ) : (
-                              <span className="text-slate-300">-</span>
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-purple-50 text-purple-700 border border-purple-100 animate-pulse">
+                                SUPABASE CERT
+                              </span>
                             )}
                           </td>
+                          <td className="px-6 py-3.5 font-bold text-slate-800">
+                            <div className="flex items-center gap-2">
+                              <span>{item.equipo}</span>
+                              {item.origen === 'SUPABASE_CERT' && ((item.detalles_trabajos && item.detalles_trabajos.length > 0) || (item.operarios && item.operarios.length > 0)) && (
+                                <button
+                                  onClick={() => setExpandedIdx(expandedIdx === idx ? null : idx)}
+                                  className="text-[10px] bg-purple-50 hover:bg-purple-100 text-purple-700 px-2 py-0.5 rounded border border-purple-200 transition-all font-bold flex items-center gap-1 cursor-pointer"
+                                >
+                                  {expandedIdx === idx ? "Ocultar detalles" : "Ver detalles"}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-6 py-3.5 text-slate-700 font-semibold">{item.concepto}</td>
+                          <td className="px-6 py-3.5 text-right font-bold text-slate-700">{formatNumber(item.horas_kilometros)}</td>
+                          <td className="px-6 py-3.5 text-right text-slate-500">{formatCurrency(item.precio_unitario)}</td>
+                          <td className="px-6 py-3.5 text-right font-extrabold text-blue-600 bg-blue-50/10 group-hover:bg-blue-50/20">{formatCurrency(item.total)}</td>
+                          <td className="px-6 py-3.5 text-xs text-slate-400 max-w-xs truncate">
+                            {item.origen === 'FINNEGANS' ? (
+                              <span title={`Doc: ${item.documento} - Comp: ${item.comprobante} - Fecha: ${item.fecha}`}>
+                                📄 {item.documento || 'Venta Interna'} • {item.fecha}
+                              </span>
+                            ) : item.origen === 'PLANILLA' ? (
+                              <span title={`Cargado por: ${item.usuario_carga} - Fecha: ${item.fecha_carga}`}>
+                                👤 {item.usuario_carga} • {item.fecha_carga?.substring(0, 10)}
+                              </span>
+                            ) : (
+                              <span title={`Imputado Supabase: ${item.concepto}`}>
+                                🌐 Supabase • {item.concepto}
+                              </span>
+                            )}
+                          </td>
+                          {!reportClosed && (
+                            <td className="px-6 py-3.5 text-center whitespace-nowrap">
+                              {item.origen === 'PLANILLA' && item.id !== null ? (
+                                <button
+                                  onClick={() => handleDeleteItem(item.id!)}
+                                  disabled={deletingId === item.id}
+                                  className="text-red-500 hover:text-red-700 p-1.5 hover:bg-red-50 rounded-lg transition-colors inline-flex items-center justify-center disabled:opacity-50"
+                                  title="Eliminar este registro"
+                                >
+                                  {deletingId === item.id ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                                </button>
+                              ) : (
+                                <span className="text-slate-300">-</span>
+                              )}
+                            </td>
+                          )}
+                        </tr>
+                        {expandedIdx === idx && (
+                          <tr className="bg-purple-50/10">
+                            <td colSpan={reportClosed ? 7 : 8} className="px-6 py-4 border-b border-slate-200/50">
+                              <div className="space-y-3 pl-8 text-xs font-semibold text-slate-600">
+                                {item.detalles_trabajos && item.detalles_trabajos.length > 0 && (
+                                  <div>
+                                    <h4 className="text-slate-700 font-bold uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                                      <Wrench size={12} className="text-purple-650" />
+                                      Trabajos Realizados (Partes de Trabajo Finnegans):
+                                    </h4>
+                                    <ul className="list-disc list-inside space-y-0.5 text-slate-500 pl-2">
+                                      {item.detalles_trabajos.map((t, t_idx) => (
+                                        <li key={t_idx}>{t}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                                {item.operarios && item.operarios.length > 0 && (
+                                  <div>
+                                    <h4 className="text-slate-700 font-bold uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                                      <Clock size={12} className="text-purple-650" />
+                                      Operadores / Maquinistas Asignados:
+                                    </h4>
+                                    <div className="flex flex-wrap gap-1.5 pl-2 mt-1">
+                                      {item.operarios.map((op, op_idx) => (
+                                        <span key={op_idx} className="bg-white border border-slate-200 text-slate-650 px-2.5 py-0.5 rounded-md text-[11px] font-bold">
+                                          👤 {op}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
                         )}
-                      </tr>
+                      </React.Fragment>
                     ))
                   )}
                 </tbody>
@@ -499,8 +584,236 @@ export default function Equipos({
               <span className="text-slate-700 font-extrabold text-sm">TOTAL COSTO: {formatCurrency(stats.totalCosto)}</span>
             </div>
           </div>
+
+          {/* Documentos de Respaldo */}
+          <div className="mt-6">
+            <DocumentosRespaldo
+              token={token}
+              tipoDocumento="CERTIFICADOS_EQUIPOS"
+              unidadNegocio={unidadNegocio}
+              periodo={periodo}
+              reportClosed={reportClosed}
+            />
+          </div>
         </>
       )}
     </div>
   );
 }
+
+interface RespaldoItem {
+  id: number;
+  tipo_documento: string;
+  unidad_negocio: string;
+  periodo: string;
+  nombre_archivo: string;
+  tipo_mime: string;
+  usuario_carga: string;
+  fecha_carga: string;
+}
+
+function DocumentosRespaldo({
+  token,
+  tipoDocumento,
+  unidadNegocio,
+  periodo,
+  reportClosed
+}: {
+  token: string;
+  tipoDocumento: string;
+  unidadNegocio: string;
+  periodo: string;
+  reportClosed: boolean;
+}) {
+  const [list, setList] = useState<RespaldoItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  const pStr = periodo.replace('/', '-');
+
+  const fetchRespaldos = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/respaldos?tipo_documento=${encodeURIComponent(tipoDocumento)}&unidad_negocio=${encodeURIComponent(unidadNegocio)}&periodo=${encodeURIComponent(pStr)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setList(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      console.error(err);
+      setError('Error al cargar documentos de respaldo');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (unidadNegocio && periodo) {
+      fetchRespaldos();
+    }
+  }, [unidadNegocio, periodo, tipoDocumento]);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setError('');
+    setSuccess('');
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('tipo_documento', tipoDocumento);
+    formData.append('unidad_negocio', unidadNegocio);
+    formData.append('periodo', pStr);
+
+    try {
+      const res = await fetch(`/api/respaldos/upload`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || `Error ${res.status}`);
+      }
+      setSuccess('Documento subido correctamente.');
+      fetchRespaldos();
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Error al subir documento');
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleDescargar = async (id: number, nombre: string) => {
+    try {
+      const res = await fetch(`/api/respaldos/descargar/${id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Error al descargar el archivo');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = nombre;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error(err);
+      alert('No se pudo descargar el archivo.');
+    }
+  };
+
+  const handleEliminar = async (id: number) => {
+    if (!window.confirm('¿Está seguro de que desea eliminar este documento de respaldo?')) return;
+    setDeletingId(id);
+    setError('');
+    setSuccess('');
+    try {
+      const res = await fetch(`/api/respaldos/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setSuccess('Documento eliminado.');
+      setList(prev => prev.filter(item => item.id !== id));
+    } catch (err: any) {
+      console.error(err);
+      setError('Error al eliminar documento');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-4">
+      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="flex items-center gap-2">
+          <Paperclip className="text-blue-600 h-5 w-5" />
+          <h4 className="text-sm font-bold text-slate-800">Documentación de Respaldo</h4>
+        </div>
+        {!reportClosed && (
+          <label className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-1.5 px-3 rounded-lg text-xs transition-colors cursor-pointer select-none border border-slate-200">
+            {uploading ? <Loader2 size={13} className="animate-spin" /> : <UploadCloud size={13} />}
+            Subir Documento
+            <input type="file" onChange={handleUpload} disabled={uploading} className="hidden" />
+          </label>
+        )}
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-xs flex items-center gap-2">
+          <AlertCircle size={14} className="shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {success && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-3 py-2 rounded-lg text-xs flex items-center gap-2">
+          <Check size={14} className="shrink-0" />
+          <span>{success}</span>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex items-center justify-center py-4">
+          <Loader2 size={18} className="text-blue-600 animate-spin" />
+        </div>
+      ) : list.length === 0 ? (
+        <p className="text-xs text-slate-400 italic text-center py-2">No hay documentos de respaldo adjuntos para este período.</p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {list.map(item => (
+            <div key={item.id} className="flex items-center justify-between p-2.5 rounded-xl border border-slate-100 bg-slate-50/30 hover:bg-slate-55 transition-colors">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <Paperclip size={14} className="text-slate-400 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <button
+                    onClick={() => handleDescargar(item.id, item.nombre_archivo)}
+                    className="text-xs font-bold text-slate-700 hover:text-blue-600 transition-colors truncate block text-left w-full hover:underline"
+                    title={`Descargar ${item.nombre_archivo}`}
+                  >
+                    {item.nombre_archivo}
+                  </button>
+                  <span className="text-[9px] text-slate-400 block truncate">
+                    Cargado por: {item.usuario_carga} • {item.fecha_carga.substring(0, 10)}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 shrink-0 ml-2">
+                <button
+                  onClick={() => handleDescargar(item.id, item.nombre_archivo)}
+                  className="text-slate-500 hover:text-blue-600 p-1 hover:bg-blue-50 rounded transition-colors"
+                  title="Descargar"
+                >
+                  <Download size={13} />
+                </button>
+                {!reportClosed && (
+                  <button
+                    onClick={() => handleEliminar(item.id)}
+                    disabled={deletingId === item.id}
+                    className="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                    title="Eliminar"
+                  >
+                    {deletingId === item.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Download, Search, UploadCloud, Loader2, Settings, X, Trash2, AlertCircle, FileText, Info, Building2, Calendar } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -528,6 +528,30 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
 
   const resultado = data ? data.totales.ingresos - data.totales.gastos : 0;
 
+  const costosPorProveedor = useMemo(() => {
+    if (!data || !data.gastos) return [];
+    const grouped: Record<string, number> = {};
+    data.gastos.forEach((i: any) => {
+      const key = i.proveedor || 'Sin Proveedor';
+      grouped[key] = (grouped[key] || 0) + (i.importe || 0);
+    });
+    return Object.entries(grouped)
+      .map(([name, total]) => ({ name, total }))
+      .sort((a, b) => b.total - a.total);
+  }, [data]);
+
+  const costosPorConcepto = useMemo(() => {
+    if (!data || !data.gastos) return [];
+    const grouped: Record<string, number> = {};
+    data.gastos.forEach((i: any) => {
+      const key = i.concepto || 'Sin Concepto';
+      grouped[key] = (grouped[key] || 0) + (i.importe || 0);
+    });
+    return Object.entries(grouped)
+      .map(([name, total]) => ({ name, total }))
+      .sort((a, b) => b.total - a.total);
+  }, [data]);
+
   return (
     <div className="p-6 max-w-[1800px] w-full mx-auto">
       
@@ -830,42 +854,66 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                <div className="bg-white rounded shadow border border-gray-200">
-                  <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
-                    <h3 className="font-semibold text-gray-700">Ingresos por Rubro</h3>
+                {/* Ingresos por Rubro */}
+                <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-4">
+                  <div className="border-b border-slate-100 pb-3">
+                    <h3 className="font-bold text-slate-800 text-sm">Distribución de Ingresos por Rubro</h3>
                   </div>
-                  <div className="p-4">
+                  <div className="space-y-4">
                     {ingresosPorRubro.length > 0 ? (
-                      <ul className="space-y-3">
-                        {ingresosPorRubro.map((r, idx) => (
-                          <li key={idx} className="flex justify-between items-center text-sm">
-                            <span className="text-gray-600 truncate mr-2" title={r.rubro}>{r.rubro}</span>
-                            <span className="font-medium text-green-700 whitespace-nowrap">$ {r.total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
-                          </li>
-                        ))}
-                      </ul>
+                      ingresosPorRubro.map((r, idx) => {
+                        const pct = data.totales.ingresos > 0 ? (r.total / data.totales.ingresos) * 100 : 0;
+                        return (
+                          <div key={idx} className="space-y-1.5">
+                            <div className="flex justify-between items-center text-xs font-semibold text-slate-700">
+                              <span className="truncate pr-4" title={r.rubro}>{r.rubro}</span>
+                              <span className="text-slate-500 font-bold whitespace-nowrap">
+                                $ {r.total.toLocaleString('es-AR', { minimumFractionDigits: 2 })} ({pct.toFixed(1)}%)
+                              </span>
+                            </div>
+                            <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/40">
+                              <div
+                                className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full rounded-full transition-all duration-500"
+                                style={{ width: `${pct}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        );
+                      })
                     ) : (
-                      <p className="text-gray-500 text-sm">No hay ingresos registrados en este periodo.</p>
+                      <p className="text-slate-400 italic text-xs py-2 text-center">No hay ingresos registrados en este periodo.</p>
                     )}
                   </div>
                 </div>
 
-                <div className="bg-white rounded shadow border border-gray-200">
-                  <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
-                    <h3 className="font-semibold text-gray-700">Costos por Rubro</h3>
+                {/* Costos por Rubro */}
+                <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-4">
+                  <div className="border-b border-slate-100 pb-3">
+                    <h3 className="font-bold text-slate-800 text-sm">Distribución de Costos por Rubro</h3>
                   </div>
-                  <div className="p-4">
+                  <div className="space-y-4">
                     {gastosPorRubro.length > 0 ? (
-                      <ul className="space-y-3">
-                        {gastosPorRubro.map((r, idx) => (
-                          <li key={idx} className="flex justify-between items-center text-sm">
-                            <span className="text-gray-600 truncate mr-2" title={r.rubro}>{r.rubro}</span>
-                            <span className="font-medium text-red-700 whitespace-nowrap">$ {r.total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
-                          </li>
-                        ))}
-                      </ul>
+                      gastosPorRubro.map((r, idx) => {
+                        const pct = data.totales.gastos > 0 ? (r.total / data.totales.gastos) * 100 : 0;
+                        return (
+                          <div key={idx} className="space-y-1.5">
+                            <div className="flex justify-between items-center text-xs font-semibold text-slate-700">
+                              <span className="truncate pr-4" title={r.rubro}>{r.rubro}</span>
+                              <span className="text-slate-500 font-bold whitespace-nowrap">
+                                $ {r.total.toLocaleString('es-AR', { minimumFractionDigits: 2 })} ({pct.toFixed(1)}%)
+                              </span>
+                            </div>
+                            <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/40">
+                              <div
+                                className="bg-gradient-to-r from-rose-500 to-orange-400 h-full rounded-full transition-all duration-500"
+                                style={{ width: `${pct}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        );
+                      })
                     ) : (
-                      <p className="text-gray-500 text-sm">No hay costos registrados en este periodo.</p>
+                      <p className="text-slate-400 italic text-xs py-2 text-center">No hay costos registrados en este periodo.</p>
                     )}
                   </div>
                 </div>
@@ -882,6 +930,93 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
                  </div>
               </div>
               <div>
+                {/* Indicadores de Costos Agrupados */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                  {/* Costos por Proveedor */}
+                  <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-4">
+                    <div className="border-b border-slate-100 pb-3">
+                      <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider">Top Proveedores</h4>
+                    </div>
+                    <div className="space-y-4">
+                      {costosPorProveedor.slice(0, 5).map((item: any, idx: number) => {
+                        const pct = data.totales.gastos > 0 ? (item.total / data.totales.gastos) * 100 : 0;
+                        return (
+                          <div key={idx} className="space-y-1.5">
+                            <div className="flex justify-between items-center text-xs font-semibold text-slate-700">
+                              <span className="truncate pr-4" title={item.name}>{item.name}</span>
+                              <span className="text-slate-500 font-bold whitespace-nowrap">
+                                $ {item.total.toLocaleString('es-AR', { minimumFractionDigits: 2 })} ({pct.toFixed(1)}%)
+                              </span>
+                            </div>
+                            <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/40">
+                              <div className="bg-gradient-to-r from-rose-500 to-orange-400 h-full rounded-full" style={{ width: `${pct}%` }}></div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {costosPorProveedor.length === 0 && (
+                        <p className="text-slate-400 italic text-xs text-center py-2">No hay costos registrados.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Costos por Rubro */}
+                  <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-4">
+                    <div className="border-b border-slate-100 pb-3">
+                      <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider">Top Rubros / Categorías</h4>
+                    </div>
+                    <div className="space-y-4">
+                      {gastosPorRubro.slice(0, 5).map((item, idx) => {
+                        const pct = data.totales.gastos > 0 ? (item.total / data.totales.gastos) * 100 : 0;
+                        return (
+                          <div key={idx} className="space-y-1.5">
+                            <div className="flex justify-between items-center text-xs font-semibold text-slate-700">
+                              <span className="truncate pr-4" title={item.rubro}>{item.rubro}</span>
+                              <span className="text-slate-500 font-bold whitespace-nowrap">
+                                $ {item.total.toLocaleString('es-AR', { minimumFractionDigits: 2 })} ({pct.toFixed(1)}%)
+                              </span>
+                            </div>
+                            <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/40">
+                              <div className="bg-gradient-to-r from-rose-500 to-orange-400 h-full rounded-full" style={{ width: `${pct}%` }}></div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {gastosPorRubro.length === 0 && (
+                        <p className="text-slate-400 italic text-xs text-center py-2">No hay costos registrados.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Costos por Concepto */}
+                  <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-4">
+                    <div className="border-b border-slate-100 pb-3">
+                      <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider">Top Conceptos</h4>
+                    </div>
+                    <div className="space-y-4">
+                      {costosPorConcepto.slice(0, 5).map((item: any, idx: number) => {
+                        const pct = data.totales.gastos > 0 ? (item.total / data.totales.gastos) * 100 : 0;
+                        return (
+                          <div key={idx} className="space-y-1.5">
+                            <div className="flex justify-between items-center text-xs font-semibold text-slate-700">
+                              <span className="truncate pr-4" title={item.name}>{item.name}</span>
+                              <span className="text-slate-500 font-bold whitespace-nowrap">
+                                $ {item.total.toLocaleString('es-AR', { minimumFractionDigits: 2 })} ({pct.toFixed(1)}%)
+                              </span>
+                            </div>
+                            <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/40">
+                              <div className="bg-gradient-to-r from-rose-500 to-orange-400 h-full rounded-full" style={{ width: `${pct}%` }}></div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {costosPorConcepto.length === 0 && (
+                        <p className="text-slate-400 italic text-xs text-center py-2">No hay costos registrados.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[800px] divide-y divide-gray-200 border">
                     <thead className="bg-gray-50">

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Building2, UploadCloud, Trash2, Calendar, FileText, Check, AlertCircle, Loader2, Save, ArrowLeft, RefreshCw } from 'lucide-react';
+import { Building2, UploadCloud, Trash2, Calendar, FileText, Check, AlertCircle, Loader2, Save, ArrowLeft, RefreshCw, Download, Info, Briefcase, Paperclip } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 const API_URL = '';
 function apiFetch(path: string, token: string, options: any = {}) {
@@ -73,6 +74,87 @@ export default function CertificadosObras({
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [reportClosed, setReportClosed] = useState(false);
+
+  const downloadTemplate = () => {
+    const data = [
+      ["Comitente:", "Empresa Cliente S.A."],
+      ["Contratista:", "Seguridad Integral S.R.L."],
+      ["Obra:", "Ampliación Planta Industrial - Sector B"],
+      ["Fecha:", "21/06/2026"],
+      [],
+      [],
+      [
+        "Item",
+        "Descripción / Tarea",
+        "U.M.",
+        "Cantidad Aprobada",
+        "Precio Unitario",
+        "Presente Certificado",
+        "Anterior Certificado"
+      ],
+      [
+        "1.1",
+        "Instalación de faenas y limpieza de terreno",
+        "gl",
+        1,
+        500000,
+        1,
+        0
+      ],
+      [
+        "1.2",
+        "Excavación y movimiento de suelos",
+        "m3",
+        1200,
+        1200,
+        300,
+        600
+      ],
+      [
+        "2.1",
+        "Estructura de hormigón armado H21",
+        "m3",
+        250,
+        18000,
+        50,
+        150
+      ],
+      [
+        "2.2",
+        "Mampostería de ladrillos huecos 18x18x33",
+        "m2",
+        1500,
+        3500,
+        400,
+        800
+      ],
+      [
+        "3.1",
+        "Pintura exterior e interior al látex",
+        "m2",
+        3000,
+        1200,
+        1500,
+        500
+      ]
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    const wscols = [
+      { wch: 10 },
+      { wch: 45 },
+      { wch: 8 },
+      { wch: 18 },
+      { wch: 18 },
+      { wch: 20 },
+      { wch: 20 }
+    ];
+    ws['!cols'] = wscols;
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Certificado");
+    XLSX.writeFile(wb, "Plantilla_Certificado_Obra.xlsx");
+  };
 
   // Active sheet form state
   const [comitente, setComitente] = useState('');
@@ -325,6 +407,14 @@ export default function CertificadosObras({
 
         {/* Upload Button */}
         <div className="flex items-center gap-3">
+          <button
+            onClick={downloadTemplate}
+            className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 font-bold py-2 px-4 rounded-xl text-sm border border-slate-200 transition-all shadow-sm"
+          >
+            <Download size={16} />
+            Descargar Plantilla
+          </button>
+
           {!reportClosed ? (
             <label className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-xl text-sm transition-all shadow-sm shadow-blue-500/10 cursor-pointer select-none">
               {uploading ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />}
@@ -508,6 +598,15 @@ export default function CertificadosObras({
                 </div>
               </div>
 
+              {/* Documentos de Respaldo */}
+              <DocumentosRespaldo
+                token={token}
+                tipoDocumento="CERTIFICADO_OBRAS"
+                unidadNegocio={unidadNegocio}
+                periodo={periodo}
+                reportClosed={reportClosed}
+              />
+
               {/* Items Grid Card */}
               <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col">
                 <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
@@ -666,12 +765,117 @@ export default function CertificadosObras({
               )}
             </div>
           ) : (
-            <div className="lg:col-span-3 bg-white border border-slate-200/80 rounded-2xl p-12 text-center text-slate-400 space-y-2 shadow-sm">
-              <FileText size={48} className="mx-auto text-slate-300" />
-              <h3 className="font-bold text-slate-600 text-base">Ningún certificado seleccionado</h3>
-              <p className="text-sm max-w-sm mx-auto">
-                Seleccione un certificado en la lista lateral, o suba uno nuevo en el botón superior.
-              </p>
+            <div className="lg:col-span-3 space-y-6">
+              {/* Introduction Card */}
+              <div className="bg-gradient-to-br from-white to-blue-50/10 border border-slate-200/80 rounded-2xl p-8 shadow-sm space-y-6">
+                <div className="flex items-start gap-4">
+                  <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl border border-blue-100/50 shrink-0">
+                    <FileText size={28} />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-lg font-bold text-slate-800">Importación y Carga Inteligente de Certificados</h3>
+                    <p className="text-sm text-slate-500 max-w-2xl leading-relaxed font-medium">
+                      El sistema interpreta automáticamente sus planillas de obras. No es necesario estructurar fórmulas complejas en el Excel; la plataforma mapea las columnas y calcula los avances y totales de forma inteligente.
+                    </p>
+                  </div>
+                </div>
+
+                <hr className="border-slate-100" />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  {/* Column 1: Estructura */}
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Info size={14} className="text-blue-500" />
+                      1. Cabecera y Metadatos (Filas 1 a 15)
+                    </h4>
+                    <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                      El importador escanea las primeras 15 filas buscando las siguientes etiquetas. El valor ubicado en la celda contigua (a la derecha) será extraído automáticamente:
+                    </p>
+                    <ul className="space-y-2 text-xs text-slate-600 font-semibold pl-1">
+                      <li className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                        <span><code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">Comitente:</code> Nombre del cliente</span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                        <span><code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">Contratista:</code> Nombre de la constructora</span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                        <span><code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">Obra:</code> Identificador de la obra</span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                        <span><code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">Fecha:</code> Fecha del certificado (ej. YYYY-MM-DD o DD/MM/YYYY)</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  {/* Column 2: Mapeo e Interpretacion */}
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Check size={14} className="text-emerald-500" />
+                      2. Mapeo Automático de Columnas
+                    </h4>
+                    <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                      El sistema busca una fila que contenga columnas clave. No importa el orden exacto ni las palabras idénticas; se realiza una búsqueda semántica de aproximación:
+                    </p>
+                    <div className="grid grid-cols-2 gap-2 text-[11px] font-semibold text-slate-600 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
+                      <div>
+                        <span className="text-slate-400 font-bold block mb-0.5">Columna Requerida</span>
+                        <span className="text-slate-700">Item</span>
+                        <span className="text-slate-700 block mt-1">Descripción / Tarea</span>
+                        <span className="text-slate-700 block mt-1">U.M. (Unidad de Medida)</span>
+                        <span className="text-slate-700 block mt-1">Cantidad Aprobada</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 font-bold block mb-0.5">Términos que Coinciden</span>
+                        <span className="text-blue-600">"item"</span>
+                        <span className="text-blue-600 block mt-1">"descrip", "tarea", "trabajo"</span>
+                        <span className="text-blue-600 block mt-1">"unidad", "u.m"</span>
+                        <span className="text-blue-600 block mt-1">"aprobada", "cantidad aprob"</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-100 pt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Calculos inteligentes */}
+                  <div className="space-y-2.5">
+                    <h4 className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
+                      Cálculos y Fórmulas Automáticas
+                    </h4>
+                    <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                      No es necesario incluir las columnas de importes o parciales calculados. El sistema recalcula en tiempo real al importar:
+                    </p>
+                    <div className="text-[11px] text-slate-600 bg-indigo-50/15 border border-indigo-100/50 p-3 rounded-xl space-y-1.5 font-medium">
+                      <p><span className="font-bold text-slate-700">Total Certificado:</span> Cantidad Presente + Cantidad Anterior</p>
+                      <p><span className="font-bold text-slate-700">Faltante a Certificar:</span> Cantidad Aprobada - Total Certificado</p>
+                      <p><span className="font-bold text-slate-700">Monto Parcial Presente:</span> Cantidad Presente × Precio Unitario</p>
+                      <p><span className="font-bold text-slate-700">Porcentaje de Avance:</span> Total Certificado ÷ Cantidad Aprobada × 100</p>
+                    </div>
+                  </div>
+
+                  {/* Accion rapida */}
+                  <div className="bg-slate-55 border border-slate-200/50 p-6 rounded-2xl flex flex-col justify-between items-start gap-4">
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-bold text-slate-800">¿Listo para comenzar?</h4>
+                      <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                        Descargue la plantilla prediseñada para asegurar que la estructura cumpla con el formato óptimo del importador.
+                      </p>
+                    </div>
+                    <button
+                      onClick={downloadTemplate}
+                      className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-5 rounded-xl text-xs transition-all shadow-md shadow-blue-500/10"
+                    >
+                      <Download size={14} />
+                      Descargar Plantilla Excel de Ejemplo
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -679,3 +883,220 @@ export default function CertificadosObras({
     </div>
   );
 }
+
+interface RespaldoItem {
+  id: number;
+  tipo_documento: string;
+  unidad_negocio: string;
+  periodo: string;
+  nombre_archivo: string;
+  tipo_mime: string;
+  usuario_carga: string;
+  fecha_carga: string;
+}
+
+function DocumentosRespaldo({
+  token,
+  tipoDocumento,
+  unidadNegocio,
+  periodo,
+  reportClosed
+}: {
+  token: string;
+  tipoDocumento: string;
+  unidadNegocio: string;
+  periodo: string;
+  reportClosed: boolean;
+}) {
+  const [list, setList] = useState<RespaldoItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  const pStr = periodo.replace('/', '-');
+
+  const fetchRespaldos = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/respaldos?tipo_documento=${encodeURIComponent(tipoDocumento)}&unidad_negocio=${encodeURIComponent(unidadNegocio)}&periodo=${encodeURIComponent(pStr)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setList(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      console.error(err);
+      setError('Error al cargar documentos de respaldo');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (unidadNegocio && periodo) {
+      fetchRespaldos();
+    }
+  }, [unidadNegocio, periodo, tipoDocumento]);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setError('');
+    setSuccess('');
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('tipo_documento', tipoDocumento);
+    formData.append('unidad_negocio', unidadNegocio);
+    formData.append('periodo', pStr);
+
+    try {
+      const res = await fetch(`/api/respaldos/upload`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || `Error ${res.status}`);
+      }
+      setSuccess('Documento subido correctamente.');
+      fetchRespaldos();
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Error al subir documento');
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleDescargar = async (id: number, nombre: string) => {
+    try {
+      const res = await fetch(`/api/respaldos/descargar/${id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Error al descargar el archivo');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = nombre;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error(err);
+      alert('No se pudo descargar el archivo.');
+    }
+  };
+
+  const handleEliminar = async (id: number) => {
+    if (!window.confirm('¿Está seguro de que desea eliminar este documento de respaldo?')) return;
+    setDeletingId(id);
+    setError('');
+    setSuccess('');
+    try {
+      const res = await fetch(`/api/respaldos/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setSuccess('Documento eliminado.');
+      setList(prev => prev.filter(item => item.id !== id));
+    } catch (err: any) {
+      console.error(err);
+      setError('Error al eliminar documento');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-4">
+      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="flex items-center gap-2">
+          <Paperclip className="text-blue-600 h-5 w-5" />
+          <h4 className="text-sm font-bold text-slate-800">Documentación de Respaldo</h4>
+        </div>
+        {!reportClosed && (
+          <label className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-1.5 px-3 rounded-lg text-xs transition-colors cursor-pointer select-none border border-slate-200">
+            {uploading ? <Loader2 size={13} className="animate-spin" /> : <UploadCloud size={13} />}
+            Subir Documento
+            <input type="file" onChange={handleUpload} disabled={uploading} className="hidden" />
+          </label>
+        )}
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-xs flex items-center gap-2">
+          <AlertCircle size={14} className="shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {success && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-3 py-2 rounded-lg text-xs flex items-center gap-2">
+          <Check size={14} className="shrink-0" />
+          <span>{success}</span>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex items-center justify-center py-4">
+          <Loader2 size={18} className="text-blue-600 animate-spin" />
+        </div>
+      ) : list.length === 0 ? (
+        <p className="text-xs text-slate-400 italic text-center py-2">No hay documentos de respaldo adjuntos para este período.</p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {list.map(item => (
+            <div key={item.id} className="flex items-center justify-between p-2.5 rounded-xl border border-slate-100 bg-slate-50/30 hover:bg-slate-55 transition-colors">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <Paperclip size={14} className="text-slate-400 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <button
+                    onClick={() => handleDescargar(item.id, item.nombre_archivo)}
+                    className="text-xs font-bold text-slate-700 hover:text-blue-600 transition-colors truncate block text-left w-full hover:underline"
+                    title={`Descargar ${item.nombre_archivo}`}
+                  >
+                    {item.nombre_archivo}
+                  </button>
+                  <span className="text-[9px] text-slate-400 block truncate">
+                    Cargado por: {item.usuario_carga} • {item.fecha_carga.substring(0, 10)}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 shrink-0 ml-2">
+                <button
+                  onClick={() => handleDescargar(item.id, item.nombre_archivo)}
+                  className="text-slate-500 hover:text-blue-600 p-1 hover:bg-blue-50 rounded transition-colors"
+                  title="Descargar"
+                >
+                  <Download size={13} />
+                </button>
+                {!reportClosed && (
+                  <button
+                    onClick={() => handleEliminar(item.id)}
+                    disabled={deletingId === item.id}
+                    className="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                    title="Eliminar"
+                  >
+                    {deletingId === item.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+

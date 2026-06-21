@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import * as XLSX from 'xlsx';
-import { UploadCloud, Building2, PackageCheck, TrendingUp, DollarSign, FileText, Filter, Calendar, LayoutDashboard, Search, ChevronDown, ChevronUp, ChevronRight, BarChart3, Presentation, Download, LogOut, Settings, Users, Save, X, Trash2, Edit2, Send, Check, Loader2, Shield, Bell, Wallet, Info, AlertCircle, Wrench, Package } from 'lucide-react';
+import { UploadCloud, Building2, PackageCheck, TrendingUp, DollarSign, FileText, Filter, Calendar, LayoutDashboard, Search, ChevronDown, ChevronUp, ChevronRight, BarChart3, Presentation, Download, LogOut, Settings, Users, Save, X, Trash2, Edit2, Send, Check, Loader2, Shield, Bell, Wallet, Info, AlertCircle, Wrench, Package, Paperclip } from 'lucide-react';
 import ConfiguracionAvanzada from './components/ConfiguracionAvanzada';
 import ConfiguracionCentrosCosto from './components/ConfiguracionCentrosCosto';
+import ConfiguracionEquipos from './components/ConfiguracionEquipos';
 import ErrorBoundary from './components/ErrorBoundary';
 import InformeGestion from './components/InformeGestion';
 import GestorInformes from './components/GestorInformes';
@@ -348,6 +349,28 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
   };
 
   const [uploadMsg, setUploadMsg] = useState('');
+
+  const [reportClosed, setReportClosed] = useState(false);
+  const activeUnidad = appliedFilters.empresa.includes('Todas') ? (defaultUnidad || '') : appliedFilters.empresa[0];
+  const activePeriodo = appliedFilters.periodo.includes('Todos') ? currentPeriod : appliedFilters.periodo[0];
+
+  useEffect(() => {
+    if (activeUnidad && activePeriodo) {
+      const pStr = activePeriodo.replace('/', '-');
+      apiFetch(`/api/informes/estado?unidad_negocio=${encodeURIComponent(activeUnidad)}&periodo=${encodeURIComponent(pStr)}`, token)
+        .then(res => {
+          if (res.existe && res.estado === 'CERRADO') {
+            setReportClosed(true);
+          } else {
+            setReportClosed(false);
+          }
+        })
+        .catch(e => {
+          console.error("Error fetching report state:", e);
+          setReportClosed(false);
+        });
+    }
+  }, [activeUnidad, activePeriodo, token]);
 
   
   const downloadTemplate = () => {
@@ -1574,8 +1597,18 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
               TOTAL: ${kpis.totalConsolidado.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
-        </div>
+          </div>
 
+          {/* Documentos de Respaldo */}
+          <div className="mt-6">
+            <DocumentosRespaldo
+              token={token}
+              tipoDocumento="INGRESOS_VENTAS_INTERNAS"
+              unidadNegocio={activeUnidad}
+              periodo={activePeriodo}
+              reportClosed={reportClosed}
+            />
+        </div>
       </div>
       {renderCustomDialog()}
     </div>
@@ -1766,7 +1799,7 @@ function Configuracion({ token }: { token: string }) {
   const [savingUn, setSavingUn] = useState(false);
   const [modalLoading, setModalLoading] = useState(false);
   const [modalMsg, setModalMsg] = useState({ text: '', type: '' });
-  const [configTab, setConfigTab] = useState<'usuarios' | 'audit' | 'ingresos' | 'costos-asientos' | 'costos-compras' | 'centros-costo' | 'unidades' | 'ajustes-excel'>('usuarios');
+  const [configTab, setConfigTab] = useState<'usuarios' | 'audit' | 'ingresos' | 'costos-asientos' | 'costos-compras' | 'centros-costo' | 'unidades' | 'ajustes-excel' | 'equipos'>('usuarios');
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
   const [searchUnidad, setSearchUnidad] = useState('');
@@ -1901,13 +1934,14 @@ function Configuracion({ token }: { token: string }) {
           <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl"><Settings size={28} /></div>
           <div><h2 className="text-2xl font-bold text-slate-800">Configuración</h2><p className="text-sm text-slate-500">Gestión de usuarios y auditoría</p></div>
         </div>
-        <div className="flex bg-slate-100 p-1 rounded-xl self-start sm:self-auto overflow-x-auto max-w-full">
+        <div className="flex flex-wrap bg-slate-100 p-1 rounded-xl self-start sm:self-auto gap-1">
           <button onClick={() => setConfigTab('usuarios')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'usuarios' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Usuarios</button>
           <button onClick={() => setConfigTab('audit')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'audit' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Auditoría</button>
           <button onClick={() => setConfigTab('ingresos')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'ingresos' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Conf. Ingresos</button>
           <button onClick={() => setConfigTab('costos-asientos')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'costos-asientos' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Conf. Asientos</button>
           <button onClick={() => setConfigTab('costos-compras')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'costos-compras' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Conf. Costos Compras</button>
           <button onClick={() => setConfigTab('centros-costo')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'centros-costo' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Conf. Centros de Costo</button>
+          <button onClick={() => setConfigTab('equipos')} className={`px-4 py-2 text-sm font-bold rounded-lg whitespace-nowrap transition-colors ${configTab === 'equipos' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}>Conf. Equipos</button>
 
         </div>
       </div>
@@ -2019,6 +2053,10 @@ function Configuracion({ token }: { token: string }) {
       ) : configTab === 'centros-costo' ? (
         <ErrorBoundary>
           <ConfiguracionCentrosCosto token={token} />
+        </ErrorBoundary>
+      ) : configTab === 'equipos' ? (
+        <ErrorBoundary>
+          <ConfiguracionEquipos token={token} />
         </ErrorBoundary>
       ) : (
         <ConfiguracionAvanzada token={token} tipo={configTab as any} />
@@ -2326,6 +2364,222 @@ export default function App() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface RespaldoItem {
+  id: number;
+  tipo_documento: string;
+  unidad_negocio: string;
+  periodo: string;
+  nombre_archivo: string;
+  tipo_mime: string;
+  usuario_carga: string;
+  fecha_carga: string;
+}
+
+function DocumentosRespaldo({
+  token,
+  tipoDocumento,
+  unidadNegocio,
+  periodo,
+  reportClosed
+}: {
+  token: string;
+  tipoDocumento: string;
+  unidadNegocio: string;
+  periodo: string;
+  reportClosed: boolean;
+}) {
+  const [list, setList] = useState<RespaldoItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  const pStr = periodo.replace('/', '-');
+
+  const fetchRespaldos = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/respaldos?tipo_documento=${encodeURIComponent(tipoDocumento)}&unidad_negocio=${encodeURIComponent(unidadNegocio)}&periodo=${encodeURIComponent(pStr)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setList(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      console.error(err);
+      setError('Error al cargar documentos de respaldo');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (unidadNegocio && periodo) {
+      fetchRespaldos();
+    }
+  }, [unidadNegocio, periodo, tipoDocumento]);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setError('');
+    setSuccess('');
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('tipo_documento', tipoDocumento);
+    formData.append('unidad_negocio', unidadNegocio);
+    formData.append('periodo', pStr);
+
+    try {
+      const res = await fetch(`/api/respaldos/upload`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || `Error ${res.status}`);
+      }
+      setSuccess('Documento subido correctamente.');
+      fetchRespaldos();
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Error al subir documento');
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleDescargar = async (id: number, nombre: string) => {
+    try {
+      const res = await fetch(`/api/respaldos/descargar/${id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Error al descargar el archivo');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = nombre;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error(err);
+      alert('No se pudo descargar el archivo.');
+    }
+  };
+
+  const handleEliminar = async (id: number) => {
+    if (!window.confirm('¿Está seguro de que desea eliminar este documento de respaldo?')) return;
+    setDeletingId(id);
+    setError('');
+    setSuccess('');
+    try {
+      const res = await fetch(`/api/respaldos/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setSuccess('Documento eliminado.');
+      setList(prev => prev.filter(item => item.id !== id));
+    } catch (err: any) {
+      console.error(err);
+      setError('Error al eliminar documento');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-4 max-w-[1800px] mx-auto mb-6">
+      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="flex items-center gap-2">
+          <Paperclip className="text-blue-600 h-5 w-5" />
+          <h4 className="text-sm font-bold text-slate-800">Documentación de Respaldo</h4>
+        </div>
+        {!reportClosed && (
+          <label className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-1.5 px-3 rounded-lg text-xs transition-colors cursor-pointer select-none border border-slate-200">
+            {uploading ? <Loader2 size={13} className="animate-spin" /> : <UploadCloud size={13} />}
+            Subir Documento
+            <input type="file" onChange={handleUpload} disabled={uploading} className="hidden" />
+          </label>
+        )}
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-xs flex items-center gap-2">
+          <AlertCircle size={14} className="shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {success && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-3 py-2 rounded-lg text-xs flex items-center gap-2">
+          <Check size={14} className="shrink-0" />
+          <span>{success}</span>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex items-center justify-center py-4">
+          <Loader2 size={18} className="text-blue-600 animate-spin" />
+        </div>
+      ) : list.length === 0 ? (
+        <p className="text-xs text-slate-400 italic text-center py-2">No hay documentos de respaldo adjuntos para este período.</p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {list.map(item => (
+            <div key={item.id} className="flex items-center justify-between p-2.5 rounded-xl border border-slate-100 bg-slate-50/30 hover:bg-slate-55 transition-colors">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <Paperclip size={14} className="text-slate-400 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <button
+                    onClick={() => handleDescargar(item.id, item.nombre_archivo)}
+                    className="text-xs font-bold text-slate-700 hover:text-blue-600 transition-colors truncate block text-left w-full hover:underline"
+                    title={`Descargar ${item.nombre_archivo}`}
+                  >
+                    {item.nombre_archivo}
+                  </button>
+                  <span className="text-[9px] text-slate-400 block truncate">
+                    Cargado por: {item.usuario_carga} • {item.fecha_carga.substring(0, 10)}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 shrink-0 ml-2">
+                <button
+                  onClick={() => handleDescargar(item.id, item.nombre_archivo)}
+                  className="text-slate-500 hover:text-blue-600 p-1 hover:bg-blue-50 rounded transition-colors"
+                  title="Descargar"
+                >
+                  <Download size={13} />
+                </button>
+                {!reportClosed && (
+                  <button
+                    onClick={() => handleEliminar(item.id)}
+                    disabled={deletingId === item.id}
+                    className="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                    title="Eliminar"
+                  >
+                    {deletingId === item.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
