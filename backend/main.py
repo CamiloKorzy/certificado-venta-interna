@@ -2941,6 +2941,16 @@ def cerrar_informe(action: InformeAction):
         rrhh_data = get_rrhh(action.unidad_negocio, action.periodo)
         asientos_data = get_asientos(action.unidad_negocio, action.periodo)
         
+        # Obtener datos de nuevos módulos para el snapshot
+        try: consumos_data = get_consumos_inventarios_live(action.unidad_negocio, action.periodo)
+        except: consumos_data = []
+        
+        try: equipos_data = get_equipos_live(action.unidad_negocio, action.periodo)
+        except: equipos_data = []
+        
+        try: obras_data = get_certificados_obras_live(action.unidad_negocio, action.periodo)
+        except: obras_data = []
+        
         totales_data = {
             "ingresos": sum(i["importe"] for i in ingresos_data),
             "gastos": sum(g["importe"] for g in gastos_data),
@@ -2952,7 +2962,10 @@ def cerrar_informe(action: InformeAction):
             "rrhh": rrhh_data,
             "gastos": gastos_data,
             "asientos": asientos_data,
-            "totales": totales_data
+            "totales": totales_data,
+            "consumos": consumos_data,
+            "equipos": equipos_data,
+            "obras": obras_data
         }
 
         import json
@@ -3073,3 +3086,577 @@ def get_informes_lista(user=Depends(get_current_user)):
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ═══════════════════════════════════════════════════════
+# NUEVOS MÓDULOS: CONSUMOS, EQUIPOS Y OBRAS
+# ═══════════════════════════════════════════════════════
+
+def get_consumos_inventarios_live(unidad_negocio: str, periodo: str):
+    conn = get_aurora()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT 
+                fecha, 
+                numerocomprobante, 
+                productoconsumoprod, 
+                cantidadconsumoprod, 
+                unidadconsumoprod, 
+                preciounitvalorizadoconsumoprod, 
+                importevalorizadoconsumoprod,
+                ordendeproduccion,
+                depositoorigenconsumoprod
+            FROM analisis_de_consumos_de_produccion
+            WHERE empresa = %s 
+              AND SUBSTRING(fecha, 1, 7) = %s
+            ORDER BY fecha DESC
+        """, (unidad_negocio, periodo))
+        rows = cur.fetchall()
+        
+        result = []
+        for r in rows:
+            raw_precio = r[5]
+            raw_importe = r[6]
+            
+            precio = 0.0
+            if raw_precio and raw_precio != 'NULL' and raw_precio != '':
+                try: precio = float(raw_precio)
+                except: pass
+                
+            importe = 0.0
+            if raw_importe and raw_importe != 'NULL' and raw_importe != '':
+                try: importe = float(raw_importe)
+                except: pass
+                
+            result.append({
+                "fecha": str(r[0])[:10] if r[0] else "",
+                "comprobante": r[1] or "",
+                "insumo": r[2] or "",
+                "cantidad": float(r[3] or 0.0),
+                "unidad": r[4] or "",
+                "precio_unitario": precio,
+                "total": importe,
+                "orden_produccion": r[7] or "",
+                "deposito": r[8] or ""
+            })
+        return result
+    finally:
+        cur.close()
+        conn.close()
+
+@app.get("/api/consumos-inventarios")
+def get_consumos_inventarios(unidad_negocio: str, periodo: str, current_user = Depends(get_current_user)):
+    cerrado = check_informe_cerrado(unidad_negocio, periodo, 'consumos')
+    if cerrado is not None:
+        return cerrado
+    try:
+        return get_consumos_inventarios_live(unidad_negocio, periodo)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def get_equipos_live(unidad_negocio: str, periodo: str):
+    # 1. Planilla
+    conn_supa = get_supabase()
+    cur_supa = conn_supa.cursor()
+    cur_supa.execute("""
+        SELECT id, equipo, concepto, horas_kilometros, precio_unitario, total, usuario_carga, fecha_carga
+        FROM cert_equipos_planilla
+        WHERE unidad_negocio = %s AND periodo = %s
+    """, (unidad_negocio, periodo))
+    rows_supa = cur_supa.fetchall()
+    cur_supa.close()
+    conn_supa.close()
+    
+    result = []
+    for r in rows_supa:
+        result.append({
+            "id": r[0],
+            "origen": "PLANILLA",
+            "equipo": r[1],
+            "concepto": r[2],
+            "horas_kilometros": float(r[3] or 0),
+            "precio_unitario": float(r[4] or 0),
+            "total": float(r[5] or 0),
+            "usuario_carga": r[6],
+            "fecha_carga": str(r[7])
+        })
+        
+    # 2. Finnegans
+    y, m = periodo.split('-')
+    conn_a = get_aurora()
+    cur_a = conn_a.cursor()
+    try:
+        cur_a.execute("""
+            SELECT fecha, documento, comprobante, equiposolicitantenombre, productonombre, itemcantidad, itemprecio, itemimporte, conceptonombre, descripcion
+            FROM ceesa_cee_certificados_ventas_internas
+            WHERE empresa = 'Taller Central CEE Enriquez'
+              AND EXTRACT(YEAR FROM CAST(fecha AS TIMESTAMP)) = %s
+              AND EXTRACT(MONTH FROM CAST(fecha AS TIMESTAMP)) = %s
+        """, (int(y), int(m)))
+        rows_a = cur_a.fetchall()
+        
+        for r in rows_a:
+            eq_solicitante = r[3] or ""
+            eq_clean = eq_solicitante.strip().lower()
+            unit_clean = unidad_negocio.strip().lower()
+            
+            matches = (eq_clean == unit_clean or eq_clean in unit_clean or unit_clean in eq_clean)
+            if matches:
+                qty = 0.0
+                try: qty = float(r[5] or 0)
+                except: pass
+                
+                price = 0.0
+                try: price = float(r[6] or 0)
+                except: pass
+                
+                total = 0.0
+                try: total = float(r[7] or 0)
+                except: pass
+                
+                result.append({
+                    "id": None,
+                    "origen": "FINNEGANS",
+                    "equipo": r[4] or "Equipo sin nombre",
+                    "concepto": r[8] or r[9] or "Alquiler",
+                    "horas_kilometros": qty,
+                    "precio_unitario": price,
+                    "total": total,
+                    "documento": r[1] or "",
+                    "comprobante": r[2] or "",
+                    "fecha": str(r[0])[:10] if r[0] else ""
+                })
+    finally:
+        cur_a.close()
+        conn_a.close()
+        
+    return result
+
+@app.get("/api/equipos")
+def get_equipos(unidad_negocio: str, periodo: str, current_user = Depends(get_current_user)):
+    cerrado = check_informe_cerrado(unidad_negocio, periodo, 'equipos')
+    if cerrado is not None:
+        return cerrado
+    try:
+        return get_equipos_live(unidad_negocio, periodo)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/equipos/upload")
+async def upload_equipos(
+    file: UploadFile = File(...),
+    unidad_negocio: str = Form(...),
+    periodo: str = Form(...),
+    current_user = Depends(get_current_user)
+):
+    import io
+    import openpyxl
+    contents = await file.read()
+    wb = openpyxl.load_workbook(filename=io.BytesIO(contents), data_only=True)
+    ws = wb.active
+    
+    header_row_idx = None
+    headers = []
+    
+    for row_idx, row in enumerate(ws.iter_rows(values_only=True), start=1):
+        if not row: continue
+        row_str = [str(c or "").strip().lower() for c in row]
+        if any("equipo" in s for s in row_str) and any("concepto" in s for s in row_str):
+            header_row_idx = row_idx
+            headers = row_str
+            break
+            
+    if header_row_idx is None:
+        headers = [str(c or "").strip().lower() for c in ws[1]]
+        header_row_idx = 1
+        
+    idx_equipo = -1
+    idx_concepto = -1
+    idx_horas = -1
+    idx_precio = -1
+    idx_total = -1
+    
+    for i, h in enumerate(headers):
+        if "equipo" in h: idx_equipo = i
+        elif "concepto" in h: idx_concepto = i
+        elif "hora" in h or "kilom" in h or "km" in h: idx_horas = i
+        elif "precio" in h or "unit" in h: idx_precio = i
+        elif "total" in h or "importe" in h: idx_total = i
+        
+    if idx_equipo == -1 or idx_concepto == -1:
+        raise HTTPException(status_code=400, detail="El archivo no tiene las columnas requeridas (Equipo, Concepto).")
+        
+    conn = get_supabase()
+    cur = conn.cursor()
+    user_email = current_user.get("email", "unknown")
+    
+    inserted_count = 0
+    errors = []
+    
+    for row_idx, row in enumerate(ws.iter_rows(min_row=header_row_idx + 1, values_only=True), start=header_row_idx + 1):
+        if not row or not any(row): continue
+        
+        equipo_val = str(row[idx_equipo] or "").strip()
+        concepto_val = str(row[idx_concepto] or "").strip()
+        
+        if not equipo_val: continue
+        
+        horas_val = 0.0
+        if idx_horas != -1 and row[idx_horas] is not None:
+            try: horas_val = float(row[idx_horas])
+            except: pass
+            
+        precio_val = 0.0
+        if idx_precio != -1 and row[idx_precio] is not None:
+            try: precio_val = float(row[idx_precio])
+            except: pass
+            
+        total_val = horas_val * precio_val
+        if idx_total != -1 and row[idx_total] is not None:
+            try: total_val = float(row[idx_total])
+            except: pass
+            
+        try:
+            cur.execute("""
+                INSERT INTO cert_equipos_planilla (unidad_negocio, periodo, equipo, concepto, horas_kilometros, precio_unitario, total, usuario_carga)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """, (unidad_negocio, periodo, equipo_val, concepto_val, horas_val, precio_val, total_val, user_email))
+            inserted_count += 1
+        except Exception as e:
+            errors.append(f"Fila {row_idx}: {str(e)}")
+            
+    conn.commit()
+    cur.close()
+    conn.close()
+    
+    return {"status": "ok", "inserted": inserted_count, "errors": errors}
+
+@app.delete("/api/equipos/bulk")
+def delete_equipos_bulk(unidad_negocio: str, periodo: str, current_user = Depends(get_current_user)):
+    conn = get_supabase()
+    cur = conn.cursor()
+    try:
+        cur.execute("DELETE FROM cert_equipos_planilla WHERE unidad_negocio = %s AND periodo = %s", (unidad_negocio, periodo))
+        conn.commit()
+        return {"status": "ok"}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cur.close()
+        conn.close()
+
+@app.delete("/api/equipos/{id}")
+def delete_equipo_item(id: int, current_user = Depends(get_current_user)):
+    conn = get_supabase()
+    cur = conn.cursor()
+    try:
+        cur.execute("DELETE FROM cert_equipos_planilla WHERE id = %s", (id,))
+        conn.commit()
+        return {"status": "ok"}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cur.close()
+        conn.close()
+
+
+def get_certificados_obras_live(unidad_negocio: str, periodo: str):
+    conn = get_supabase()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT id, numero_interno, comitente, contratista, obra, fecha_certificado, estado, usuario_carga, fecha_carga
+            FROM cert_obras_maestro
+            WHERE unidad_negocio = %s AND periodo = %s
+            ORDER BY numero_interno ASC
+        """, (unidad_negocio, periodo))
+        maestros = cur.fetchall()
+        
+        sheets = []
+        for m in maestros:
+            maestro_id = m[0]
+            cur.execute("""
+                SELECT id, item, descripcion, unidad_medida, cantidad_aprobada, precio_unitario, presente_certificado, anterior_certificado, total_certificado, faltante_certificar, parcial_presente, parcial_anterior, parcial_total, monto_aprobado, avance_usd
+                FROM cert_obras_detalles
+                WHERE maestro_id = %s
+                ORDER BY id ASC
+            """, (maestro_id,))
+            details = cur.fetchall()
+            
+            items_list = []
+            for d in details:
+                items_list.append({
+                    "id": d[0],
+                    "item": d[1] or "",
+                    "descripcion": d[2] or "",
+                    "unidad_medida": d[3] or "",
+                    "cantidad_aprobada": float(d[4] or 0),
+                    "precio_unitario": float(d[5] or 0),
+                    "presente_certificado": float(d[6] or 0),
+                    "anterior_certificado": float(d[7] or 0),
+                    "total_certificado": float(d[8] or 0),
+                    "faltante_certificar": float(d[9] or 0),
+                    "parcial_presente": float(d[10] or 0),
+                    "parcial_anterior": float(d[11] or 0),
+                    "parcial_total": float(d[12] or 0),
+                    "monto_aprobado": float(d[13] or 0),
+                    "avance_usd": float(d[14] or 0)
+                })
+                
+            sheets.append({
+                "id": maestro_id,
+                "numero_interno": m[1],
+                "comitente": m[2] or "",
+                "contratista": m[3] or "",
+                "obra": m[4] or "",
+                "fecha_certificado": str(m[5]) if m[5] else "",
+                "estado": m[6],
+                "usuario_carga": m[7],
+                "fecha_carga": str(m[8]),
+                "items": items_list
+            })
+        return sheets
+    finally:
+        cur.close()
+        conn.close()
+
+@app.get("/api/certificados-obras")
+def get_certificados_obras(unidad_negocio: str, periodo: str, current_user = Depends(get_current_user)):
+    cerrado = check_informe_cerrado(unidad_negocio, periodo, 'obras')
+    if cerrado is not None:
+        return cerrado
+    try:
+        return get_certificados_obras_live(unidad_negocio, periodo)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/certificados-obras/upload")
+async def upload_certificado_obra(
+    file: UploadFile = File(...),
+    unidad_negocio: str = Form(...),
+    periodo: str = Form(...),
+    current_user = Depends(get_current_user)
+):
+    import io
+    import openpyxl
+    from datetime import datetime, date
+    
+    contents = await file.read()
+    wb = openpyxl.load_workbook(filename=io.BytesIO(contents), data_only=True)
+    ws = wb.active
+    
+    comitente = ""
+    contratista = ""
+    obra = ""
+    fecha_cert = None
+    
+    for row in ws.iter_rows(max_row=15, values_only=True):
+        if not row: continue
+        for col_idx, cell in enumerate(row):
+            cell_str = str(cell or "").strip().lower()
+            if "comitente" in cell_str and col_idx + 1 < len(row):
+                comitente = str(row[col_idx + 1] or "").strip()
+            elif "contratista" in cell_str and col_idx + 1 < len(row):
+                contratista = str(row[col_idx + 1] or "").strip()
+            elif "obra" in cell_str and col_idx + 1 < len(row):
+                if "total" not in cell_str:
+                    obra = str(row[col_idx + 1] or "").strip()
+            elif "fecha" in cell_str and col_idx + 1 < len(row):
+                val = row[col_idx + 1]
+                if isinstance(val, datetime):
+                    fecha_cert = val.date()
+                elif isinstance(val, date):
+                    fecha_cert = val
+                elif val:
+                    try:
+                        fecha_cert = datetime.strptime(str(val).strip()[:10], "%Y-%m-%d").date()
+                    except:
+                        try:
+                            fecha_cert = datetime.strptime(str(val).strip(), "%d/%m/%Y").date()
+                        except:
+                            pass
+
+    header_row_idx = None
+    headers = []
+    for row_idx, row in enumerate(ws.iter_rows(values_only=True), start=1):
+        if not row: continue
+        row_str = [str(c or "").strip().lower() for c in row]
+        if any("item" in s for s in row_str) and any("descrip" in s for s in row_str) and any("unidad" in s for s in row_str):
+            header_row_idx = row_idx
+            headers = row_str
+            break
+            
+    if header_row_idx is None:
+        raise HTTPException(status_code=400, detail="No se encontró la fila de cabecera con las columnas (Item, Descripción, Unidad de Medida).")
+        
+    idx_item = -1
+    idx_desc = -1
+    idx_um = -1
+    idx_cant_aprob = -1
+    idx_precio = -1
+    idx_pres_cert = -1
+    idx_ant_cert = -1
+    idx_tot_cert = -1
+    idx_faltante = -1
+    idx_parc_pres = -1
+    idx_parc_ant = -1
+    idx_parc_tot = -1
+    idx_monto_aprob = -1
+    idx_avance = -1
+    
+    for i, h in enumerate(headers):
+        if "item" in h: idx_item = i
+        elif "descrip" in h or "tarea" in h or "trabajo" in h: idx_desc = i
+        elif "unidad" in h or "u.m" in h: idx_um = i
+        elif "aprobada" in h or "cantidad aprob" in h: idx_cant_aprob = i
+        elif "precio" in h or "unitario" in h: idx_precio = i
+        elif "presente" in h and "certificado" in h and "parcial" not in h: idx_pres_cert = i
+        elif "anterior" in h and "certificado" in h and "parcial" not in h: idx_ant_cert = i
+        elif "total" in h and "certificado" in h and "parcial" not in h: idx_tot_cert = i
+        elif "faltante" in h: idx_faltante = i
+        elif "parcial presente" in h or ("parcial" in h and "presente" in h): idx_parc_pres = i
+        elif "parcial anterior" in h or ("parcial" in h and "anterior" in h): idx_parc_ant = i
+        elif "parcial total" in h or ("parcial" in h and "total" in h): idx_parc_tot = i
+        elif "monto aprobado" in h or "aprobado" in h: idx_monto_aprob = i
+        elif "avance" in h: idx_avance = i
+        
+    if idx_item == -1 or idx_desc == -1:
+         raise HTTPException(status_code=400, detail="Las columnas básicas 'Item' o 'Descripción' no fueron detectadas.")
+         
+    conn = get_supabase()
+    cur = conn.cursor()
+    
+    cur.execute("""
+        SELECT COALESCE(MAX(numero_interno), 0) + 1 
+        FROM cert_obras_maestro 
+        WHERE unidad_negocio = %s AND periodo = %s
+    """, (unidad_negocio, periodo))
+    next_num = cur.fetchone()[0]
+    
+    user_email = current_user.get("email", "unknown")
+    
+    cur.execute("""
+        INSERT INTO cert_obras_maestro (unidad_negocio, periodo, numero_interno, comitente, contratista, obra, fecha_certificado, estado, usuario_carga)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, 'BORRADOR', %s) RETURNING id
+    """, (unidad_negocio, periodo, next_num, comitente, contratista, obra, fecha_cert, user_email))
+    maestro_id = cur.fetchone()[0]
+    
+    def get_cell_val(row, idx):
+        if idx != -1 and idx < len(row) and row[idx] is not None:
+            val = row[idx]
+            if str(val).strip().upper() == "NULL" or str(val).strip() == "":
+                return 0.0
+            try: return float(val)
+            except: return 0.0
+        return 0.0
+        
+    inserted_items = 0
+    for row_idx, row in enumerate(ws.iter_rows(min_row=header_row_idx + 1, values_only=True), start=header_row_idx + 1):
+        if not row or not any(row): continue
+        item_val = str(row[idx_item] or "").strip()
+        desc_val = str(row[idx_desc] or "").strip()
+        
+        if not item_val and not desc_val: continue
+        
+        um_val = str(row[idx_um] or "").strip() if idx_um != -1 else ""
+        
+        cant_aprob = get_cell_val(row, idx_cant_aprob)
+        precio_unit = get_cell_val(row, idx_precio)
+        pres_cert = get_cell_val(row, idx_pres_cert)
+        ant_cert = get_cell_val(row, idx_ant_cert)
+        tot_cert = get_cell_val(row, idx_tot_cert)
+        faltante = get_cell_val(row, idx_faltante)
+        parc_pres = get_cell_val(row, idx_parc_pres)
+        parc_ant = get_cell_val(row, idx_parc_ant)
+        parc_tot = get_cell_val(row, idx_parc_tot)
+        monto_aprob = get_cell_val(row, idx_monto_aprob)
+        avance = get_cell_val(row, idx_avance)
+        
+        cur.execute("""
+            INSERT INTO cert_obras_detalles (
+                maestro_id, item, descripcion, unidad_medida, cantidad_aprobada, precio_unitario, 
+                presente_certificado, anterior_certificado, total_certificado, faltante_certificar, 
+                parcial_presente, parcial_anterior, parcial_total, monto_aprobado, avance_usd
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            maestro_id, item_val, desc_val, um_val, cant_aprob, precio_unit,
+            pres_cert, ant_cert, tot_cert, faltante,
+            parc_pres, parc_ant, parc_tot, monto_aprob, avance
+        ))
+        inserted_items += 1
+        
+    conn.commit()
+    cur.close()
+    conn.close()
+    
+    return {
+        "status": "ok",
+        "maestro_id": maestro_id,
+        "numero_interno": next_num,
+        "inserted_items": inserted_items
+    }
+
+class ConfirmCertificadoObraReq(BaseModel):
+    comitente: str
+    contratista: str
+    obra: str
+    fecha_certificado: Optional[str] = None
+    items: list
+
+@app.put("/api/certificados-obras/{maestro_id}/confirm")
+def confirm_certificado_obra(maestro_id: int, req: ConfirmCertificadoObraReq, current_user = Depends(get_current_user)):
+    conn = get_supabase()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            UPDATE cert_obras_maestro 
+            SET comitente = %s, contratista = %s, obra = %s, fecha_certificado = %s, estado = 'CONFIRMADO'
+            WHERE id = %s
+        """, (req.comitente, req.contratista, req.obra, req.fecha_certificado if req.fecha_certificado else None, maestro_id))
+        
+        cur.execute("DELETE FROM cert_obras_detalles WHERE maestro_id = %s", (maestro_id,))
+        
+        for item in req.items:
+            cur.execute("""
+                INSERT INTO cert_obras_detalles (
+                    maestro_id, item, descripcion, unidad_medida, cantidad_aprobada, precio_unitario, 
+                    presente_certificado, anterior_certificado, total_certificado, faltante_certificar, 
+                    parcial_presente, parcial_anterior, parcial_total, monto_aprobado, avance_usd
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                maestro_id, item.get("item"), item.get("descripcion"), item.get("unidad_medida"),
+                item.get("cantidad_aprobada", 0), item.get("precio_unitario", 0),
+                item.get("presente_certificado", 0), item.get("anterior_certificado", 0),
+                item.get("total_certificado", 0), item.get("faltante_certificar", 0),
+                item.get("parcial_presente", 0), item.get("parcial_anterior", 0),
+                item.get("parcial_total", 0), item.get("monto_aprobado", 0),
+                item.get("avance_usd", 0)
+            ))
+            
+        conn.commit()
+        return {"status": "ok"}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cur.close()
+        conn.close()
+
+@app.delete("/api/certificados-obras/{maestro_id}")
+def delete_certificado_obra(maestro_id: int, current_user = Depends(get_current_user)):
+    conn = get_supabase()
+    cur = conn.cursor()
+    try:
+        cur.execute("DELETE FROM cert_obras_maestro WHERE id = %s", (maestro_id,))
+        conn.commit()
+        return {"status": "ok"}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cur.close()
+        conn.close()

@@ -1,11 +1,14 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import * as XLSX from 'xlsx';
-import { UploadCloud, Building2, PackageCheck, TrendingUp, FileText, Filter, Calendar, LayoutDashboard, Search, ChevronDown, ChevronUp, ChevronRight, BarChart3, Presentation, Download, LogOut, Settings, Users, Save, X, Trash2, Edit2, Send, Check, Loader2, Shield, Bell, Wallet, Info, AlertCircle } from 'lucide-react';
+import { UploadCloud, Building2, PackageCheck, TrendingUp, FileText, Filter, Calendar, LayoutDashboard, Search, ChevronDown, ChevronUp, ChevronRight, BarChart3, Presentation, Download, LogOut, Settings, Users, Save, X, Trash2, Edit2, Send, Check, Loader2, Shield, Bell, Wallet, Info, AlertCircle, Wrench, Package } from 'lucide-react';
 import ConfiguracionAvanzada from './components/ConfiguracionAvanzada';
 import ConfiguracionCentrosCosto from './components/ConfiguracionCentrosCosto';
 import ErrorBoundary from './components/ErrorBoundary';
 import InformeGestion from './components/InformeGestion';
 import GestorInformes from './components/GestorInformes';
+import ConsumosInventarios from './components/ConsumosInventarios';
+import Equipos from './components/Equipos';
+import CertificadosObras from './components/CertificadosObras';
 // ─── API Helper ───
 const API_URL = '';
 function apiFetch(path: string, token: string, options: any = {}) {
@@ -993,7 +996,7 @@ function Dashboard({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: 
             </div>
           </div>
           <div className="text-xs text-slate-400 font-medium">
-            Selección administrada desde la solapa Proyectos
+            Selección administrada desde la solapa Reportes de Gestión
           </div>
         </div>
 
@@ -2142,7 +2145,7 @@ export default function App() {
   const [user, setUser] = useState<any>(() => {
     try { return JSON.parse(localStorage.getItem('cert_user') || 'null'); } catch { return null; }
   });
-  const [view, setView] = useState<'proyectos' | 'dashboard' | 'ingresos' | 'costos' | 'asientos' | 'rrhh' | 'config'>('proyectos');
+  const [view, setView] = useState<'proyectos' | 'dashboard' | 'ingresos' | 'costos' | 'asientos' | 'rrhh' | 'consumos' | 'equipos' | 'obras' | 'config'>('proyectos');
   const [globalUnidad, setGlobalUnidad] = useState<string | undefined>(undefined);
   const [globalPeriodo, setGlobalPeriodo] = useState<string | undefined>(undefined);
   const [showAbout, setShowAbout] = useState(false);
@@ -2175,7 +2178,7 @@ export default function App() {
 
               <button onClick={() => setView('proyectos')}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'proyectos' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
-                <span className="flex items-center gap-1.5"><FileText size={15} /> Proyectos</span>
+                <span className="flex items-center gap-1.5"><FileText size={15} /> Reportes de Gestión</span>
               </button>
 
               {globalUnidad && globalPeriodo && (
@@ -2199,6 +2202,18 @@ export default function App() {
                   <button onClick={() => setView('rrhh')}
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'rrhh' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
                     <span className="flex items-center gap-1.5"><Users size={15} /> RRHH</span>
+                  </button>
+                  <button onClick={() => setView('consumos')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'consumos' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
+                    <span className="flex items-center gap-1.5"><Package size={15} /> Consumos</span>
+                  </button>
+                  <button onClick={() => setView('equipos')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'equipos' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
+                    <span className="flex items-center gap-1.5"><Wrench size={15} /> Equipos</span>
+                  </button>
+                  <button onClick={() => setView('obras')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'obras' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
+                    <span className="flex items-center gap-1.5"><Building2 size={15} /> Obras</span>
                   </button>
                 </>
               )}
@@ -2225,6 +2240,9 @@ export default function App() {
       {view === 'costos' && <Costos token={token} defaultUnidad={globalUnidad} defaultPeriodo={globalPeriodo} />}
       {view === 'asientos' && <Asientos token={token} defaultUnidad={globalUnidad} defaultPeriodo={globalPeriodo} />}
       {view === 'rrhh' && <RRHH token={token} defaultUnidad={globalUnidad} defaultPeriodo={globalPeriodo} />}
+      {view === 'consumos' && <ConsumosInventarios token={token} unidadNegocio={globalUnidad!} periodo={globalPeriodo!} />}
+      {view === 'equipos' && <Equipos token={token} unidadNegocio={globalUnidad!} periodo={globalPeriodo!} />}
+      {view === 'obras' && <CertificadosObras token={token} unidadNegocio={globalUnidad!} periodo={globalPeriodo!} />}
       {view === 'config' && user?.rol === 'admin' && <Configuracion token={token} />}
 
       {/* Modal Acerca de */}

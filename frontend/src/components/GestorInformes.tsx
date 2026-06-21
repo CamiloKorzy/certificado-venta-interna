@@ -260,7 +260,7 @@ export default function GestorInformes({ token, onOpenReport, user }: any) {
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-            <FileText className="text-blue-600" /> Proyectos de Informes
+            <FileText className="text-blue-600" /> Reportes de Gestión
           </h1>
           <p className="text-slate-500 mt-1 text-sm">Gestiona el ciclo de vida de los informes de gestión</p>
         </div>
@@ -322,7 +322,7 @@ export default function GestorInformes({ token, onOpenReport, user }: any) {
                   <td className="p-4 text-sm text-slate-500">{inf.usuario_apertura}</td>
                   <td className="p-4 flex items-center gap-4">
                     <button onClick={() => onOpenReport(inf.unidad_negocio, perStr)} className="text-blue-600 hover:text-blue-800 text-sm font-bold">
-                      Abrir Proyecto
+                      Abrir Reporte
                     </button>
                     {inf.estado === 'ABIERTO' && (
                       <button 

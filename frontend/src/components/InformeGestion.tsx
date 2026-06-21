@@ -547,7 +547,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
           </div>
         </div>
         <div className="text-xs text-slate-400 font-medium">
-          Selección administrada desde la solapa Proyectos
+          Selección administrada desde la solapa Reportes de Gestión
         </div>
       </div>
 
