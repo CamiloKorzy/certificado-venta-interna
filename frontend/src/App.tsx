@@ -2141,7 +2141,7 @@ function Ingresos({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: s
 }
 
 function Costos({ token, defaultUnidad, defaultPeriodo }: { token: string, defaultUnidad?: string, defaultPeriodo?: string }) {
-  const [subTab, setSubTab] = useState<'resumen' | 'asientos' | 'rrhh' | 'consumos' | 'equipos'>('resumen');
+  const [subTab, setSubTab] = useState<'resumen' | 'rrhh' | 'consumos' | 'equipos'>('resumen');
 
   return (
     <div className="bg-slate-50 min-h-screen pb-12 overflow-x-hidden font-sans">
@@ -2152,12 +2152,6 @@ function Costos({ token, defaultUnidad, defaultPeriodo }: { token: string, defau
             className={`px-4 h-full text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'resumen' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
           >
             <Wallet size={13} /> Resumen de Costos
-          </button>
-          <button 
-            onClick={() => setSubTab('asientos')}
-            className={`px-4 h-full text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'asientos' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-          >
-            <FileText size={13} /> Asientos Vinculados (Soporte)
           </button>
           <button 
             onClick={() => setSubTab('rrhh')}
@@ -2181,7 +2175,6 @@ function Costos({ token, defaultUnidad, defaultPeriodo }: { token: string, defau
       </div>
 
       {subTab === 'resumen' && <InformeGestion token={token} mode="costos" defaultUnidad={defaultUnidad} defaultPeriodo={defaultPeriodo} />}
-      {subTab === 'asientos' && <InformeGestion token={token} mode="asientos" defaultUnidad={defaultUnidad} defaultPeriodo={defaultPeriodo} />}
       {subTab === 'rrhh' && <InformeGestion token={token} mode="rrhh" defaultUnidad={defaultUnidad} defaultPeriodo={defaultPeriodo} />}
       {subTab === 'consumos' && <ConsumosInventarios token={token} unidadNegocio={defaultUnidad!} periodo={defaultPeriodo!} />}
       {subTab === 'equipos' && <Equipos token={token} unidadNegocio={defaultUnidad!} periodo={defaultPeriodo!} />}
@@ -2197,7 +2190,7 @@ export default function App() {
   const [user, setUser] = useState<any>(() => {
     try { return JSON.parse(localStorage.getItem('cert_user') || 'null'); } catch { return null; }
   });
-  const [view, setView] = useState<'proyectos' | 'dashboard' | 'ingresos' | 'costos' | 'asientos' | 'rrhh' | 'consumos' | 'equipos' | 'obras' | 'config'>('proyectos');
+  const [view, setView] = useState<'proyectos' | 'dashboard' | 'ingresos' | 'costos' | 'config'>('proyectos');
   const [globalUnidad, setGlobalUnidad] = useState<string | undefined>(undefined);
   const [globalPeriodo, setGlobalPeriodo] = useState<string | undefined>(undefined);
   const [showAbout, setShowAbout] = useState(false);
