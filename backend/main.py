@@ -3076,7 +3076,51 @@ def reabrir_informe(action: InformeAction):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.delete("/api/informes/eliminar")
+def eliminar_informe(unidad_negocio: str, periodo: str, current_user = Depends(get_current_user)):
+    try:
+        conn = get_supabase()
+        cur = conn.cursor()
+        
+        # Verificar que el informe exista y esté ABIERTO
+        cur.execute("""
+            SELECT estado FROM cert_informes_proyecto 
+            WHERE unidad_negocio = %s AND periodo = %s
+        """, (unidad_negocio, periodo))
+        row = cur.fetchone()
+        if not row:
+            cur.close()
+            conn.close()
+            raise HTTPException(status_code=404, detail="El informe no existe.")
+            
+        estado = row[0]
+        if estado != 'ABIERTO':
+            cur.close()
+            conn.close()
+            raise HTTPException(status_code=400, detail="Solo se pueden eliminar informes en estado ABIERTO.")
+            
+        # Eliminar el informe
+        cur.execute("""
+            DELETE FROM cert_informes_proyecto 
+            WHERE unidad_negocio = %s AND periodo = %s
+        """, (unidad_negocio, periodo))
+        
+        # Eliminar cierres del mismo periodo y unidad por precaución
+        cur.execute("SELECT id FROM cert_cierres_mensuales WHERE unidad_negocio = %s AND periodo = %s", (unidad_negocio, periodo))
+        row_c = cur.fetchone()
+        if row_c:
+            cierre_id = row_c[0]
+            cur.execute("DELETE FROM cert_cierres_detalle WHERE cierre_id = %s", (cierre_id,))
+            cur.execute("DELETE FROM cert_cierres_mensuales WHERE id = %s", (cierre_id,))
 
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {"message": "Informe eliminado correctamente"}
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/informes/lista")
 def get_informes_lista(user=Depends(get_current_user)):

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { FileText, Plus, FolderLock, FolderOpen, Calendar, Building, Loader2, Info, AlertCircle } from 'lucide-react';
+import { FileText, Plus, FolderLock, FolderOpen, Calendar, Building, Loader2, Info, AlertCircle, Trash2 } from 'lucide-react';
 import { MultiSelect } from './MultiSelect';
 
 export default function GestorInformes({ token, onOpenReport, user }: any) {
@@ -157,6 +157,31 @@ export default function GestorInformes({ token, onOpenReport, user }: any) {
          throw new Error(j.detail || "Error al reabrir periodo");
       }
       await showAlert("Periodo reabierto correctamente", "Éxito");
+      fetchInformes();
+    } catch(e: any) {
+      await showAlert(e.message, "Error");
+    }
+  };
+
+  const handleEliminar = async (inf: any) => {
+    const [y, m] = inf.periodo.split('-');
+    const confirmed = await showConfirm(
+      `¿Estás seguro de que deseas eliminar el informe del período ${m}/${y} para la sucursal "${inf.unidad_negocio}"?\n\nEsta acción borrará el informe y no se podrá deshacer.`,
+      "Eliminar Informe"
+    );
+    if (!confirmed) return;
+    try {
+      const res = await fetch(`/api/informes/eliminar?unidad_negocio=${encodeURIComponent(inf.unidad_negocio)}&periodo=${encodeURIComponent(inf.periodo)}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!res.ok) {
+         const j = await res.json();
+         throw new Error(j.detail || "Error al eliminar informe");
+      }
+      await showAlert("Informe eliminado correctamente", "Éxito");
       fetchInformes();
     } catch(e: any) {
       await showAlert(e.message, "Error");
@@ -325,12 +350,21 @@ export default function GestorInformes({ token, onOpenReport, user }: any) {
                       Abrir Reporte
                     </button>
                     {inf.estado === 'ABIERTO' && (
-                      <button 
-                        onClick={() => handlePresentar(inf)}
-                        className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-bold transition shadow-sm"
-                      >
-                        Presentar Período
-                      </button>
+                      <>
+                        <button 
+                          onClick={() => handlePresentar(inf)}
+                          className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-bold transition shadow-sm"
+                        >
+                          Presentar Período
+                        </button>
+                        <button 
+                          onClick={() => handleEliminar(inf)}
+                          className="px-3 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded text-xs font-bold transition shadow-sm flex items-center gap-1"
+                        >
+                          <Trash2 size={12} />
+                          Eliminar
+                        </button>
+                      </>
                     )}
                     {inf.estado === 'CERRADO' && user?.rol === 'admin' && (
                       <button 
