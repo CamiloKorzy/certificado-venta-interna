@@ -4238,40 +4238,6 @@ def get_transportes_live(unidad_negocio: str, periodo: str):
                     "remitos": [log_doc] if log_doc else []
                 })
                 
-    # Mock fallback si todo está vacío
-    if not result:
-        mock_1 = {
-            "id": -301,
-            "origen": "SUPABASE_CERT",
-            "fecha": f"{y_int}-{m_int:02d}-05",
-            "transportista": "Transportes Misiones S.A.",
-            "chofer": "ALVEZ, Leonardo",
-            "producto": "Piedra triturada Intermedia 6-19",
-            "cantidad": 5.0,
-            "toneladas": 142.20,
-            "precio_unitario": 850.00,
-            "total": 120870.0,
-            "documento": "Supabase Cert",
-            "comprobante": "",
-            "remitos": ["R-00005-00072157", "R-00005-00072158"]
-        }
-        mock_2 = {
-            "id": -302,
-            "origen": "SUPABASE_CERT",
-            "fecha": f"{y_int}-{m_int:02d}-12",
-            "transportista": "Fletes Enriquez",
-            "chofer": "SUAREZ FEDERICO MANUEL",
-            "producto": "Estabilizado Sin Suelo",
-            "cantidad": 3.0,
-            "toneladas": 61.20,
-            "precio_unitario": 920.00,
-            "total": 56304.0,
-            "documento": "Supabase Cert",
-            "comprobante": "",
-            "remitos": ["RI-00000-00015401"]
-        }
-        result = [mock_1, mock_2]
-        
     return result
 
 
