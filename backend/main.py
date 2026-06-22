@@ -3096,6 +3096,82 @@ def get_informe_mensual(unidad_negocio: str, periodo: str, current_user = Depend
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/informes/consolidado")
+def get_informes_consolidado(periodo: str, current_user = Depends(get_current_user)):
+    try:
+        user_id = current_user.get("id") or current_user.get("sub")
+        rol = current_user.get("rol")
+        
+        unidades = []
+        if rol == "admin":
+            conn = get_aurora()
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT TRIM(COALESCE(nombreempresa, '')) as sucursal
+                FROM ceesa_cee_sucursales
+                WHERE nombreempresa IS NOT NULL AND TRIM(COALESCE(nombreempresa, '')) != ''
+                GROUP BY TRIM(COALESCE(nombreempresa, ''))
+                ORDER BY sucursal
+            """)
+            unidades = [r[0] for r in cur.fetchall() if r[0]]
+            cur.close()
+            conn.close()
+        else:
+            conn_supa = get_supabase()
+            cur = conn_supa.cursor()
+            cur.execute("SELECT unidad_negocio FROM cert_usuarios_unidades WHERE usuario_id = %s", (user_id,))
+            unidades = [r[0] for r in cur.fetchall() if r[0]]
+            cur.close()
+            conn_supa.close()
+
+        consolidado = {
+            "periodo": periodo,
+            "totales": {"ingresos": 0, "gastos": 0, "neto": 0},
+            "por_unidad": [],
+            "desglose_categorias": {}
+        }
+        
+        for u in unidades:
+            try:
+                data = get_informe_mensual(u, periodo, current_user)
+                tot_i = data["totales"]["ingresos"]
+                tot_g = data["totales"]["gastos"]
+                neto = tot_i - tot_g
+                
+                consolidado["totales"]["ingresos"] += tot_i
+                consolidado["totales"]["gastos"] += tot_g
+                consolidado["totales"]["neto"] += neto
+                
+                consolidado["por_unidad"].append({
+                    "unidad_negocio": u,
+                    "ingresos": tot_i,
+                    "gastos": tot_g,
+                    "neto": neto
+                })
+                
+                for item in data["ingresos"]:
+                    cat = item.get("categoria", "Sin categoría")
+                    if cat not in consolidado["desglose_categorias"]:
+                        consolidado["desglose_categorias"][cat] = {"ingresos": 0, "gastos": 0}
+                    consolidado["desglose_categorias"][cat]["ingresos"] += item.get("importe", 0)
+                
+                for item in data["gastos"]:
+                    cat = item.get("categoria", "Sin categoría")
+                    if cat not in consolidado["desglose_categorias"]:
+                        consolidado["desglose_categorias"][cat] = {"ingresos": 0, "gastos": 0}
+                    consolidado["desglose_categorias"][cat]["gastos"] += item.get("importe", 0)
+                        
+            except Exception as e:
+                print(f"Error procesando unidad {u} para consolidado: {e}")
+                
+        cats_list = [{"categoria": k, "ingresos": v["ingresos"], "gastos": v["gastos"], "neto": v["ingresos"] - v["gastos"]} for k, v in consolidado["desglose_categorias"].items()]
+        cats_list.sort(key=lambda x: abs(x["neto"]), reverse=True)
+        consolidado["desglose_categorias"] = cats_list
+        
+        return consolidado
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 # ==========================================

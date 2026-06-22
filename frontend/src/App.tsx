@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import * as XLSX from 'xlsx';
-import { UploadCloud, Building2, PackageCheck, TrendingUp, DollarSign, FileText, Filter, Calendar, LayoutDashboard, Search, ChevronDown, ChevronUp, ChevronRight, BarChart3, Presentation, Download, LogOut, Settings, Users, Save, X, Trash2, Edit2, Send, Check, Loader2, Shield, Bell, Wallet, Info, AlertCircle, Wrench, Package, Paperclip, Truck } from 'lucide-react';
+import { UploadCloud, Building2, PackageCheck, TrendingUp, DollarSign, FileText, Filter, Calendar, LayoutDashboard, Search, ChevronDown, ChevronUp, ChevronRight, BarChart3, Presentation, Download, LogOut, Settings, Users, Save, X, Trash2, Edit2, Send, Check, Loader2, Shield, Bell, Wallet, Info, AlertCircle, Wrench, Package, Paperclip, Truck, PieChart } from 'lucide-react';
 import ConfiguracionAvanzada from './components/ConfiguracionAvanzada';
 import ConfiguracionCentrosCosto from './components/ConfiguracionCentrosCosto';
 import ConfiguracionEquipos from './components/ConfiguracionEquipos';
@@ -11,6 +11,7 @@ import ConsumosInventarios from './components/ConsumosInventarios';
 import Equipos from './components/Equipos';
 import Transportes from './components/Transportes';
 import CertificadosObras from './components/CertificadosObras';
+import DashboardConsolidado from './components/DashboardConsolidado';
 import { Briefcase } from 'lucide-react';
 // ─── API Helper ───
 const API_URL = '';
@@ -2250,7 +2251,7 @@ export default function App() {
   const [user, setUser] = useState<any>(() => {
     try { return JSON.parse(localStorage.getItem('cert_user') || 'null'); } catch { return null; }
   });
-  const [view, setView] = useState<'proyectos' | 'dashboard' | 'ingresos' | 'costos' | 'config'>('proyectos');
+  const [view, setView] = useState<'proyectos' | 'dashboard' | 'dashboard_consolidado' | 'ingresos' | 'costos' | 'config'>('proyectos');
   const [globalUnidad, setGlobalUnidad] = useState<string | undefined>(undefined);
   const [globalPeriodo, setGlobalPeriodo] = useState<string | undefined>(undefined);
   const [showAbout, setShowAbout] = useState(false);
@@ -2294,11 +2295,16 @@ export default function App() {
                 <span className="flex items-center gap-1.5"><FileText size={15} /> Resultados Gestión</span>
               </button>
 
+              <button onClick={() => setView('dashboard_consolidado')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'dashboard_consolidado' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
+                <span className="flex items-center gap-1.5"><PieChart size={15} /> Dashboard Consolidado</span>
+              </button>
+
               {globalUnidad && globalPeriodo && (
                 <>
                   <button onClick={() => setView('dashboard')}
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'dashboard' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
-                    <span className="flex items-center gap-1.5"><LayoutDashboard size={15} /> Dashboard</span>
+                    <span className="flex items-center gap-1.5"><LayoutDashboard size={15} /> Dashboard de Gestión</span>
                   </button>
                   <button onClick={() => setView('ingresos')}
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'ingresos' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
@@ -2340,6 +2346,7 @@ export default function App() {
           }} 
         />
       )}
+      {view === 'dashboard_consolidado' && <DashboardConsolidado token={token} defaultPeriodo={globalPeriodo} />}
       {view === 'dashboard' && <MainDashboard token={token} defaultUnidad={globalUnidad} defaultPeriodo={globalPeriodo} />}
       {view === 'ingresos' && <Ingresos token={token} onLogout={handleLogout} defaultUnidad={globalUnidad} defaultPeriodo={globalPeriodo} />}
       {view === 'costos' && <Costos token={token} defaultUnidad={globalUnidad} defaultPeriodo={globalPeriodo} />}
