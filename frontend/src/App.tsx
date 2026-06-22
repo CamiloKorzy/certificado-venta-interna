@@ -1686,7 +1686,7 @@ function LoginScreen({ onLogin }: { onLogin: (token: string, user: any) => void 
 // ═══════════════════════════════════════════════════════
 // CONFIGURACIÓN — GESTIÓN DE USUARIOS Y UNIDADES
 // ═══════════════════════════════════════════════════════
-const ROLES_MAP: Record<string, string> = { admin: 'Administrador', responsable_un: 'Responsable U.N.', consulta: 'Solo Consulta' };
+const ROLES_MAP: Record<string, string> = { admin: 'Administrador', responsable_un: 'Responsable U.N.', consulta: 'Solo Consulta', consulta_general: 'Consulta General' };
 
 function Configuracion({ token }: { token: string }) {
   const [customDialog, setCustomDialog] = useState<{
@@ -1962,7 +1962,7 @@ function Configuracion({ token }: { token: string }) {
             <input type="password" className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50" placeholder={editing ? '•••••' : ''} value={form.password || ''} onChange={e => setForm({...form, password: e.target.value})} /></div>
           <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Perfil</label>
             <select className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 cursor-pointer" value={form.rol} onChange={e => setForm({...form, rol: e.target.value})}>
-              <option value="admin">Administrador</option><option value="responsable_un">Responsable U.N.</option><option value="consulta">Solo Consulta</option>
+              <option value="admin">Administrador</option><option value="responsable_un">Responsable U.N.</option><option value="consulta">Solo Consulta</option><option value="consulta_general">Consulta General</option>
             </select></div>
           <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Chat ID Telegram</label>
             <input className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50" placeholder="Ej: 123456789" value={form.telegram_chat_id || ''} onChange={e => setForm({...form, telegram_chat_id: e.target.value})} />
@@ -2295,10 +2295,12 @@ export default function App() {
                 <span className="flex items-center gap-1.5"><FileText size={15} /> Resultados Gestión</span>
               </button>
 
-              <button onClick={() => setView('dashboard_consolidado')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'dashboard_consolidado' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
-                <span className="flex items-center gap-1.5"><PieChart size={15} /> Dashboard Consolidado</span>
-              </button>
+              {(user?.rol === 'admin' || user?.rol === 'consulta_general') && (
+                <button onClick={() => setView('dashboard_consolidado')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'dashboard_consolidado' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}>
+                  <span className="flex items-center gap-1.5"><PieChart size={15} /> Dashboard Consolidado</span>
+                </button>
+              )}
 
               {globalUnidad && globalPeriodo && (
                 <>

@@ -1728,8 +1728,8 @@ def get_mis_unidades(user=Depends(get_current_user)):
     user_id = user.get("id") or user.get("sub")
     rol = user.get("rol")
     
-    # Si es admin, puede ver todas las sucursales (leemos de Aurora o simplemente devolvemos las de Aurora)
-    if rol == "admin":
+    # Si es admin o consulta_general, puede ver todas las sucursales
+    if rol in ["admin", "consulta_general"]:
         try:
             conn = get_aurora()
             cur = conn.cursor()
@@ -3103,7 +3103,7 @@ def get_informes_consolidado(periodo: str, current_user = Depends(get_current_us
         rol = current_user.get("rol")
         
         unidades = []
-        if rol == "admin":
+        if rol in ["admin", "consulta_general"]:
             conn = get_aurora()
             cur = conn.cursor()
             cur.execute("""
@@ -3412,7 +3412,7 @@ def get_informes_lista(user=Depends(get_current_user)):
         
         # Filtramos por las unidades a las que tiene acceso el usuario
         unidades_permitidas = set()
-        if user.get("rol") != "admin":
+        if user.get("rol") not in ["admin", "consulta_general"]:
             cur.execute("SELECT unidad_negocio FROM cert_usuarios_unidades WHERE usuario_id = %s", (user.get('id') or user.get('sub'),))
             unidades_permitidas = {r[0].strip() for r in cur.fetchall()}
             if not unidades_permitidas:
@@ -3420,7 +3420,7 @@ def get_informes_lista(user=Depends(get_current_user)):
                 conn.close()
                 return []
                 
-        if user.get("rol") == "admin":
+        if user.get("rol") in ["admin", "consulta_general"]:
             cur.execute("SELECT id, unidad_negocio, periodo, estado, usuario_apertura FROM cert_informes_proyecto ORDER BY periodo DESC")
         else:
             cur.execute("SELECT id, unidad_negocio, periodo, estado, usuario_apertura FROM cert_informes_proyecto WHERE unidad_negocio IN %s ORDER BY periodo DESC", (tuple(unidades_permitidas),))
