@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Loader2, Calendar, TrendingUp, TrendingDown, DollarSign, PieChart, BarChart3, Building2 } from 'lucide-react';
+import { PieChart as RePieChart, Pie, Cell, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+
+const COLORS_INGRESOS = ['#10b981', '#34d399', '#059669', '#047857', '#6ee7b7', '#a7f3d0', '#065f46'];
+const COLORS_GASTOS = ['#f43f5e', '#fb7185', '#e11d48', '#be123c', '#fda4af', '#fecdd3', '#9f1239'];
 
 const authFetch = async (url: string, token: string, options: RequestInit = {}) => {
   const res = await fetch(url, {
@@ -174,24 +178,24 @@ export default function DashboardConsolidado({ token, defaultPeriodo = getDefaul
               </div>
             </div>
 
-            {/* Main Content Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Main Content Grid (Tablas) */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               
               {/* Desglose por Sucursal */}
-              <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
                 <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                   <h3 className="font-bold text-slate-800 flex items-center gap-2">
                     <Building2 size={18} className="text-blue-500" /> Rendimiento por Sucursal/UN
                   </h3>
                 </div>
-                <div className="p-0 overflow-x-auto">
+                <div className="p-0 overflow-x-auto max-h-[400px] overflow-y-auto">
                   <table className="w-full text-sm text-left">
-                    <thead className="bg-slate-50 text-slate-500 text-xs uppercase font-bold">
+                    <thead className="bg-slate-50 text-slate-500 text-xs uppercase font-bold sticky top-0">
                       <tr>
-                        <th className="px-6 py-4">Sucursal / UN</th>
+                        <th className="px-6 py-4">Sucursal</th>
                         <th className="px-6 py-4 text-right">Ingresos</th>
                         <th className="px-6 py-4 text-right">Costos</th>
-                        <th className="px-6 py-4 text-right">Resultado Neto</th>
+                        <th className="px-6 py-4 text-right">Neto</th>
                         <th className="px-6 py-4 text-right">Margen</th>
                       </tr>
                     </thead>
@@ -221,56 +225,125 @@ export default function DashboardConsolidado({ token, defaultPeriodo = getDefaul
                 </div>
               </div>
 
-              {/* Categorias Consolidado */}
+              {/* Indicadores por Rubro */}
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col h-full overflow-hidden">
                 <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50">
                   <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                    <BarChart3 size={18} className="text-purple-500" /> Distribución Consolidada
+                    <BarChart3 size={18} className="text-purple-500" /> Costos e Ingresos por Rubros
                   </h3>
                 </div>
-                <div className="p-6 flex-1 overflow-y-auto max-h-[500px]">
-                  <div className="space-y-6">
-                    {data.desglose_categorias.map((cat: any, idx: number) => {
-                      // Graficamos la barra principal en base al mayor de todos (ingresos o gastos)
-                      const maxCatVal = Math.max(
-                        ...data.desglose_categorias.map((c: any) => Math.max(c.ingresos, c.gastos))
-                      );
-                      const safeMax = maxCatVal || 1;
-                      const pctIngreso = (cat.ingresos / safeMax) * 100;
-                      const pctGasto = (cat.gastos / safeMax) * 100;
-                      
-                      return (
-                        <div key={idx} className="space-y-2">
-                          <div className="flex justify-between items-center text-sm">
-                            <span className="font-bold text-slate-700">{cat.categoria}</span>
-                            <span className={`font-bold ${cat.neto >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                              Neto: {formatCurrency(cat.neto)}
-                            </span>
-                          </div>
-                          
-                          {/* Barras de comparación */}
-                          <div className="space-y-1">
-                            {cat.ingresos > 0 && (
-                              <div className="flex items-center gap-2">
-                                <div className="h-2 bg-emerald-500 rounded-full" style={{ width: `${Math.max(pctIngreso, 1)}%` }}></div>
-                                <span className="text-xs text-slate-500 font-medium">{formatCurrency(cat.ingresos)}</span>
-                              </div>
-                            )}
-                            {cat.gastos > 0 && (
-                              <div className="flex items-center gap-2">
-                                <div className="h-2 bg-rose-500 rounded-full" style={{ width: `${Math.max(pctGasto, 1)}%` }}></div>
-                                <span className="text-xs text-slate-500 font-medium">{formatCurrency(cat.gastos)}</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {data.desglose_categorias.length === 0 && (
-                      <p className="text-sm text-slate-500 text-center py-4">No hay datos de categorías para este período.</p>
-                    )}
-                  </div>
+                <div className="p-0 overflow-x-auto max-h-[400px] overflow-y-auto">
+                  <table className="w-full text-sm text-left">
+                    <thead className="bg-slate-50 text-slate-500 text-xs uppercase font-bold sticky top-0">
+                      <tr>
+                        <th className="px-6 py-4">Rubro</th>
+                        <th className="px-6 py-4 text-right text-emerald-600">Ingresos</th>
+                        <th className="px-6 py-4 text-right text-rose-600">Costos</th>
+                        <th className="px-6 py-4 text-right">Neto</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {[...data.desglose_categorias]
+                        .sort((a, b) => b.neto - a.neto)
+                        .map((cat: any, idx: number) => (
+                          <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="px-6 py-4 font-bold text-slate-700">{cat.categoria}</td>
+                            <td className="px-6 py-4 text-right font-medium text-emerald-600">{cat.ingresos > 0 ? formatCurrency(cat.ingresos) : '-'}</td>
+                            <td className="px-6 py-4 text-right font-medium text-rose-600">{cat.gastos > 0 ? formatCurrency(cat.gastos) : '-'}</td>
+                            <td className={`px-6 py-4 text-right font-bold ${cat.neto >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                              {formatCurrency(cat.neto)}
+                            </td>
+                          </tr>
+                        ))}
+                      {data.desglose_categorias.length === 0 && (
+                        <tr>
+                          <td colSpan={4} className="text-sm text-slate-500 text-center py-4">No hay datos de categorías para este período.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
+              </div>
+
+            </div>
+
+            {/* Gráficos */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              
+              {/* Gráfico Ingresos por Rubro */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 h-[400px]">
+                <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-6">
+                  <PieChart size={18} className="text-emerald-500" /> Distribución de Ingresos
+                </h3>
+                <ResponsiveContainer width="100%" height="85%">
+                  <RePieChart>
+                    <Pie
+                      data={data.desglose_categorias.filter((c: any) => c.ingresos > 0).sort((a: any, b: any) => b.ingresos - a.ingresos)}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={100}
+                      paddingAngle={2}
+                      dataKey="ingresos"
+                      nameKey="categoria"
+                      label={({ name, percent }) => (percent || 0) > 0.05 ? `${name} ${((percent || 0) * 100).toFixed(0)}%` : ''}
+                    >
+                      {data.desglose_categorias.filter((c: any) => c.ingresos > 0).map((entry: any, index: number) => (
+                        <Cell key={`cell-${index}`} fill={COLORS_INGRESOS[index % COLORS_INGRESOS.length]} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip formatter={(value: any) => formatCurrency(Number(value))} />
+                    <Legend />
+                  </RePieChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Gráfico Gastos por Rubro */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 h-[400px]">
+                <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-6">
+                  <PieChart size={18} className="text-rose-500" /> Distribución de Costos
+                </h3>
+                <ResponsiveContainer width="100%" height="85%">
+                  <RePieChart>
+                    <Pie
+                      data={data.desglose_categorias.filter((c: any) => c.gastos > 0).sort((a: any, b: any) => b.gastos - a.gastos)}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={100}
+                      paddingAngle={2}
+                      dataKey="gastos"
+                      nameKey="categoria"
+                      label={({ name, percent }) => (percent || 0) > 0.05 ? `${name} ${((percent || 0) * 100).toFixed(0)}%` : ''}
+                    >
+                      {data.desglose_categorias.filter((c: any) => c.gastos > 0).map((entry: any, index: number) => (
+                        <Cell key={`cell-${index}`} fill={COLORS_GASTOS[index % COLORS_GASTOS.length]} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip formatter={(value: any) => formatCurrency(Number(value))} />
+                    <Legend />
+                  </RePieChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Gráfico Barras Neto por Sucursal */}
+              <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-6 h-[400px]">
+                <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-6">
+                  <BarChart3 size={18} className="text-blue-500" /> Resultado Neto por Sucursal
+                </h3>
+                <ResponsiveContainer width="100%" height="85%">
+                  <BarChart data={[...data.por_unidad].sort((a, b) => b.neto - a.neto)} margin={{ top: 10, right: 30, left: 20, bottom: 40 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="unidad_negocio" angle={-45} textAnchor="end" tick={{ fontSize: 11, fill: '#64748b' }} interval={0} height={60} />
+                    <YAxis tickFormatter={(val) => `$${(val/1000000).toFixed(1)}M`} tick={{ fontSize: 11, fill: '#64748b' }} />
+                    <RechartsTooltip formatter={(value: any) => formatCurrency(Number(value))} cursor={{ fill: '#f8fafc' }} />
+                    <Bar dataKey="neto" name="Resultado Neto" radius={[4, 4, 0, 0]}>
+                      {[...data.por_unidad].sort((a, b) => b.neto - a.neto).map((entry: any, index: number) => (
+                        <Cell key={`cell-${index}`} fill={entry.neto >= 0 ? '#3b82f6' : '#f97316'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
 
             </div>
