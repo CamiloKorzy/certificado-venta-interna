@@ -42,6 +42,11 @@ interface EquipoItem {
   unidad_de_negocio?: string;
   mes?: number;
   anio?: number;
+  horas_registro?: number;
+  horas_a_cobrar?: number;
+  disponibilidad?: number;
+  utilizacion?: number;
+  fecha_certificacion?: string;
 }
 
 export default function Equipos({
@@ -451,10 +456,12 @@ export default function Equipos({
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200/80 sticky top-0 z-10">
                     <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Origen</th>
-                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Equipo / Detalle</th>
+                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Equipo / Máquina</th>
                     <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Concepto</th>
-                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Horas / Kilómetros</th>
-                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Precio Unitario</th>
+                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Horas Reg.</th>
+                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Horas Cobrar / Kms</th>
+                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Disp. / Util.</th>
+                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Tarifa / Precio</th>
                     <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right font-bold text-slate-700">Total</th>
                     <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Info Adicional / Carga</th>
                     {!reportClosed && <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center w-24">Acción</th>}
@@ -463,7 +470,7 @@ export default function Equipos({
                 <tbody className="divide-y divide-slate-100 font-medium text-slate-600 text-sm">
                   {filteredData.length === 0 ? (
                     <tr>
-                      <td colSpan={reportClosed ? 7 : 8} className="px-6 py-12 text-center text-slate-400">
+                      <td colSpan={reportClosed ? 9 : 10} className="px-6 py-12 text-center text-slate-400">
                         No se encontraron registros de equipos.
                       </td>
                     </tr>
@@ -500,7 +507,22 @@ export default function Equipos({
                             </div>
                           </td>
                           <td className="px-6 py-3.5 text-slate-700 font-semibold">{item.concepto}</td>
-                          <td className="px-6 py-3.5 text-right font-bold text-slate-700">{formatNumber(item.horas_kilometros)}</td>
+                          <td className="px-6 py-3.5 text-right font-bold text-slate-500">
+                            {item.origen === 'SUPABASE_CERT' ? formatNumber(item.horas_registro || 0) : '-'}
+                          </td>
+                          <td className="px-6 py-3.5 text-right font-bold text-slate-700">
+                            {item.origen === 'SUPABASE_CERT' ? formatNumber(item.horas_a_cobrar || 0) : formatNumber(item.horas_kilometros)}
+                          </td>
+                          <td className="px-6 py-3.5 text-center whitespace-nowrap">
+                            {item.origen === 'SUPABASE_CERT' ? (
+                              <div className="flex flex-col items-center justify-center text-[11px] font-bold">
+                                <span className="text-emerald-600">D: {formatNumber(item.disponibilidad || 0)}%</span>
+                                <span className="text-blue-600">U: {formatNumber(item.utilizacion || 0)}%</span>
+                              </div>
+                            ) : (
+                              <span className="text-slate-400">-</span>
+                            )}
+                          </td>
                           <td className="px-6 py-3.5 text-right text-slate-500">{formatCurrency(item.precio_unitario)}</td>
                           <td className="px-6 py-3.5 text-right font-extrabold text-blue-600 bg-blue-50/10 group-hover:bg-blue-50/20">{formatCurrency(item.total)}</td>
                           <td className="px-6 py-3.5 text-xs text-slate-400 max-w-xs truncate">
@@ -513,8 +535,8 @@ export default function Equipos({
                                 👤 {item.usuario_carga} • {item.fecha_carga?.substring(0, 10)}
                               </span>
                             ) : (
-                              <span title={`Imputado Supabase: ${item.concepto}`}>
-                                🌐 Supabase • {item.concepto}
+                              <span title={`Fecha Cert: ${item.fecha_certificacion}`}>
+                                🌐 Supabase • {item.fecha_certificacion}
                               </span>
                             )}
                           </td>
@@ -537,7 +559,7 @@ export default function Equipos({
                         </tr>
                         {expandedIdx === idx && (
                           <tr className="bg-purple-50/10">
-                            <td colSpan={reportClosed ? 7 : 8} className="px-6 py-4 border-b border-slate-200/50">
+                            <td colSpan={reportClosed ? 9 : 10} className="px-6 py-4 border-b border-slate-200/50">
                               <div className="space-y-3 pl-8 text-xs font-semibold text-slate-600">
                                 {item.detalles_trabajos && item.detalles_trabajos.length > 0 && (
                                   <div>
