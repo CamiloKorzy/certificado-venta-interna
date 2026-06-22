@@ -3124,6 +3124,20 @@ def get_informes_consolidado(periodo: str, current_user = Depends(get_current_us
             cur.close()
             conn_supa.close()
 
+        # Filtrar unidades que esten en estado CERRADO o PRESENTADO
+        conn_supa = get_supabase()
+        cur_supa = conn_supa.cursor()
+        cur_supa.execute("""
+            SELECT unidad_negocio 
+            FROM cert_informes_proyecto 
+            WHERE periodo = %s AND estado IN ('CERRADO', 'PRESENTADO')
+        """, (periodo,))
+        unidades_cerradas = {r[0] for r in cur_supa.fetchall() if r[0]}
+        cur_supa.close()
+        conn_supa.close()
+        
+        unidades = [u for u in unidades if u in unidades_cerradas]
+
         consolidado = {
             "periodo": periodo,
             "totales": {"ingresos": 0, "gastos": 0, "neto": 0},

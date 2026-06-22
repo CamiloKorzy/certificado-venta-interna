@@ -26,7 +26,7 @@ const getDefaultPeriod = () => {
 };
 
 export default function DashboardConsolidado({ token, defaultPeriodo = getDefaultPeriod() }: { token: string, defaultPeriodo?: string }) {
-  const [periodo, setPeriodo] = useState<string>(defaultPeriodo);
+  const [periodo, setPeriodo] = useState<string>(defaultPeriodo || getDefaultPeriod());
   const [loading, setLoading] = useState<boolean>(true);
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
