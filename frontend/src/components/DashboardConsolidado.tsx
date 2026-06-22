@@ -286,7 +286,7 @@ export default function DashboardConsolidado({ token, defaultPeriodo = getDefaul
                       paddingAngle={2}
                       dataKey="ingresos"
                       nameKey="categoria"
-                      label={({ name, percent }: { name: string, percent: number | undefined }) => (percent || 0) > 0.05 ? `${name} ${((percent || 0) * 100).toFixed(0)}%` : ''}
+                      label={({ name, percent }: any) => (percent || 0) > 0.05 ? `${name} ${((percent || 0) * 100).toFixed(0)}%` : ''}
                     >
                       {data.desglose_categorias.filter((c: any) => c.ingresos > 0).map((entry: any, index: number) => (
                         <Cell key={`cell-${index}`} fill={COLORS_INGRESOS[index % COLORS_INGRESOS.length]} />
@@ -314,7 +314,7 @@ export default function DashboardConsolidado({ token, defaultPeriodo = getDefaul
                       paddingAngle={2}
                       dataKey="gastos"
                       nameKey="categoria"
-                      label={({ name, percent }: { name: string, percent: number | undefined }) => (percent || 0) > 0.05 ? `${name} ${((percent || 0) * 100).toFixed(0)}%` : ''}
+                      label={({ name, percent }: any) => (percent || 0) > 0.05 ? `${name} ${((percent || 0) * 100).toFixed(0)}%` : ''}
                     >
                       {data.desglose_categorias.filter((c: any) => c.gastos > 0).map((entry: any, index: number) => (
                         <Cell key={`cell-${index}`} fill={COLORS_GASTOS[index % COLORS_GASTOS.length]} />
