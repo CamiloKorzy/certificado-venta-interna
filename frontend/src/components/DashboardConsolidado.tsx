@@ -286,7 +286,7 @@ export default function DashboardConsolidado({ token, defaultPeriodo = getDefaul
                       paddingAngle={2}
                       dataKey="ingresos"
                       nameKey="categoria"
-                      label={({ name, percent }) => (percent || 0) > 0.05 ? `${name} ${((percent || 0) * 100).toFixed(0)}%` : ''}
+                      label={({ name, percent }: { name: string, percent: number | undefined }) => (percent || 0) > 0.05 ? `${name} ${((percent || 0) * 100).toFixed(0)}%` : ''}
                     >
                       {data.desglose_categorias.filter((c: any) => c.ingresos > 0).map((entry: any, index: number) => (
                         <Cell key={`cell-${index}`} fill={COLORS_INGRESOS[index % COLORS_INGRESOS.length]} />
@@ -314,7 +314,7 @@ export default function DashboardConsolidado({ token, defaultPeriodo = getDefaul
                       paddingAngle={2}
                       dataKey="gastos"
                       nameKey="categoria"
-                      label={({ name, percent }) => (percent || 0) > 0.05 ? `${name} ${((percent || 0) * 100).toFixed(0)}%` : ''}
+                      label={({ name, percent }: { name: string, percent: number | undefined }) => (percent || 0) > 0.05 ? `${name} ${((percent || 0) * 100).toFixed(0)}%` : ''}
                     >
                       {data.desglose_categorias.filter((c: any) => c.gastos > 0).map((entry: any, index: number) => (
                         <Cell key={`cell-${index}`} fill={COLORS_GASTOS[index % COLORS_GASTOS.length]} />
@@ -335,7 +335,7 @@ export default function DashboardConsolidado({ token, defaultPeriodo = getDefaul
                   <BarChart data={[...data.por_unidad].sort((a, b) => b.neto - a.neto)} margin={{ top: 10, right: 30, left: 20, bottom: 40 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                     <XAxis dataKey="unidad_negocio" angle={-45} textAnchor="end" tick={{ fontSize: 11, fill: '#64748b' }} interval={0} height={60} />
-                    <YAxis tickFormatter={(val) => `$${(val/1000000).toFixed(1)}M`} tick={{ fontSize: 11, fill: '#64748b' }} />
+                    <YAxis tickFormatter={(val: number) => `$${(val/1000000).toFixed(1)}M`} tick={{ fontSize: 11, fill: '#64748b' }} />
                     <RechartsTooltip formatter={(value: any) => formatCurrency(Number(value))} cursor={{ fill: '#f8fafc' }} />
                     <Bar dataKey="neto" name="Resultado Neto" radius={[4, 4, 0, 0]}>
                       {[...data.por_unidad].sort((a, b) => b.neto - a.neto).map((entry: any, index: number) => (
