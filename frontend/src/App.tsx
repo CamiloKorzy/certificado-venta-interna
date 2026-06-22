@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import * as XLSX from 'xlsx';
-import { UploadCloud, Building2, PackageCheck, TrendingUp, DollarSign, FileText, Filter, Calendar, LayoutDashboard, Search, ChevronDown, ChevronUp, ChevronRight, BarChart3, Presentation, Download, LogOut, Settings, Users, Save, X, Trash2, Edit2, Send, Check, Loader2, Shield, Bell, Wallet, Info, AlertCircle, Wrench, Package, Paperclip } from 'lucide-react';
+import { UploadCloud, Building2, PackageCheck, TrendingUp, DollarSign, FileText, Filter, Calendar, LayoutDashboard, Search, ChevronDown, ChevronUp, ChevronRight, BarChart3, Presentation, Download, LogOut, Settings, Users, Save, X, Trash2, Edit2, Send, Check, Loader2, Shield, Bell, Wallet, Info, AlertCircle, Wrench, Package, Paperclip, Truck } from 'lucide-react';
 import ConfiguracionAvanzada from './components/ConfiguracionAvanzada';
 import ConfiguracionCentrosCosto from './components/ConfiguracionCentrosCosto';
 import ConfiguracionEquipos from './components/ConfiguracionEquipos';
@@ -9,6 +9,7 @@ import InformeGestion from './components/InformeGestion';
 import GestorInformes from './components/GestorInformes';
 import ConsumosInventarios from './components/ConsumosInventarios';
 import Equipos from './components/Equipos';
+import Transportes from './components/Transportes';
 import CertificadosObras from './components/CertificadosObras';
 import { Briefcase } from 'lucide-react';
 // ─── API Helper ───
@@ -2193,7 +2194,7 @@ function Ingresos({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: s
 }
 
 function Costos({ token, defaultUnidad, defaultPeriodo }: { token: string, defaultUnidad?: string, defaultPeriodo?: string }) {
-  const [subTab, setSubTab] = useState<'resumen' | 'rrhh' | 'consumos' | 'equipos'>('resumen');
+  const [subTab, setSubTab] = useState<'resumen' | 'rrhh' | 'consumos' | 'equipos' | 'transportes'>('resumen');
 
   return (
     <div className="bg-slate-50 min-h-screen pb-12 overflow-x-hidden font-sans">
@@ -2223,6 +2224,12 @@ function Costos({ token, defaultUnidad, defaultPeriodo }: { token: string, defau
           >
             <Wrench size={13} /> Certificaciones de Equipos (Soporte)
           </button>
+          <button 
+            onClick={() => setSubTab('transportes')}
+            className={`px-4 h-full text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'transportes' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            <Truck size={13} /> Certificaciones de Transportes/Fletes (Soporte)
+          </button>
         </div>
       </div>
 
@@ -2230,6 +2237,7 @@ function Costos({ token, defaultUnidad, defaultPeriodo }: { token: string, defau
       {subTab === 'rrhh' && <InformeGestion token={token} mode="rrhh" defaultUnidad={defaultUnidad} defaultPeriodo={defaultPeriodo} />}
       {subTab === 'consumos' && <ConsumosInventarios token={token} unidadNegocio={defaultUnidad!} periodo={defaultPeriodo!} />}
       {subTab === 'equipos' && <Equipos token={token} unidadNegocio={defaultUnidad!} periodo={defaultPeriodo!} />}
+      {subTab === 'transportes' && <Transportes token={token} unidadNegocio={defaultUnidad!} periodo={defaultPeriodo!} />}
     </div>
   );
 }
