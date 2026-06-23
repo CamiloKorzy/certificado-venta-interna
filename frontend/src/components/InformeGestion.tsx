@@ -690,7 +690,7 @@ export default function InformeGestion({ token, defaultUnidad = 'Seguridad de Ac
                             <td className="p-3 text-slate-800 font-medium">{a.concepto}</td>
                             <td className="p-3 text-slate-600">{a.categoria}</td>
                             <td className="p-3 text-right font-mono font-medium text-slate-800">
-                              {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(a.importe)}
+                              {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(a.importe)}
                             </td>
                             <td className="p-3 text-center">
                               <button onClick={() => handleDeleteAjuste(a.id)} className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-colors" title="Eliminar">

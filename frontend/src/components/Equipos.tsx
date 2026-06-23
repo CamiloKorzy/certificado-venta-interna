@@ -238,9 +238,9 @@ export default function Equipos({
 
   const formatNumber = (val: number) => {
     return new Intl.NumberFormat('es-AR', {
-      minimumFractionDigits: 0,
+      minimumFractionDigits: 2,
       maximumFractionDigits: 2
-    }).format(val);
+    }).format(val || 0);
   };
 
   return (

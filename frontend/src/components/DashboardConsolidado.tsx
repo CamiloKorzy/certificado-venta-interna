@@ -36,7 +36,7 @@ export default function DashboardConsolidado({ token, defaultPeriodo = getDefaul
   const [error, setError] = useState<string | null>(null);
 
   const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(val);
+    return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val || 0);
   };
 
   const fetchConsolidado = async (pStr: string) => {

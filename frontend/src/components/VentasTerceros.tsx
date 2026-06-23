@@ -433,7 +433,11 @@ export default function VentasTerceros({ token, defaultUnidad, defaultPeriodo }:
   };
 
   const formatNumber = (num: number) => {
-    return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(num || 0)
+    return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num || 0)
+  }
+
+  const formatDecimal = (num: number) => {
+    return new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num || 0)
   }
 
   const isInvalidNum = (val: any) => {
@@ -866,11 +870,11 @@ export default function VentasTerceros({ token, defaultUnidad, defaultPeriodo }:
                         <td className="py-2.5 px-3 text-slate-800 font-bold truncate max-w-[150px]" title={t.cliente}>{t.cliente}</td>
                         <td className="py-2.5 px-3 font-semibold text-slate-700">{t.remitonumero}</td>
                         <td className="py-2.5 px-3 text-slate-500">{t.remitofecha || '-'}</td>
-                        <td className="py-2.5 px-3 text-right text-blue-700 font-bold bg-blue-50/20">{t.cantidaddespachada}</td>
+                        <td className="py-2.5 px-3 text-right text-blue-700 font-bold bg-blue-50/20">{!isInvalidNum(t.cantidaddespachada) ? formatDecimal(parseFloat(t.cantidaddespachada)) : '-'}</td>
                         <td className="py-2.5 px-3 text-right text-blue-700 font-bold bg-blue-50/20">{!isInvalidNum(t.remitoimporte) ? formatNumber(parseFloat(t.remitoimporte)) : '-'}</td>
                         <td className="py-2.5 px-3 text-right bg-amber-50/20">
                           {parseFloat(t.cantidadpendientefacturar) > 0 ? (
-                            <span className="text-amber-700 font-bold">{t.cantidadpendientefacturar}</span>
+                            <span className="text-amber-700 font-bold">{!isInvalidNum(t.cantidadpendientefacturar) ? formatDecimal(parseFloat(t.cantidadpendientefacturar)) : '-'}</span>
                           ) : (
                             <span className="text-slate-400">0</span>
                           )}
@@ -954,7 +958,7 @@ export default function VentasTerceros({ token, defaultUnidad, defaultPeriodo }:
                            </td>
                            <td className="py-2.5 px-4 text-slate-500 text-right font-medium">{c.cant_facturas}</td>
                            <td className="py-2.5 px-4 text-blue-700 text-right font-black">
-                             {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 0 }).format(c.importe_total)}
+                             {formatNumber(c.importe_total)}
                            </td>
                         </tr>
                       ))}
@@ -987,7 +991,7 @@ export default function VentasTerceros({ token, defaultUnidad, defaultPeriodo }:
                            </td>
                            <td className="py-2.5 px-4 text-slate-500 text-right font-medium">{c.cant_facturas}</td>
                            <td className="py-2.5 px-4 text-purple-700 text-right font-black">
-                             {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 0 }).format(c.importe_total)}
+                             {formatNumber(c.importe_total)}
                            </td>
                         </tr>
                       ))}
@@ -1022,10 +1026,10 @@ export default function VentasTerceros({ token, defaultUnidad, defaultPeriodo }:
                       <tr key={i} className="border-b border-slate-50 hover:bg-emerald-50/50 cursor-pointer transition-colors" onClick={() => { setModalType('prod_cliente'); setModalTitleContext(`${c.cliente}|${c.producto}`); }}>
                          <td className="py-3 px-4 font-bold text-slate-700 max-w-[200px] truncate" title={c.cliente}>{c.cliente || 'Consumidor'}</td>
                          <td className="py-3 px-4 font-medium text-slate-600 max-w-[200px] truncate" title={c.producto}>{c.producto || 'Genérico'}</td>
-                         <td className="py-3 px-4 text-blue-600 text-right font-black">{c.cant_despachada > 0 ? c.cant_despachada : '-'}</td>
-                         <td className="py-3 px-4 text-emerald-600 text-right font-black">{c.cant_facturada > 0 ? c.cant_facturada : '-'}</td>
-                         <td className="py-3 px-4 text-amber-600 text-right font-black">{c.cant_pte > 0 ? c.cant_pte : '-'}</td>
-                         <td className="py-3 px-4 text-indigo-700 text-right font-black">{c.importe_producto > 0 ? new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 0 }).format(c.importe_producto) : '-'}</td>
+                         <td className="py-3 px-4 text-blue-600 text-right font-black">{c.cant_despachada > 0 ? formatDecimal(c.cant_despachada) : '-'}</td>
+                         <td className="py-3 px-4 text-emerald-600 text-right font-black">{c.cant_facturada > 0 ? formatDecimal(c.cant_facturada) : '-'}</td>
+                         <td className="py-3 px-4 text-amber-600 text-right font-black">{c.cant_pte > 0 ? formatDecimal(c.cant_pte) : '-'}</td>
+                         <td className="py-3 px-4 text-indigo-700 text-right font-black">{c.importe_producto > 0 ? formatNumber(c.importe_producto) : '-'}</td>
                       </tr>
                     ))}
                     {!facturacionStats.prod_cliente_stats?.length && <tr><td colSpan={6} className="text-center py-8 text-slate-400">Seleccione filtros para analizar despachos y facturación de productos</td></tr>}
@@ -1139,14 +1143,14 @@ export default function VentasTerceros({ token, defaultUnidad, defaultPeriodo }:
                                 <td className="py-3 px-4 text-slate-600 truncate max-w-[200px]" title={t.producto}>{t.producto || '-'}</td>
                                 
                                 {modalType === 'remitos' && (
-                                  <td className="py-3 px-4 text-right font-medium text-slate-400">{t.cantidaddespachada}</td>
+                                  <td className="py-3 px-4 text-right font-medium text-slate-400">{!isInvalidNum(t.cantidaddespachada) ? formatDecimal(parseFloat(t.cantidaddespachada)) : '-'}</td>
                                 )}
                                 {(modalType === 'facturas' || modalType === 'facturas_cobradas') && (
                                   <td className="py-3 px-4 text-right font-medium text-slate-400">{formatNumber(t._impFac)}</td>
                                 )}
 
                                 <td className={`py-3 px-4 text-right font-black ${modalType === 'remitos' || modalType === 'facturas' ? 'text-red-500' : modalType === 'remitos_facturados' ? 'text-emerald-600' : modalType === 'facturas_cobradas' ? 'text-teal-600' : 'text-slate-700'}`}>
-                                   {modalType === 'remitos' ? t.cantidadpendientefacturar : modalType === 'despachados' || modalType === 'remitos_facturados' ? t.cantidaddespachada : modalType === 'facturas' ? formatNumber(t._restante) : modalType === 'facturas_cobradas' ? formatNumber(t._impFac - t._restante) : (t._impFac > 0 ? formatNumber(t._impFac) : '-')}
+                                   {modalType === 'remitos' ? (!isInvalidNum(t.cantidadpendientefacturar) ? formatDecimal(parseFloat(t.cantidadpendientefacturar)) : '-') : modalType === 'despachados' || modalType === 'remitos_facturados' ? (!isInvalidNum(t.cantidaddespachada) ? formatDecimal(parseFloat(t.cantidaddespachada)) : '-') : modalType === 'facturas' ? formatNumber(t._restante) : modalType === 'facturas_cobradas' ? formatNumber(t._impFac - t._restante) : (t._impFac > 0 ? formatNumber(t._impFac) : '-')}
                                 </td>
                              </tr>
                              {modalType === 'emitidas' && expandedFactura === t.facturanumero && t._remitosList?.length > 0 && (
