@@ -4664,3 +4664,6 @@ def delete_certificado_obra(maestro_id: int, current_user = Depends(get_current_
     finally:
         cur.close()
         conn.close()
+
+from routers.ventas_router import router as ventas_router
+app.include_router(ventas_router, prefix="/api/ventas", tags=["Ventas"])

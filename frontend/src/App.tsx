@@ -12,10 +12,11 @@ import Equipos from './components/Equipos';
 import Transportes from './components/Transportes';
 import CertificadosObras from './components/CertificadosObras';
 import DashboardConsolidado from './components/DashboardConsolidado';
+import VentasTerceros from './components/VentasTerceros';
 import { Briefcase } from 'lucide-react';
 // ─── API Helper ───
 const API_URL = '';
-function apiFetch(path: string, token: string, options: any = {}) {
+export function apiFetch(path: string, token: string, options: any = {}) {
   return fetch(API_URL + path, {
     ...options,
     headers: {
@@ -2167,7 +2168,7 @@ function MainDashboard({ token, defaultUnidad, defaultPeriodo }: { token: string
 }
 
 function Ingresos({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: string, onLogout: () => void, defaultUnidad?: string, defaultPeriodo?: string }) {
-  const [subTab, setSubTab] = useState<'comprobantes' | 'obras'>('comprobantes');
+  const [subTab, setSubTab] = useState<'comprobantes' | 'obras' | 'terceros'>('comprobantes');
 
   return (
     <div className="bg-slate-50 min-h-screen pb-12 overflow-x-hidden font-sans">
@@ -2185,11 +2186,18 @@ function Ingresos({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: s
           >
             <Briefcase size={13} /> Certificados de Obras (Soporte)
           </button>
+          <button 
+            onClick={() => setSubTab('terceros')}
+            className={`px-4 h-full text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'terceros' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            <DollarSign size={13} /> Ventas a Terceros
+          </button>
         </div>
       </div>
 
       {subTab === 'comprobantes' && <Dashboard token={token} onLogout={onLogout} defaultUnidad={defaultUnidad} defaultPeriodo={defaultPeriodo} />}
       {subTab === 'obras' && <CertificadosObras token={token} unidadNegocio={defaultUnidad!} periodo={defaultPeriodo!} />}
+      {subTab === 'terceros' && <VentasTerceros token={token} defaultUnidad={defaultUnidad} defaultPeriodo={defaultPeriodo} />}
     </div>
   );
 }
