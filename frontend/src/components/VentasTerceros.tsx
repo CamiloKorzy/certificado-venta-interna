@@ -176,12 +176,14 @@ export default function VentasTerceros({ token, defaultUnidad, defaultPeriodo }:
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 50;
 
+  const normalizedDefaultPeriodo = defaultPeriodo ? defaultPeriodo.replace('/', '-') : undefined;
+
   useEffect(() => {
     fetchPeriodos(token).then(data => {
       if (Array.isArray(data)) {
         const mapped = data.map(p => ({ label: p.label, value: p.periodo }));
         setOptsPeriodos(mapped)
-        setSelPeriodos(defaultPeriodo && mapped.some(m => m.value === defaultPeriodo) ? [defaultPeriodo] : mapped.map(m => m.value))
+        setSelPeriodos(normalizedDefaultPeriodo && mapped.some(m => m.value === normalizedDefaultPeriodo) ? [normalizedDefaultPeriodo] : mapped.map(m => m.value))
       } else {
         if (data && data.detail) setErrorMsg(prev => prev ? prev + ' | ' + data.detail : data.detail)
       }
