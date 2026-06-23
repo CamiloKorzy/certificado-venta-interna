@@ -159,7 +159,7 @@ export default function VentasTerceros({ token, defaultUnidad, defaultPeriodo }:
   const [fechaDesde, setFechaDesde] = useState<string>('')
   const [fechaHasta, setFechaHasta] = useState<string>('')
 
-  const [activeTab, setActiveTab] = useState<'operativo' | 'facturacion'>('operativo')
+  const [activeTab, setActiveTab] = useState<'consolidado' | 'despachos' | 'facturacion'>('consolidado')
   const [resumen, setResumen] = useState<any>(null)
   const [tracking, setTracking] = useState<any[]>([])
   const [facturacionStats, setFacturacionStats] = useState<any>(null)
@@ -257,8 +257,12 @@ export default function VentasTerceros({ token, defaultUnidad, defaultPeriodo }:
 
   // Reload stats if jumping into facturacion tab and they are missing
   useEffect(() => {
-    if (activeTab === 'facturacion' && !facturacionStats && resumen && !loading) {
-      loadData();
+    // Solo cargar los que corresponden a la tab y no están cargados
+    if ((activeTab === 'consolidado' || activeTab === 'despachos') && !resumen && !loading) {
+      loadData()
+    }
+    if ((activeTab === 'consolidado' || activeTab === 'facturacion') && !facturacionStats && resumen && !loading) {
+      loadData()
     }
   }, [activeTab]);
 
@@ -582,10 +586,16 @@ export default function VentasTerceros({ token, defaultUnidad, defaultPeriodo }:
       {/* TABS NAVIGATION */}
       <div className="bg-white border-b border-slate-200 px-6 flex gap-6 z-20 relative shadow-sm">
         <button 
-          onClick={() => setActiveTab('operativo')}
-          className={`py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'operativo' ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          onClick={() => setActiveTab('consolidado')}
+          className={`py-3 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'consolidado' ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
         >
-          Tracking Operativo
+          Consolidado
+        </button>
+        <button 
+          onClick={() => setActiveTab('despachos')}
+          className={`py-3 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'despachos' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+        >
+          Despachos
         </button>
         <button 
           onClick={() => setActiveTab('facturacion')}
@@ -603,7 +613,7 @@ export default function VentasTerceros({ token, defaultUnidad, defaultPeriodo }:
           <div className="flex justify-center items-center h-64">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
           </div>
-        ) : resumen && activeTab === 'operativo' ? (
+        ) : resumen && activeTab === 'consolidado' ? (
           <>
             {/* TOP KPI ROW */}
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4">
@@ -776,8 +786,10 @@ export default function VentasTerceros({ token, defaultUnidad, defaultPeriodo }:
                       </tbody>
                     </table>
                  </div>
-              </div>
-
+               </div>
+          </>
+        ) : tracking && activeTab === 'despachos' ? (
+          <>
             {/* DATA TABLE (GRILLA) */}
             <div className="bg-white border border-slate-200 shadow-sm rounded-xl overflow-hidden flex flex-col w-full">
               <div className="p-4 border-b border-slate-200 bg-slate-50 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0">
@@ -824,6 +836,9 @@ export default function VentasTerceros({ token, defaultUnidad, defaultPeriodo }:
                       <th className="cursor-pointer hover:bg-slate-200 py-3 px-3 text-right text-blue-800 bg-blue-50/50" onClick={() => handleSort('cantidaddespachada')}>
                         <div className="flex items-center justify-end gap-1">Cant. Desp <ArrowUpDown className="w-3 h-3" /></div>
                       </th>
+                      <th className="cursor-pointer hover:bg-slate-200 py-3 px-3 text-right text-blue-800 bg-blue-50/50" onClick={() => handleSort('remitoimporte')}>
+                        <div className="flex items-center justify-end gap-1">Imp. Remito <ArrowUpDown className="w-3 h-3" /></div>
+                      </th>
                       <th className="cursor-pointer hover:bg-slate-200 py-3 px-3 text-right text-amber-800 bg-amber-50/50" onClick={() => handleSort('cantidadpendientefacturar')}>
                         <div className="flex items-center justify-end gap-1">Cant. Pte <ArrowUpDown className="w-3 h-3" /></div>
                       </th>
@@ -852,6 +867,7 @@ export default function VentasTerceros({ token, defaultUnidad, defaultPeriodo }:
                         <td className="py-2.5 px-3 font-semibold text-slate-700">{t.remitonumero}</td>
                         <td className="py-2.5 px-3 text-slate-500">{t.remitofecha || '-'}</td>
                         <td className="py-2.5 px-3 text-right text-blue-700 font-bold bg-blue-50/20">{t.cantidaddespachada}</td>
+                        <td className="py-2.5 px-3 text-right text-blue-700 font-bold bg-blue-50/20">{!isInvalidNum(t.remitoimporte) ? formatNumber(parseFloat(t.remitoimporte)) : '-'}</td>
                         <td className="py-2.5 px-3 text-right bg-amber-50/20">
                           {parseFloat(t.cantidadpendientefacturar) > 0 ? (
                             <span className="text-amber-700 font-bold">{t.cantidadpendientefacturar}</span>

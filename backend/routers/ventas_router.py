@@ -340,7 +340,7 @@ def get_tracking(
         query = f"""
             SELECT 
                 remitoid, COALESCE(CAST(NULLIF(NULLIF(remitofecha, ''), 'NULL') AS date)::text, '') AS remitofecha, remitonumero, remitotipo, 
-                cliente, producto, cantidaddespachada, cantidadpendientefacturar, empresa, 
+                cliente, producto, cantidaddespachada, preciounitario, remitoimporte, cantidadpendientefacturar, empresa, 
                 remitoestado, facturaid, facturanumero, COALESCE(CAST(NULLIF(NULLIF(facturafecha, ''), 'NULL') AS date)::text, '') AS facturafecha, 
                 facturaimporte, facturatipo, cantidadfacturada, COALESCE(CAST(NULLIF(NULLIF(fechavinculacionfactura, ''), 'NULL') AS date)::text, '') AS fechavinculacionfactura, 
                 cobranzaid, cobranzanumero, COALESCE(CAST(NULLIF(NULLIF(cobranzafecha, ''), 'NULL') AS date)::text, '') AS cobranzafecha, 
