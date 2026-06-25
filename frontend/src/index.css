@@ -1,5 +1,15 @@
 @import "tailwindcss";
 
+@layer utilities {
+  .scrollbar-none {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 html, body {
     overflow-y: auto !important;
     overflow-x: auto !important;

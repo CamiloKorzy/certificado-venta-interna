@@ -2174,25 +2174,29 @@ function Ingresos({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: s
   return (
     <div className="bg-slate-50 min-h-screen pb-12 overflow-x-hidden font-sans">
       <div className="bg-white border-b border-slate-200 shadow-sm mb-4">
-        <div className="max-w-[1800px] mx-auto px-6 flex items-center h-10 gap-1 overflow-x-auto whitespace-nowrap scrollbar-none">
-          <button 
-            onClick={() => setSubTab('comprobantes')}
-            className={`px-4 h-full text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'comprobantes' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-          >
-            <TrendingUp size={13} /> Comprobantes de Ingresos (Ventas Internas)
-          </button>
-          <button 
-            onClick={() => setSubTab('obras')}
-            className={`px-4 h-full text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'obras' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-          >
-            <Briefcase size={13} /> Certificados de Obras (Soporte)
-          </button>
-          <button 
-            onClick={() => setSubTab('terceros')}
-            className={`px-4 h-full text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'terceros' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-          >
-            <DollarSign size={13} /> Ventas a Terceros
-          </button>
+        <div className="max-w-[1800px] mx-auto px-6 py-2">
+          <div className="flex items-center gap-1 overflow-x-auto whitespace-nowrap scrollbar-none w-full">
+            <div className="inline-flex bg-slate-100/80 p-1 rounded-lg border border-slate-200/60">
+              <button 
+                onClick={() => setSubTab('comprobantes')}
+                className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'comprobantes' ? 'bg-white text-blue-700 shadow-sm ring-1 ring-slate-200/50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}
+              >
+                <TrendingUp size={13} /> Comprobantes de Ingresos (Ventas Internas)
+              </button>
+              <button 
+                onClick={() => setSubTab('obras')}
+                className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'obras' ? 'bg-white text-blue-700 shadow-sm ring-1 ring-slate-200/50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}
+              >
+                <Briefcase size={13} /> Certificados de Obras (Soporte)
+              </button>
+              <button 
+                onClick={() => setSubTab('terceros')}
+                className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'terceros' ? 'bg-white text-blue-700 shadow-sm ring-1 ring-slate-200/50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}
+              >
+                <DollarSign size={13} /> Ventas a Terceros
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -2209,49 +2213,53 @@ function Costos({ token, defaultUnidad, defaultPeriodo }: { token: string, defau
   return (
     <div className="bg-slate-50 min-h-screen pb-12 overflow-x-hidden font-sans">
       <div className="bg-white border-b border-slate-200 shadow-sm mb-4 relative">
-        <div className="max-w-[1800px] mx-auto px-6 flex items-center h-12 gap-2 overflow-x-auto whitespace-nowrap pb-1">
-          <button 
-            onClick={() => setSubTab('resumen')}
-            className={`px-4 h-full text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'resumen' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-          >
-            <Wallet size={13} /> Resumen de Costos
-          </button>
-          <button 
-            onClick={() => setSubTab('facturas')}
-            className={`px-4 h-full text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'facturas' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-          >
-            <FileText size={13} /> Facturas de Compras (Soporte)
-          </button>
-          <button 
-            onClick={() => setSubTab('asientos')}
-            className={`px-4 h-full text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'asientos' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-          >
-            <FileText size={13} /> Asientos Contables (Soporte)
-          </button>
-          <button 
-            onClick={() => setSubTab('rrhh')}
-            className={`px-4 h-full text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'rrhh' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-          >
-            <Users size={13} /> Recursos Humanos (Soporte)
-          </button>
-          <button 
-            onClick={() => setSubTab('consumos')}
-            className={`px-4 h-full text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'consumos' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-          >
-            <Package size={13} /> Consumos de Inventarios (Soporte)
-          </button>
-          <button 
-            onClick={() => setSubTab('equipos')}
-            className={`px-4 h-full text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'equipos' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-          >
-            <Wrench size={13} /> Certificaciones de Equipos (Soporte)
-          </button>
-          <button 
-            onClick={() => setSubTab('transportes')}
-            className={`px-4 h-full text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'transportes' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-          >
-            <Truck size={13} /> Certificaciones de Transportes/Fletes (Soporte)
-          </button>
+        <div className="max-w-[1800px] mx-auto px-6 py-2">
+          <div className="flex items-center gap-1 overflow-x-auto whitespace-nowrap scrollbar-none w-full">
+            <div className="inline-flex bg-slate-100/80 p-1 rounded-lg border border-slate-200/60">
+              <button 
+                onClick={() => setSubTab('resumen')}
+                className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'resumen' ? 'bg-white text-blue-700 shadow-sm ring-1 ring-slate-200/50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}
+              >
+                <Wallet size={13} /> Resumen de Costos
+              </button>
+              <button 
+                onClick={() => setSubTab('facturas')}
+                className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'facturas' ? 'bg-white text-blue-700 shadow-sm ring-1 ring-slate-200/50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}
+              >
+                <FileText size={13} /> Facturas de Compras (Soporte)
+              </button>
+              <button 
+                onClick={() => setSubTab('asientos')}
+                className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'asientos' ? 'bg-white text-blue-700 shadow-sm ring-1 ring-slate-200/50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}
+              >
+                <FileText size={13} /> Asientos Contables (Soporte)
+              </button>
+              <button 
+                onClick={() => setSubTab('rrhh')}
+                className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'rrhh' ? 'bg-white text-blue-700 shadow-sm ring-1 ring-slate-200/50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}
+              >
+                <Users size={13} /> Recursos Humanos (Soporte)
+              </button>
+              <button 
+                onClick={() => setSubTab('consumos')}
+                className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'consumos' ? 'bg-white text-blue-700 shadow-sm ring-1 ring-slate-200/50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}
+              >
+                <Package size={13} /> Consumos de Inventarios (Soporte)
+              </button>
+              <button 
+                onClick={() => setSubTab('equipos')}
+                className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'equipos' ? 'bg-white text-blue-700 shadow-sm ring-1 ring-slate-200/50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}
+              >
+                <Wrench size={13} /> Certificaciones de Equipos (Soporte)
+              </button>
+              <button 
+                onClick={() => setSubTab('transportes')}
+                className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'transportes' ? 'bg-white text-blue-700 shadow-sm ring-1 ring-slate-200/50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}
+              >
+                <Truck size={13} /> Certificaciones de Transportes/Fletes (Soporte)
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
