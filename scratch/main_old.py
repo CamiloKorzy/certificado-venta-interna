@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request, Depends, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Request, Depends, UploadFile, File
 import io
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -36,21 +36,8 @@ def safe_float(val):
     except:
         return 0.0
 
-def normalize_periodo(periodo: str) -> str:
-    if not periodo:
-        return periodo
-    periodo = str(periodo).replace("/", "-").strip()
-    parts = periodo.split('-')
-    if len(parts) == 2:
-        if len(parts[0]) == 4:
-            return f"{parts[0]}-{parts[1].zfill(2)}"
-        elif len(parts[1]) == 4:
-            return f"{parts[1]}-{parts[0].zfill(2)}"
-    return periodo
-
 def check_informe_cerrado(empresa: str, periodo: str, modulo: str):
     try:
-        periodo = normalize_periodo(periodo)
         if not empresa or not periodo: return None
         conn = get_supabase()
         cur = conn.cursor()
@@ -59,16 +46,7 @@ def check_informe_cerrado(empresa: str, periodo: str, modulo: str):
         cur.close()
         conn.close()
         if row and row[0] == 'CERRADO' and row[1]:
-            data = row[1].get(modulo)
-            if data and isinstance(data, list):
-                for item in data:
-                    if isinstance(item, dict) and "categoria" in item:
-                        db_cat = item.get("categoria") or "Ajuste Manual"
-                        if db_cat == "Ajuste Excel":
-                            item["categoria"] = "Ingresos adicionales" if item.get("tipo_movimiento") == "INGRESO" else "Egresos adicionales"
-                        elif db_cat == "Gastos de Compra":
-                            item["categoria"] = "Costos"
-            return data
+            return row[1].get(modulo)
     except:
         pass
     return None
@@ -316,45 +294,7 @@ def auto_setup_db():
                 IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='cert_cierres_detalle' AND column_name='proveedor') THEN
                     ALTER TABLE cert_cierres_detalle ADD COLUMN proveedor TEXT;
                 END IF;
-                
-                CREATE TABLE IF NOT EXISTS cert_informes_proyecto (
-                    id SERIAL PRIMARY KEY,
-                    unidad_negocio TEXT NOT NULL,
-                    periodo TEXT NOT NULL,
-                    estado TEXT NOT NULL DEFAULT 'ABIERTO',
-                    snapshot_data JSONB,
-                    usuario_apertura TEXT,
-                    fecha_apertura TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    usuario_cierre TEXT,
-                    fecha_cierre TIMESTAMP,
-                    UNIQUE(unidad_negocio, periodo)
-                );
             END $$;
-
-            CREATE TABLE IF NOT EXISTS cert_respaldos (
-                id SERIAL PRIMARY KEY,
-                tipo_documento VARCHAR(100) NOT NULL,
-                unidad_negocio VARCHAR(255) NOT NULL,
-                periodo VARCHAR(7) NOT NULL,
-                nombre_archivo VARCHAR(255) NOT NULL,
-                tipo_mime VARCHAR(255),
-                contenido TEXT,
-                usuario_carga VARCHAR(255),
-                fecha_carga TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE IF NOT EXISTS cert_config_equipos_asignados (
-                id SERIAL PRIMARY KEY,
-                sucursal TEXT NOT NULL,
-                equipo_codigo TEXT NOT NULL,
-                equipo_nombre TEXT NOT NULL,
-                fecha_desde DATE NOT NULL,
-                fecha_hasta DATE,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                usuario_carga TEXT,
-                fecha_carga TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE INDEX IF NOT EXISTS idx_cert_config_equipos_suc ON cert_config_equipos_asignados(sucursal);
 
         """)
         # Crear admin por defecto si no existe
@@ -365,7 +305,7 @@ def auto_setup_db():
                 INSERT INTO cert_usuarios (email, nombre, password, rol, activo)
                 VALUES ('admin@ceeenriquez.com', 'Administrador', %s, 'admin', 1)
             """, (admin_hash,))
-            print("[SETUP] OK - Usuario admin creado: admin@ceeenriquez.com / admin2026")
+            print("[SETUP] ✅ Usuario admin creado: admin@ceeenriquez.com / admin2026")
             
         # Migración: Agregar columna estado_doc si no existe
         try:
@@ -373,11 +313,11 @@ def auto_setup_db():
         except Exception as e:
             pass
             
-        print("[SETUP] OK - Tablas cert_* verificadas/creadas")
+        print("[SETUP] ✅ Tablas cert_* verificadas/creadas")
         cur.close()
         conn.close()
     except Exception as e:
-        print(f"[SETUP] ERROR - Error en auto-setup: {e}")
+        print(f"[SETUP] ⚠️ Error en auto-setup: {e}")
         _setup_done = False  # Reintentar en próxima llamada
 
 def log_action(email: str, accion: str, detalles: str = ""):
@@ -618,16 +558,7 @@ def save_config_centros_costo(sucursal: str, items: List[dict]):
         conn.close()
 
 @app.post("/api/config/ajustes-excel")
-async def upload_ajustes_excel(
-    file: UploadFile = File(...), 
-    unidad: Optional[str] = Form(None),
-    periodo: Optional[str] = Form(None),
-    tipo: Optional[str] = Form(None),
-    current_user = Depends(get_current_user)
-):
-    if periodo:
-        periodo = normalize_periodo(periodo)
-    from datetime import datetime, date
+async def upload_ajustes_excel(file: UploadFile = File(...), current_user = Depends(get_current_user)):
     contents = await file.read()
     wb = openpyxl.load_workbook(filename=io.BytesIO(contents), data_only=True)
     ws = wb.active
@@ -653,148 +584,44 @@ async def upload_ajustes_excel(
     inserted_count = 0
     suggestions = {}
     
-    # Leer headers de la fila 1 para determinar dinámicamente si es el nuevo formato de 4 columnas
-    headers = [str(cell.value or "").strip().lower() for cell in ws[1]]
-    is_new_format = False
-    
-    if "fecha" in headers and "comprobante" in headers:
-        is_new_format = True
-        idx_fecha = headers.index("fecha")
-        idx_comprobante = headers.index("comprobante")
-        idx_concepto = headers.index("concepto") if "concepto" in headers else 2
-        idx_importe = headers.index("importe") if "importe" in headers else 3
-    else:
-        # Fallback si tiene 4 columnas o menos y se proveen los parámetros del form
-        if len(headers) <= 4 and unidad and periodo and tipo:
-            is_new_format = True
-            idx_fecha = 0
-            idx_comprobante = 1
-            idx_concepto = 2
-            idx_importe = 3
-
     for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
         if not row or not any(row): continue
         
-        if is_new_format:
-            fecha_val = row[idx_fecha] if len(row) > idx_fecha else None
-            comprobante_val = row[idx_comprobante] if len(row) > idx_comprobante else ""
-            concepto_val = row[idx_concepto] if len(row) > idx_concepto else ""
-            importe_val = row[idx_importe] if len(row) > idx_importe else None
+        unidad_negocio = str(row[0] or "").strip()
+        periodo = str(row[1] or "").strip()
+        concepto = str(row[2] or "").strip()
+        tipo_mov = str(row[3] or "").strip().upper()
+        categoria = str(row[4] or "").strip()
+        importe_val = row[5]
+        observaciones = str(row[6] or "").strip() if len(row) > 6 else ""
+        
+        if not unidad_negocio or not periodo or not tipo_mov or importe_val is None:
+            errors.append(f"Fila {row_idx}: Faltan datos (Unidad, Periodo, Tipo o Importe).")
+            continue
             
-            # Parsear Fecha
-            parsed_fecha = None
-            if isinstance(fecha_val, datetime):
-                parsed_fecha = fecha_val
-            elif isinstance(fecha_val, date):
-                parsed_fecha = datetime.combine(fecha_val, datetime.min.time())
-            elif fecha_val:
-                fecha_str = str(fecha_val).strip()
-                for fmt in ('%d/%m/%Y', '%d-%m-%Y', '%Y-%m-%d', '%Y/%m/%d'):
-                    try:
-                        parsed_fecha = datetime.strptime(fecha_str, fmt)
-                        break
-                    except ValueError:
-                        continue
-            
-            if not parsed_fecha:
-                errors.append(f"Fila {row_idx}: Fecha '{fecha_val}' no es válida (debe ser DD/MM/AAAA).")
-                continue
-                
-            # Determinar periodo a partir de la fecha (MM/YYYY)
-            periodo_val = f"{parsed_fecha.month:02d}/{parsed_fecha.year}"
-            
-            # Determinar unidad de negocio
-            unidad_negocio = str(unidad or "").strip()
-            if not unidad_negocio:
-                errors.append(f"Fila {row_idx}: No se especificó la Unidad de Negocio.")
-                continue
-                
-            tipo_mov = str(tipo or "").strip().upper()
-            if tipo_mov not in ["INGRESO", "COSTO", "GASTO"]:
-                errors.append(f"Fila {row_idx}: Tipo de movimiento '{tipo_mov}' inválido.")
-                continue
-            if tipo_mov == "GASTO":
-                tipo_mov = "COSTO"
-                
-            # Validar y truncar Comprobante
-            comprobante = str(comprobante_val or "").strip()
-            if len(comprobante) > 15:
-                comprobante = comprobante[:15]
-            if not comprobante:
-                comprobante = "S/N"
-                
-            # Validar y truncar Concepto
-            concepto = str(concepto_val or "").strip()
-            if len(concepto) > 30:
-                concepto = concepto[:30]
-            if not concepto:
-                errors.append(f"Fila {row_idx}: El Concepto está vacío.")
-                continue
-                
-            # Validar Importe
-            try:
-                importe = float(importe_val)
-            except (ValueError, TypeError):
-                errors.append(f"Fila {row_idx}: Importe '{importe_val}' no es un número.")
-                continue
-                
-            if tipo_mov == "INGRESO":
-                categoria = "Ingresos adicionales"
+        if unidad_negocio not in valid_sucursales:
+            matches = difflib.get_close_matches(unidad_negocio, valid_sucursales, n=1, cutoff=0.6)
+            if matches:
+                suggestions[unidad_negocio] = matches[0]
+                unidad_negocio = matches[0]
             else:
-                categoria = "Egresos adicionales"
-            observaciones = comprobante
-            fecha_carga = parsed_fecha
-        else:
-            # Formato viejo
-            if len(row) >= 6 and str(row[3] or "").strip().upper() in ["INGRESO", "GASTO", "COSTO"]:
-                unidad_negocio = str(row[0] or "").strip()
-                periodo_val = str(row[1] or "").strip()
-                concepto = str(row[2] or "").strip()
-                tipo_mov = str(row[3] or "").strip().upper()
-                categoria = str(row[4] or "").strip()
-                importe_val = row[5]
-                observaciones = str(row[6] or "").strip() if len(row) > 6 else ""
-            else:
-                unidad_negocio = str(row[0] or "").strip()
-                periodo_val = str(row[1] or "").strip()
-                concepto = str(row[2] or "").strip()
-                tipo_mov = str(row[3] or "").strip().upper()
-                categoria = str(row[4] or "").strip()
-                importe_val = row[5] if len(row) > 5 else None
-                observaciones = str(row[6] or "").strip() if len(row) > 6 else ""
+                errors.append(f"Fila {row_idx}: Unidad '{unidad_negocio}' no encontrada.")
+                continue
+                
+        if tipo_mov not in ["INGRESO", "GASTO"]:
+            errors.append(f"Fila {row_idx}: Tipo '{tipo_mov}' inválido. Use INGRESO o GASTO.")
+            continue
             
-            if not unidad_negocio or not periodo_val or not tipo_mov or importe_val is None:
-                errors.append(f"Fila {row_idx}: Faltan datos (Unidad, Periodo, Tipo o Importe).")
-                continue
-                
-            if unidad_negocio not in valid_sucursales:
-                matches = difflib.get_close_matches(unidad_negocio, valid_sucursales, n=1, cutoff=0.6)
-                if matches:
-                    suggestions[unidad_negocio] = matches[0]
-                    unidad_negocio = matches[0]
-                else:
-                    errors.append(f"Fila {row_idx}: Unidad '{unidad_negocio}' no encontrada.")
-                    continue
-                    
-            if tipo_mov not in ["INGRESO", "GASTO", "COSTO"]:
-                errors.append(f"Fila {row_idx}: Tipo '{tipo_mov}' inválido. Use INGRESO o COSTO.")
-                continue
-                
-            if tipo_mov == "GASTO":
-                tipo_mov = "COSTO"
-                
-            try:
-                importe = float(importe_val)
-            except (ValueError, TypeError):
-                errors.append(f"Fila {row_idx}: Importe '{importe_val}' no es un número.")
-                continue
-                
-            fecha_carga = datetime.now()
+        try:
+            importe = float(importe_val)
+        except ValueError:
+            errors.append(f"Fila {row_idx}: Importe '{importe_val}' no es un número.")
+            continue
             
         cur_supa.execute("""
-            INSERT INTO cert_ajustes_excel (unidad_negocio, periodo, concepto, tipo_movimiento, categoria, importe, observaciones, usuario_carga, fecha_carga)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (unidad_negocio, periodo_val, concepto, tipo_mov, categoria, importe, observaciones, user_email, fecha_carga))
+            INSERT INTO cert_ajustes_excel (unidad_negocio, periodo, concepto, tipo_movimiento, categoria, importe, observaciones, usuario_carga)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """, (unidad_negocio, periodo, concepto, tipo_mov, categoria, importe, observaciones, user_email))
         inserted_count += 1
         
     conn_supa.commit()
@@ -817,20 +644,11 @@ def list_ajustes_excel(current_user = Depends(get_current_user)):
     cur_supa.close()
     conn_supa.close()
     
-    ajustes = []
-    for r in rows:
-        db_cat = r[5] or "Ajuste Manual"
-        if db_cat == "Ajuste Excel":
-            categoria_label = "Ingresos adicionales" if r[4] == "INGRESO" else "Egresos adicionales"
-        else:
-            categoria_label = db_cat
-            
-        ajustes.append({
-            "id": r[0], "unidad_negocio": r[1], "periodo": r[2], "concepto": r[3],
-            "tipo_movimiento": r[4], "categoria": categoria_label, "importe": float(r[6]),
-            "observaciones": r[7], "fecha_carga": str(r[8]), "usuario_carga": r[9]
-        })
-    return ajustes
+    return [{
+        "id": r[0], "unidad_negocio": r[1], "periodo": r[2], "concepto": r[3],
+        "tipo_movimiento": r[4], "categoria": r[5], "importe": float(r[6]),
+        "observaciones": r[7], "fecha_carga": str(r[8]), "usuario_carga": r[9]
+    } for r in rows]
 
 @app.delete("/api/config/ajustes-excel/{id}")
 def delete_ajuste_excel(id: int, current_user = Depends(get_current_user)):
@@ -840,142 +658,6 @@ def delete_ajuste_excel(id: int, current_user = Depends(get_current_user)):
     conn_supa.commit()
     cur_supa.close()
     conn_supa.close()
-    return {"status": "ok"}
-
-
-
-class BulkDeleteReq(BaseModel):
-    ids: List[int]
-
-@app.delete("/api/config/ajustes-excel/bulk")
-def delete_ajustes_excel_bulk(req: BulkDeleteReq, current_user = Depends(get_current_user)):
-    conn_supa = get_supabase()
-    cur_supa = conn_supa.cursor()
-    if not req.ids:
-        return {"status": "ok"}
-    
-    format_strings = ','.join(['%s'] * len(req.ids))
-    cur_supa.execute(f"DELETE FROM cert_ajustes_excel WHERE id IN ({format_strings})", tuple(req.ids))
-    conn_supa.commit()
-    cur_supa.close()
-    conn_supa.close()
-    return {"status": "ok"}
-
-
-class EquiposAsignadosReq(BaseModel):
-    sucursal: str
-    equipo_codigo: str
-    equipo_nombre: str
-    fecha_desde: str
-    fecha_hasta: Optional[str] = None
-
-
-@app.get("/api/equipos/maestro")
-def get_equipos_maestro(current_user = Depends(get_current_user)):
-    import urllib.request
-    import json
-    
-    url = "https://naxjzquhdzyoxtjataaw.supabase.co/rest/v1/equipos?select=codigo,nombre"
-    apikey = "sb_publishable_K3r5ogAi25D2ffI6-9cWLg_VJddbdxF"
-    req = urllib.request.Request(
-        url,
-        headers={
-            "apikey": apikey,
-            "Authorization": f"Bearer {apikey}"
-        }
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=10) as response:
-            data = json.loads(response.read().decode('utf-8'))
-            data.sort(key=lambda x: str(x.get('nombre') or '').lower())
-            return data
-    except Exception as e:
-        print("Error fetching equipos maestro:", e)
-        raise HTTPException(status_code=500, detail=f"Error al obtener catálogo de equipos: {str(e)}")
-
-
-@app.get("/api/config/equipos-asignados")
-def list_equipos_asignados(current_user = Depends(get_current_user)):
-    conn_supa = get_supabase()
-    cur_supa = conn_supa.cursor()
-    cur_supa.execute("""
-        SELECT id, sucursal, equipo_codigo, equipo_nombre, fecha_desde, fecha_hasta, created_at, usuario_carga, fecha_carga 
-        FROM cert_config_equipos_asignados 
-        ORDER BY sucursal, fecha_desde DESC
-    """)
-    rows = cur_supa.fetchall()
-    cur_supa.close()
-    conn_supa.close()
-    
-    result = []
-    for r in rows:
-        result.append({
-            "id": r[0],
-            "sucursal": r[1],
-            "equipo_codigo": r[2],
-            "equipo_nombre": r[3],
-            "fecha_desde": str(r[4]) if r[4] else "",
-            "fecha_hasta": str(r[5]) if r[5] else "",
-            "created_at": str(r[6]),
-            "usuario_carga": r[7],
-            "fecha_carga": str(r[8])
-        })
-    return result
-
-
-@app.post("/api/config/equipos-asignados")
-def create_equipo_asignado(req: EquiposAsignadosReq, current_user = Depends(get_current_user)):
-    conn_supa = get_supabase()
-    cur_supa = conn_supa.cursor()
-    
-    try:
-        fd = datetime.strptime(req.fecha_desde, "%Y-%m-%d").date()
-    except Exception:
-        raise HTTPException(status_code=400, detail="fecha_desde inválida. Formato esperado: YYYY-MM-DD")
-        
-    fh = None
-    if req.fecha_hasta:
-        try:
-            fh = datetime.strptime(req.fecha_hasta, "%Y-%m-%d").date()
-            if fh < fd:
-                raise HTTPException(status_code=400, detail="fecha_hasta no puede ser anterior a fecha_desde")
-        except HTTPException as he:
-            raise he
-        except Exception:
-            raise HTTPException(status_code=400, detail="fecha_hasta inválida. Formato esperado: YYYY-MM-DD")
-
-    user_email = current_user.get("email") or "usuario"
-    cur_supa.execute("""
-        INSERT INTO cert_config_equipos_asignados (sucursal, equipo_codigo, equipo_nombre, fecha_desde, fecha_hasta, usuario_carga)
-        VALUES (%s, %s, %s, %s, %s, %s)
-    """, (req.sucursal, req.equipo_codigo, req.equipo_nombre, fd, fh, user_email))
-    conn_supa.commit()
-    cur_supa.close()
-    conn_supa.close()
-    
-    log_action(user_email, "ASIGNAR_EQUIPO", f"Asignó {req.equipo_nombre} ({req.equipo_codigo}) a {req.sucursal} desde {req.fecha_desde}")
-    return {"status": "ok"}
-
-
-@app.delete("/api/config/equipos-asignados/{id}")
-def delete_equipo_asignado(id: int, current_user = Depends(get_current_user)):
-    conn_supa = get_supabase()
-    cur_supa = conn_supa.cursor()
-    
-    cur_supa.execute("SELECT sucursal, equipo_nombre, equipo_codigo FROM cert_config_equipos_asignados WHERE id = %s", (id,))
-    row = cur_supa.fetchone()
-    if not row:
-        cur_supa.close()
-        conn_supa.close()
-        raise HTTPException(status_code=404, detail="Configuración no encontrada")
-        
-    cur_supa.execute("DELETE FROM cert_config_equipos_asignados WHERE id = %s", (id,))
-    conn_supa.commit()
-    cur_supa.close()
-    conn_supa.close()
-    
-    user_email = current_user.get("email") or "usuario"
-    log_action(user_email, "DESASIGNAR_EQUIPO", f"Eliminó asignación de {row[1]} ({row[2]}) de sucursal {row[0]}")
     return {"status": "ok"}
 
 
@@ -1009,8 +691,6 @@ def get_finnegans_categorias_asiento():
 # ═══════════════════════════════════════════════════════
 # CRUD CONFIGURACIÓN AVANZADA
 # ═══════════════════════════════════════════════════════
-
-
 
 class ConfigItem(BaseModel):
     id_ref: str
@@ -1320,86 +1000,12 @@ def get_asientos(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/compras")
-def get_compras(
-    empresa: Optional[str] = None,
-    fecha_desde: Optional[str] = None,
-    fecha_hasta: Optional[str] = None
-):
-    try:
-        conn_supa = get_supabase()
-        cur_supa = conn_supa.cursor()
-        
-        # Obtener centros de costo
-        cur_supa.execute("SELECT centro_id FROM cert_config_centros_costo WHERE sucursal = %s", (empresa,))
-        centros = [r[0] for r in cur_supa.fetchall()]
-        
-        # Obtener ids de configuracion de compras
-        cur_supa.execute("SELECT tipo_comprobante_id FROM cert_config_gastos_compras WHERE sucursal = %s", (empresa,))
-        compras_ids = [r[0] for r in cur_supa.fetchall()]
-        
-        cur_supa.close()
-        conn_supa.close()
-        
-        if not centros or not compras_ids:
-            return []
-            
-        conn = get_aurora()
-        cur = conn.cursor()
-        
-        compras_id_str = ",".join(f"'{c}'" for c in compras_ids)
-        cur.execute(f"SELECT nombre FROM ceesa_faftransaccionsubtipo WHERE transaccionsubtipoid IN ({compras_id_str})")
-        compras_nombres = [r[0] for r in cur.fetchall()]
-        
-        if not compras_nombres:
-            cur.close()
-            conn.close()
-            return []
-            
-        compras_nombres_str = ",".join(f"'{n}'" for n in compras_nombres)
-        ccs_str = ",".join(f"'{c}'" for c in centros)
-        
-        sql = f"""
-        SELECT
-            CAST(fecha AS TIMESTAMP) AS fecha,
-            tipodocumento AS categoria,
-            proveedor,
-            numerodocumento AS comprobante,
-            CAST(importeimputado AS NUMERIC) AS importe,
-            centrocosto AS sucursal
-        FROM ceesa_cee_gastos_cc
-        WHERE centrocostoid IN ({ccs_str})
-          AND tipodocumento IN ({compras_nombres_str})
-        """
-        
-        params = []
-        if fecha_desde:
-            sql += " AND CAST(fecha AS TIMESTAMP) >= %s"
-            params.append(fecha_desde)
-        if fecha_hasta:
-            sql += " AND CAST(fecha AS TIMESTAMP) <= %s"
-            params.append(fecha_hasta)
-            
-        sql += " ORDER BY CAST(fecha AS TIMESTAMP) DESC LIMIT 1000"
-        
-        cur.execute(sql, tuple(params))
-        cols = [desc[0].lower() for desc in cur.description]
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
-        
-        return [dict(zip(cols, row)) for row in rows]
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.get("/api/rrhh")
 def get_rrhh(
     empresa: Optional[str] = None,
     periodo: Optional[str] = None
 ):
     try:
-        periodo = normalize_periodo(periodo)
         cerrado = check_informe_cerrado(empresa, periodo, 'rrhh')
         if cerrado is not None: return cerrado
         empty_response = {
@@ -1801,8 +1407,8 @@ def get_mis_unidades(user=Depends(get_current_user)):
     user_id = user.get("id") or user.get("sub")
     rol = user.get("rol")
     
-    # Si es admin o consulta_general, puede ver todas las sucursales
-    if rol in ["admin", "consulta_general"]:
+    # Si es admin, puede ver todas las sucursales (leemos de Aurora o simplemente devolvemos las de Aurora)
+    if rol == "admin":
         try:
             conn = get_aurora()
             cur = conn.cursor()
@@ -2437,7 +2043,7 @@ def get_indicadores(user=Depends(get_current_user)):
                     'metadata': record,
                     'max_importe': imp,
                     'max_gravado': gravado,
-                    'items': [],
+                    'items': {},
                 }
             
             if imp > comprobantes[num_doc]['max_importe']:
@@ -2446,31 +2052,30 @@ def get_indicadores(user=Depends(get_current_user)):
                 comprobantes[num_doc]['max_gravado'] = gravado
             
             if producto and producto != 'NULL':
-                cant_raw = record.get('itemcantidad', '0') or '0'
-                precio_raw = record.get('itemprecio', '0') or '0'
-                itemimp_raw = record.get('itemimporte', '0') or '0'
-                try:
-                    cant = float(str(cant_raw).replace(',', '.'))
-                except:
-                    cant = 1.0
-                try:
-                    precio = float(str(precio_raw).replace(',', '.'))
-                except:
-                    precio = 0.0
-                try:
-                    itemimp = float(str(itemimp_raw).replace(',', '.'))
-                except:
-                    itemimp = 0.0
-                
-                item_data = {
-                    'Producto': producto,
-                    'Cantidad': cant,
-                    'Precio': precio,
-                    'Importe': itemimp,
-                    'Unidad': record.get('unidadnombre', '')
-                }
-                if item_data not in comprobantes[num_doc]['items']:
-                    comprobantes[num_doc]['items'].append(item_data)
+                if producto not in comprobantes[num_doc]['items']:
+                    cant_raw = record.get('itemcantidad', '0') or '0'
+                    precio_raw = record.get('itemprecio', '0') or '0'
+                    itemimp_raw = record.get('itemimporte', '0') or '0'
+                    try:
+                        cant = float(str(cant_raw).replace(',', '.'))
+                    except:
+                        cant = 1.0
+                    try:
+                        precio = float(str(precio_raw).replace(',', '.'))
+                    except:
+                        precio = 0.0
+                    try:
+                        itemimp = float(str(itemimp_raw).replace(',', '.'))
+                    except:
+                        itemimp = 0.0
+                    
+                    comprobantes[num_doc]['items'][producto] = {
+                        'Producto': producto,
+                        'Cantidad': cant,
+                        'Precio': precio,
+                        'Importe': itemimp,
+                        'Unidad': record.get('unidadnombre', '')
+                    }
         
         # ─── PASO 2: Construir registros finales ───
         records = []
@@ -2499,7 +2104,7 @@ def get_indicadores(user=Depends(get_current_user)):
                 return str(val).strip()
             
             desc = clean(meta.get('descripcion', ''))
-            items_list = data['items']
+            items_list = list(data['items'].values())
             
             total_val = data['max_importe']
             gravado_val = data['max_gravado']
@@ -2522,80 +2127,7 @@ def get_indicadores(user=Depends(get_current_user)):
             }
             records.append(record)
         
-
-        # --- PASO 2.5: Añadir Ajustes Excel (Ingresos) ---
-        try:
-            conn_supa = get_supabase()
-            cur_supa = conn_supa.cursor()
-            
-            # Construir la query base
-            query_ajustes = "SELECT id, tipo_movimiento, categoria, fecha_carga, concepto, observaciones, importe, unidad_negocio, periodo FROM cert_ajustes_excel WHERE tipo_movimiento = 'INGRESO'"
-            params_ajustes = []
-            
-            if user.get("rol") != "admin" and unidades_permitidas:
-                # Filtrar por unidades permitidas
-                placeholders = ','.join(['%s'] * len(unidades_permitidas))
-                query_ajustes += f" AND unidad_negocio IN ({placeholders})"
-                params_ajustes.extend(list(unidades_permitidas))
-            
-            cur_supa.execute(query_ajustes, tuple(params_ajustes))
-            rows_ajustes = cur_supa.fetchall()
-            
-            for r in rows_ajustes:
-                id_ajuste = r[0]
-                categoria = r[2] or "Ajuste Manual"
-                periodo_val = str(r[8] or "")
-                
-                # Use the first day of the periodo so the frontend extracts the correct period
-                if periodo_val and "/" in periodo_val:
-                    fecha = f"01/{periodo_val}"
-                else:
-                    fecha = str(r[3]) if r[3] else ""
-                    if fecha and len(fecha) >= 10:
-                        try:
-                            # Ya tenemos from datetime import datetime importado a nivel global
-                            fecha = datetime.strptime(fecha[:10], '%Y-%m-%d').strftime('%d/%m/%Y')
-                        except:
-                            pass
-                            
-                concepto_str = f"[{r[7]}] {r[4]}"
-                observaciones = r[5] or "-"
-                importe_val = float(r[6] or 0)
-                
-                record_ajuste = {
-                    'Fecha': fecha,
-                    'Comprobante': r[5] if r[5] else f"EXCEL-{id_ajuste}",
-                    'id_ajuste': id_ajuste,
-                    'Empresa': r[7],  # unidad_negocio
-                    'Cliente': '-',
-                    'Descripción': r[4], # concepto
-                    'Solicitante': r[7], # unidad_negocio
-                    'EstadoAutorizacion': 'Ajuste',
-                    'Total Bruto': str(importe_val),
-                    'Neto Gravado': str(importe_val),
-                    'IVA': '0.0',
-                    'UnidadNegocio': r[7],
-                    'Concepto': r[4], # concepto
-                    'origen': 'AJUSTE EXCEL',
-                    'items': [{
-                        'id': f'item-{id_ajuste}',
-                        'producto': r[4],
-                        'descripcion': r[4],
-                        'precio': importe_val,
-                        'cantidad': 1,
-                        'total': importe_val,
-                        'Importe': importe_val
-                    }]
-                }
-                records.append(record_ajuste)
-            
-            cur_supa.close()
-            conn_supa.close()
-        except Exception as e:
-            print(f"Error consultando Ajustes Excel en indicadores: {e}")
-
         if not records:
-
             raise Exception("No data found en Aurora")
             
         final_columns = ['Fecha', 'Comprobante', 'Empresa', 'Cliente', 'Descripción', 'Solicitante', 'EstadoAutorizacion', 'Neto Gravado', 'IVA', 'Total Bruto', 'UnidadNegocio', 'Concepto']
@@ -2653,7 +2185,6 @@ class PresentarPeriodoReq(BaseModel):
 def presentar_periodo(req: PresentarPeriodoReq, current_user = Depends(get_current_user)):
     """Toma la info en vivo y la guarda en las tablas de snapshot."""
     try:
-        req.periodo = normalize_periodo(req.periodo)
         # Calcular en vivo usando la misma logica (reutilizamos la que usaremos para get_informe_mensual)
         informe = get_informe_mensual_calculo_vivo(req.unidad_negocio, req.periodo)
         
@@ -2696,7 +2227,6 @@ def reabrir_periodo(req: ReabrirPeriodoReq, current_user = Depends(get_current_u
     if current_user.get("role", "admin") != "admin":
          raise HTTPException(status_code=403, detail="Solo un administrador puede reabrir periodos presentados.")
     try:
-        req.periodo = normalize_periodo(req.periodo)
         conn_supa = get_supabase()
         cur_supa = conn_supa.cursor()
         
@@ -2719,7 +2249,6 @@ def reabrir_periodo(req: ReabrirPeriodoReq, current_user = Depends(get_current_u
         raise HTTPException(status_code=500, detail=str(e))
 
 def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
-    periodo = normalize_periodo(periodo)
     conn_supa = get_supabase()
     cur_supa = conn_supa.cursor()
     
@@ -2762,7 +2291,7 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
         item = {
             "origen": "EXCEL",
             "tipo_movimiento": ex[0],
-            "categoria": "Ingresos adicionales" if ex[0].upper() == 'INGRESO' else "Egresos adicionales",
+            "categoria": "Ajuste Excel",
             "fecha": str(ex[1]),
             "concepto": ex[2],
             "comprobante": "EXCEL",
@@ -2945,7 +2474,7 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
                     gastos.append({
                         "origen": "FINNEGANS",
                         "tipo_movimiento": "EGRESO",
-                        "categoria": "Costos",  # O r[1] si queremos que sea el tipo de documento
+                        "categoria": "Gastos de Compra",  # O r[1] si queremos que sea el tipo de documento
                         "fecha": str(r[0]) if r[0] else None,
                         "concepto": f"{r[1]} - {r[2] or 'Sin Proveedor'}",
                         "comprobante": r[3] or "S/N",
@@ -2955,74 +2484,30 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
         except Exception as e:
             print("Error Gastos Compras:", e)
 
-        # === 3. Consumos de Inventario (Consolidado) ===
-        try:
-            cur.execute("""
-                SELECT 
-                    COUNT(*),
-                    SUM(CASE WHEN importevalorizadoconsumoprod IS NOT NULL AND importevalorizadoconsumoprod != 'NULL' AND importevalorizadoconsumoprod != '' 
-                             THEN CAST(importevalorizadoconsumoprod AS DOUBLE PRECISION) 
-                             ELSE 0.0 END)
-                FROM analisis_de_consumos_de_produccion
-                WHERE (empresa = %s OR depositoorigenconsumoprod ILIKE %s OR depositoorigenconsumoprod = %s)
-                  AND SUBSTRING(fecha, 1, 7) = %s
-            """, (unidad_negocio, f"%{unidad_negocio}%", unidad_negocio, periodo))
-            row_c = cur.fetchone()
-            if row_c and (row_c[0] or 0) > 0:
-                total_consumos = float(row_c[1] or 0.0)
-                y_part, m_part = periodo.split('-')
-                comprobante_label = f"Consumo de Insumos ({m_part}/{y_part})"
-                gastos.append({
-                    "origen": "CONSUMOS",
-                    "tipo_movimiento": "EGRESO",
-                    "categoria": "Materiales",
-                    "fecha": f"{periodo}-01",
-                    "concepto": "Consumo de Insumos de Producción / Inventario (Soporte)",
-                    "comprobante": comprobante_label,
-                    "proveedor": "Consumos de Producción",
-                    "importe": total_consumos
-                })
-        except Exception as e:
-            print("Error calculando total consumos consolidado:", e)
-
+        
     cur.close()
     conn.close()
     
     try:
         conn_supa = get_supabase()
         cur_supa = conn_supa.cursor()
-        
-        # Convertir periodo YYYY-MM a MM/YYYY para consultar cert_ajustes_excel
-        periodo_mmyyyy = periodo
-        if "-" in periodo:
-            y_part, m_part = periodo.split('-')
-            periodo_mmyyyy = f"{m_part}/{y_part}"
-            
         if unidad_negocio == "Todas":
-            cur_supa.execute("SELECT id, tipo_movimiento, categoria, fecha_carga, concepto, observaciones, importe, unidad_negocio FROM cert_ajustes_excel WHERE periodo = %s", (periodo_mmyyyy,))
+            cur_supa.execute("SELECT tipo_movimiento, categoria, fecha_carga, concepto, observaciones, importe, unidad_negocio FROM cert_ajustes_excel WHERE periodo = %s", (periodo,))
         else:
-            cur_supa.execute("SELECT id, tipo_movimiento, categoria, fecha_carga, concepto, observaciones, importe, unidad_negocio FROM cert_ajustes_excel WHERE unidad_negocio = %s AND periodo = %s", (unidad_negocio, periodo_mmyyyy))
+            cur_supa.execute("SELECT tipo_movimiento, categoria, fecha_carga, concepto, observaciones, importe, unidad_negocio FROM cert_ajustes_excel WHERE unidad_negocio = %s AND periodo = %s", (unidad_negocio, periodo))
             
         rows_ajustes = cur_supa.fetchall()
         for r in rows_ajustes:
-            db_cat = r[2] or "Ajuste Manual"
-            if db_cat == "Ajuste Excel":
-                categoria_label = "Ingresos adicionales" if r[1] == "INGRESO" else "Egresos adicionales"
-            elif db_cat == "Gastos de Compra":
-                categoria_label = "Costos"
-            else:
-                categoria_label = db_cat
             item = {
                 "origen": "AJUSTE EXCEL",
-                "id_ajuste": r[0],
-                "tipo_movimiento": "INGRESO" if r[1] == "INGRESO" else "EGRESO",
-                "categoria": categoria_label,
-                "fecha": str(r[3]) if r[3] else None,
-                "concepto": f"[{r[7]}] {r[4]}",
-                "comprobante": r[5] or "-",
-                "importe": float(r[6] or 0)
+                "tipo_movimiento": "INGRESO" if r[0] == "INGRESO" else "EGRESO",
+                "categoria": r[1] or "Ajuste Manual",
+                "fecha": str(r[2]) if r[2] else None,
+                "concepto": f"[{r[6]}] {r[3]}",
+                "comprobante": r[4] or "-",
+                "importe": float(r[5] or 0)
             }
-            if r[1] == "INGRESO":
+            if r[0] == "INGRESO":
                 ingresos.append(item)
             else:
                 gastos.append(item)
@@ -3030,69 +2515,15 @@ def get_informe_mensual_calculo_vivo(unidad_negocio: str, periodo: str):
         conn_supa.close()
     except Exception as e:
         print("Error Ajustes Excel:", e)
-        
-    # === 4. Incorporar Sueldos de RRHH ===
-    try:
-        rrhh_data = get_rrhh(empresa=unidad_negocio, periodo=periodo)
-        costo_empresa = rrhh_data.get("totales", {}).get("costo_empresa", 0.0)
-        if costo_empresa > 0:
-            gastos.append({
-                "origen": "RRHH",
-                "tipo_movimiento": "EGRESO",
-                "categoria": "Sueldos y Cargas Sociales",
-                "fecha": f"{periodo}-28",
-                "concepto": "Liquidación de Sueldos - RRHH",
-                "comprobante": f"RRHH-{periodo}",
-                "proveedor": "Recursos Humanos",
-                "importe": float(costo_empresa)
-            })
-    except Exception as e:
-        print("Error al incorporar sueldos de RRHH en calculo vivo:", e)
-        
-    # === 5. Incorporar Certificados de Obras (en Ingresos) ===
-    try:
-        obras = get_certificados_obras_live(unidad_negocio, periodo)
-        for ob in obras:
-            if ob.get("estado") == "CONFIRMADO":
-                # Sumar el total de la columna parcial_presente de todos los ítems del certificado
-                total_parcial_presente = sum(float(item.get("parcial_presente") or 0.0) for item in ob.get("items", []))
-                if total_parcial_presente > 0:
-                    ingresos.append({
-                        "origen": "OBRAS",
-                        "tipo_movimiento": "INGRESO",
-                        "categoria": "Certificados de Obras",
-                        "fecha": ob.get("fecha_certificado")[:10] if ob.get("fecha_certificado") else f"{periodo}-01",
-                        "concepto": f"Certificado de Obra: {ob.get('obra') or 'Sin nombre'}",
-                        "comprobante": f"Certificado #{ob.get('numero_interno')}",
-                        "proveedor": ob.get("comitente") or "-",
-                        "importe": total_parcial_presente
-                    })
-    except Exception as e:
-        print("Error al incorporar certificados de obras en calculo vivo:", e)
     
     return {
         "ingresos": ingresos,
         "gastos": gastos
     }
 
-def get_informe_mensual_ingresos(unidad_negocio: str, periodo: str):
-    data = get_informe_mensual_calculo_vivo(unidad_negocio, periodo)
-    return data["ingresos"]
-
-def get_informe_totales(unidad_negocio: str, periodo: str):
-    data = get_informe_mensual_calculo_vivo(unidad_negocio, periodo)
-    ingresos = data["ingresos"]
-    gastos = data["gastos"]
-    return {
-        "ingresos": sum(i["importe"] for i in ingresos),
-        "gastos": sum(g["importe"] for g in gastos),
-        "neto": sum(i["importe"] for i in ingresos) - sum(g["importe"] for g in gastos)
-    }
-
 @app.get("/api/informes/mensual")
 def get_informe_mensual(unidad_negocio: str, periodo: str, current_user = Depends(get_current_user)):
     try:
-        periodo = normalize_periodo(periodo)
         conn_supa = get_supabase()
         cur_supa = conn_supa.cursor()
         
@@ -3113,17 +2544,10 @@ def get_informe_mensual(unidad_negocio: str, periodo: str, current_user = Depend
             ingresos = []
             gastos = []
             for r in rows:
-                db_cat = r[2] or "Ajuste Manual"
-                if db_cat == "Ajuste Excel":
-                    categoria_label = "Ingresos adicionales" if r[1] == "INGRESO" else "Egresos adicionales"
-                elif db_cat == "Gastos de Compra":
-                    categoria_label = "Costos"
-                else:
-                    categoria_label = db_cat
                 item = {
                     "origen": r[0],
                     "tipo_movimiento": r[1],
-                    "categoria": categoria_label,
+                    "categoria": r[2],
                     "fecha": str(r[3]) if r[3] else None,
                     "concepto": r[4],
                     "comprobante": r[5],
@@ -3169,96 +2593,6 @@ def get_informe_mensual(unidad_negocio: str, periodo: str, current_user = Depend
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/informes/consolidado")
-def get_informes_consolidado(periodo: str, current_user = Depends(get_current_user)):
-    try:
-        user_id = current_user.get("id") or current_user.get("sub")
-        rol = current_user.get("rol")
-        
-        unidades = []
-        if rol in ["admin", "consulta_general"]:
-            conn = get_aurora()
-            cur = conn.cursor()
-            cur.execute("""
-                SELECT TRIM(COALESCE(nombreempresa, '')) as sucursal
-                FROM ceesa_cee_sucursales
-                WHERE nombreempresa IS NOT NULL AND TRIM(COALESCE(nombreempresa, '')) != ''
-                GROUP BY TRIM(COALESCE(nombreempresa, ''))
-                ORDER BY sucursal
-            """)
-            unidades = [r[0] for r in cur.fetchall() if r[0]]
-            cur.close()
-            conn.close()
-        else:
-            conn_supa = get_supabase()
-            cur = conn_supa.cursor()
-            cur.execute("SELECT unidad_negocio FROM cert_usuarios_unidades WHERE usuario_id = %s", (user_id,))
-            unidades = [r[0] for r in cur.fetchall() if r[0]]
-            cur.close()
-            conn_supa.close()
-
-        # Filtrar unidades que esten en estado CERRADO o PRESENTADO
-        conn_supa = get_supabase()
-        cur_supa = conn_supa.cursor()
-        cur_supa.execute("""
-            SELECT unidad_negocio 
-            FROM cert_informes_proyecto 
-            WHERE periodo = %s AND estado IN ('CERRADO', 'PRESENTADO')
-        """, (periodo,))
-        unidades_cerradas = {r[0] for r in cur_supa.fetchall() if r[0]}
-        cur_supa.close()
-        conn_supa.close()
-        
-        unidades = [u for u in unidades if u in unidades_cerradas]
-
-        consolidado = {
-            "periodo": periodo,
-            "totales": {"ingresos": 0, "gastos": 0, "neto": 0},
-            "por_unidad": [],
-            "desglose_categorias": {}
-        }
-        
-        for u in unidades:
-            try:
-                data = get_informe_mensual(u, periodo, current_user)
-                tot_i = data["totales"]["ingresos"]
-                tot_g = data["totales"]["gastos"]
-                neto = tot_i - tot_g
-                
-                consolidado["totales"]["ingresos"] += tot_i
-                consolidado["totales"]["gastos"] += tot_g
-                consolidado["totales"]["neto"] += neto
-                
-                consolidado["por_unidad"].append({
-                    "unidad_negocio": u,
-                    "ingresos": tot_i,
-                    "gastos": tot_g,
-                    "neto": neto
-                })
-                
-                for item in data["ingresos"]:
-                    cat = item.get("categoria", "Sin categoría")
-                    if cat not in consolidado["desglose_categorias"]:
-                        consolidado["desglose_categorias"][cat] = {"ingresos": 0, "gastos": 0}
-                    consolidado["desglose_categorias"][cat]["ingresos"] += item.get("importe", 0)
-                
-                for item in data["gastos"]:
-                    cat = item.get("categoria", "Sin categoría")
-                    if cat not in consolidado["desglose_categorias"]:
-                        consolidado["desglose_categorias"][cat] = {"ingresos": 0, "gastos": 0}
-                    consolidado["desglose_categorias"][cat]["gastos"] += item.get("importe", 0)
-                        
-            except Exception as e:
-                print(f"Error procesando unidad {u} para consolidado: {e}")
-                
-        cats_list = [{"categoria": k, "ingresos": v["ingresos"], "gastos": v["gastos"], "neto": v["ingresos"] - v["gastos"]} for k, v in consolidado["desglose_categorias"].items()]
-        cats_list.sort(key=lambda x: abs(x["neto"]), reverse=True)
-        consolidado["desglose_categorias"] = cats_list
-        
-        return consolidado
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
 
 
 # ==========================================
@@ -3273,7 +2607,6 @@ class InformeAction(BaseModel):
 @app.get("/api/informes/estado")
 def get_informe_estado(unidad_negocio: str, periodo: str):
     try:
-        periodo = normalize_periodo(periodo)
         conn = get_supabase()
         cur = conn.cursor()
         cur.execute("""
@@ -3305,7 +2638,6 @@ def get_informe_estado(unidad_negocio: str, periodo: str):
 @app.post("/api/informes/iniciar")
 def iniciar_informe(action: InformeAction):
     try:
-        action.periodo = normalize_periodo(action.periodo)
         conn = get_supabase()
         cur = conn.cursor()
         cur.execute("""
@@ -3323,45 +2655,19 @@ def iniciar_informe(action: InformeAction):
 @app.post("/api/informes/cerrar")
 def cerrar_informe(action: InformeAction):
     try:
-        action.periodo = normalize_periodo(action.periodo)
         # Extraer snapshot de todos los módulos!
-        # Usamos calculo vivo que ya incluye ingresos, gastos con RRHH, etc.
-        vivo_data = get_informe_mensual_calculo_vivo(action.unidad_negocio, action.periodo)
-        ingresos_data = vivo_data["ingresos"]
-        gastos_data = vivo_data["gastos"]
-        
+        ingresos_data = get_informe_mensual_ingresos(action.unidad_negocio, action.periodo)
         rrhh_data = get_rrhh(action.unidad_negocio, action.periodo)
+        gastos_data = get_gastos(action.unidad_negocio, action.periodo, action.periodo)
         asientos_data = get_asientos(action.unidad_negocio, action.periodo)
-        
-        # Obtener datos de nuevos módulos para el snapshot
-        try: consumos_data = get_consumos_inventarios_live(action.unidad_negocio, action.periodo)
-        except: consumos_data = []
-        
-        try: equipos_data = get_equipos_live(action.unidad_negocio, action.periodo)
-        except: equipos_data = []
-        
-        try: obras_data = get_certificados_obras_live(action.unidad_negocio, action.periodo)
-        except: obras_data = []
-        
-        try: transportes_data = get_transportes_live(action.unidad_negocio, action.periodo)
-        except: transportes_data = []
-        
-        totales_data = {
-            "ingresos": sum(i["importe"] for i in ingresos_data),
-            "gastos": sum(g["importe"] for g in gastos_data),
-            "neto": sum(i["importe"] for i in ingresos_data) - sum(g["importe"] for g in gastos_data)
-        }
+        totales_data = get_informe_totales(action.unidad_negocio, action.periodo)
 
         snapshot = {
             "ingresos": ingresos_data,
             "rrhh": rrhh_data,
             "gastos": gastos_data,
             "asientos": asientos_data,
-            "totales": totales_data,
-            "consumos": consumos_data,
-            "equipos": equipos_data,
-            "obras": obras_data,
-            "transportes": transportes_data
+            "totales": totales_data
         }
 
         import json
@@ -3383,26 +2689,6 @@ def cerrar_informe(action: InformeAction):
             conn.close()
             raise Exception("No se encontró el informe abierto. Primero inícielo.")
             
-        # También insertar en cert_cierres_mensuales y cert_cierres_detalle para retrocompatibilidad
-        # Borrar previo si existiera
-        cur.execute("SELECT id FROM cert_cierres_mensuales WHERE unidad_negocio = %s AND periodo = %s", (action.unidad_negocio, action.periodo))
-        old_cierre = cur.fetchone()
-        if old_cierre:
-            cur.execute("DELETE FROM cert_cierres_detalle WHERE cierre_id = %s", (old_cierre[0],))
-            cur.execute("DELETE FROM cert_cierres_mensuales WHERE id = %s", (old_cierre[0],))
-            
-        cur.execute(
-            "INSERT INTO cert_cierres_mensuales (unidad_negocio, periodo, usuario_cierre, fecha_cierre) VALUES (%s, %s, %s, NOW()) RETURNING id",
-            (action.unidad_negocio, action.periodo, action.usuario)
-        )
-        cierre_id = cur.fetchone()[0]
-        
-        for item in ingresos_data + gastos_data:
-            cur.execute(
-                "INSERT INTO cert_cierres_detalle (cierre_id, origen, tipo_movimiento, categoria, fecha, concepto, comprobante, proveedor, importe) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                (cierre_id, item["origen"], item["tipo_movimiento"], item["categoria"], item["fecha"] if item["fecha"] else None, item["concepto"], item["comprobante"], item.get("proveedor"), item["importe"])
-            )
-            
         conn.commit()
         cur.close()
         conn.close()
@@ -3415,7 +2701,6 @@ def cerrar_informe(action: InformeAction):
 @app.post("/api/informes/reabrir")
 def reabrir_informe(action: InformeAction):
     try:
-        action.periodo = normalize_periodo(action.periodo)
         # Aqui se podria verificar si el usuario es Admin.
         # Por ahora lo controlaremos en Frontend (solo Admin ve el boton).
         conn = get_supabase()
@@ -3428,15 +2713,6 @@ def reabrir_informe(action: InformeAction):
                 snapshot_data = NULL
             WHERE unidad_negocio = %s AND periodo = %s
         """, (action.unidad_negocio, action.periodo))
-        
-        # También borrar de cert_cierres_mensuales y cert_cierres_detalle
-        cur.execute("SELECT id FROM cert_cierres_mensuales WHERE unidad_negocio = %s AND periodo = %s", (action.unidad_negocio, action.periodo))
-        row = cur.fetchone()
-        if row:
-            cierre_id = row[0]
-            cur.execute("DELETE FROM cert_cierres_detalle WHERE cierre_id = %s", (cierre_id,))
-            cur.execute("DELETE FROM cert_cierres_mensuales WHERE id = %s", (cierre_id,))
-
         conn.commit()
         cur.close()
         conn.close()
@@ -3444,52 +2720,7 @@ def reabrir_informe(action: InformeAction):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.delete("/api/informes/eliminar")
-def eliminar_informe(unidad_negocio: str, periodo: str, current_user = Depends(get_current_user)):
-    try:
-        periodo = normalize_periodo(periodo)
-        conn = get_supabase()
-        cur = conn.cursor()
-        
-        # Verificar que el informe exista y esté ABIERTO
-        cur.execute("""
-            SELECT estado FROM cert_informes_proyecto 
-            WHERE unidad_negocio = %s AND periodo = %s
-        """, (unidad_negocio, periodo))
-        row = cur.fetchone()
-        if not row:
-            cur.close()
-            conn.close()
-            raise HTTPException(status_code=404, detail="El informe no existe.")
-            
-        estado = row[0]
-        if estado != 'ABIERTO':
-            cur.close()
-            conn.close()
-            raise HTTPException(status_code=400, detail="Solo se pueden eliminar informes en estado ABIERTO.")
-            
-        # Eliminar el informe
-        cur.execute("""
-            DELETE FROM cert_informes_proyecto 
-            WHERE unidad_negocio = %s AND periodo = %s
-        """, (unidad_negocio, periodo))
-        
-        # Eliminar cierres del mismo periodo y unidad por precaución
-        cur.execute("SELECT id FROM cert_cierres_mensuales WHERE unidad_negocio = %s AND periodo = %s", (unidad_negocio, periodo))
-        row_c = cur.fetchone()
-        if row_c:
-            cierre_id = row_c[0]
-            cur.execute("DELETE FROM cert_cierres_detalle WHERE cierre_id = %s", (cierre_id,))
-            cur.execute("DELETE FROM cert_cierres_mensuales WHERE id = %s", (cierre_id,))
 
-        conn.commit()
-        cur.close()
-        conn.close()
-        return {"message": "Informe eliminado correctamente"}
-    except Exception as e:
-        if isinstance(e, HTTPException):
-            raise e
-        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/informes/lista")
 def get_informes_lista(user=Depends(get_current_user)):
@@ -3499,7 +2730,7 @@ def get_informes_lista(user=Depends(get_current_user)):
         
         # Filtramos por las unidades a las que tiene acceso el usuario
         unidades_permitidas = set()
-        if user.get("rol") not in ["admin", "consulta_general"]:
+        if user.get("rol") != "admin":
             cur.execute("SELECT unidad_negocio FROM cert_usuarios_unidades WHERE usuario_id = %s", (user.get('id') or user.get('sub'),))
             unidades_permitidas = {r[0].strip() for r in cur.fetchall()}
             if not unidades_permitidas:
@@ -3507,7 +2738,7 @@ def get_informes_lista(user=Depends(get_current_user)):
                 conn.close()
                 return []
                 
-        if user.get("rol") in ["admin", "consulta_general"]:
+        if user.get("rol") == "admin":
             cur.execute("SELECT id, unidad_negocio, periodo, estado, usuario_apertura FROM cert_informes_proyecto ORDER BY periodo DESC")
         else:
             cur.execute("SELECT id, unidad_negocio, periodo, estado, usuario_apertura FROM cert_informes_proyecto WHERE unidad_negocio IN %s ORDER BY periodo DESC", (tuple(unidades_permitidas),))
@@ -3528,1215 +2759,3 @@ def get_informes_lista(user=Depends(get_current_user)):
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/respaldos")
-def listar_respaldos(tipo_documento: str, unidad_negocio: str, periodo: str, current_user = Depends(get_current_user)):
-    periodo = normalize_periodo(periodo)
-    conn = get_supabase()
-    cur = conn.cursor()
-    try:
-        cur.execute("""
-            SELECT id, nombre_archivo, tipo_mime, usuario_carga, fecha_carga
-            FROM cert_respaldos
-            WHERE tipo_documento = %s AND unidad_negocio = %s AND periodo = %s
-            ORDER BY fecha_carga DESC
-        """, (tipo_documento, unidad_negocio, periodo))
-        rows = cur.fetchall()
-        result = []
-        for r in rows:
-            result.append({
-                "id": r[0],
-                "nombre_archivo": r[1],
-                "tipo_mime": r[2],
-                "usuario_carga": r[3],
-                "fecha_carga": str(r[4])
-            })
-        return result
-    finally:
-        cur.close()
-        conn.close()
-
-@app.post("/api/respaldos/upload")
-async def upload_respaldo(
-    tipo_documento: str = Form(...),
-    unidad_negocio: str = Form(...),
-    periodo: str = Form(...),
-    file: UploadFile = File(...),
-    current_user = Depends(get_current_user)
-):
-    periodo = normalize_periodo(periodo)
-    import base64
-    contents = await file.read()
-    encoded = base64.b64encode(contents).decode("utf-8")
-    
-    conn = get_supabase()
-    cur = conn.cursor()
-    try:
-        cur.execute("""
-            INSERT INTO cert_respaldos (tipo_documento, unidad_negocio, periodo, nombre_archivo, tipo_mime, contenido, usuario_carga)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, (tipo_documento, unidad_negocio, periodo, file.filename, file.content_type, encoded, current_user.get("email", "unknown")))
-        conn.commit()
-    finally:
-        cur.close()
-        conn.close()
-    return {"status": "ok", "message": "Archivo adjunto guardado correctamente"}
-
-@app.get("/api/respaldos/descargar/{id}")
-def descargar_respaldo(id: int, current_user = Depends(get_current_user)):
-    conn = get_supabase()
-    cur = conn.cursor()
-    try:
-        cur.execute("SELECT nombre_archivo, tipo_mime, contenido FROM cert_respaldos WHERE id = %s", (id,))
-        row = cur.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Archivo no encontrado")
-        nombre, mime, encoded = row
-        import base64
-        from fastapi import Response
-        decoded = base64.b64decode(encoded)
-        headers = {
-            "Content-Disposition": f"attachment; filename={nombre}"
-        }
-        return Response(content=decoded, media_type=mime, headers=headers)
-    finally:
-        cur.close()
-        conn.close()
-
-@app.delete("/api/respaldos/{id}")
-def eliminar_respaldo(id: int, current_user = Depends(get_current_user)):
-    conn = get_supabase()
-    cur = conn.cursor()
-    try:
-        cur.execute("DELETE FROM cert_respaldos WHERE id = %s", (id,))
-        conn.commit()
-    finally:
-        cur.close()
-        conn.close()
-    return {"status": "ok", "message": "Archivo adjunto eliminado"}
-
-# ═══════════════════════════════════════════════════════
-# NUEVOS MÓDULOS: CONSUMOS, EQUIPOS Y OBRAS
-# ═══════════════════════════════════════════════════════
-
-def get_consumos_inventarios_live(unidad_negocio: str, periodo: str):
-    periodo = normalize_periodo(periodo)
-    conn = get_aurora()
-    cur = conn.cursor()
-    try:
-        cur.execute("""
-            SELECT 
-                fecha, 
-                numerocomprobante, 
-                productoconsumoprod, 
-                cantidadconsumoprod, 
-                unidadconsumoprod, 
-                preciounitvalorizadoconsumoprod, 
-                importevalorizadoconsumoprod,
-                ordendeproduccion,
-                depositoorigenconsumoprod,
-                empresa
-            FROM analisis_de_consumos_de_produccion
-            WHERE (empresa = %s OR depositoorigenconsumoprod ILIKE %s OR depositoorigenconsumoprod = %s)
-              AND SUBSTRING(fecha, 1, 7) = %s
-            ORDER BY fecha DESC
-        """, (unidad_negocio, f"%{unidad_negocio}%", unidad_negocio, periodo))
-        rows = cur.fetchall()
-        
-        result = []
-        for r in rows:
-            raw_precio = r[5]
-            raw_importe = r[6]
-            
-            precio = 0.0
-            if raw_precio and raw_precio != 'NULL' and raw_precio != '':
-                try: precio = float(raw_precio)
-                except: pass
-                
-            importe = 0.0
-            if raw_importe and raw_importe != 'NULL' and raw_importe != '':
-                try: importe = float(raw_importe)
-                except: pass
-                
-            result.append({
-                "fecha": str(r[0])[:10] if r[0] else "",
-                "comprobante": r[1] or "",
-                "insumo": r[2] or "",
-                "cantidad": float(r[3] or 0.0),
-                "unidad": r[4] or "",
-                "precio_unitario": precio,
-                "total": importe,
-                "orden_produccion": r[7] or "",
-                "deposito": r[8] or "",
-                "sucursal": r[9] or ""
-            })
-        return result
-    finally:
-        cur.close()
-        conn.close()
-
-@app.get("/api/consumos-inventarios")
-def get_consumos_inventarios(unidad_negocio: str, periodo: str, current_user = Depends(get_current_user)):
-    periodo = normalize_periodo(periodo)
-    cerrado = check_informe_cerrado(unidad_negocio, periodo, 'consumos')
-    if cerrado is not None:
-        return cerrado
-    try:
-        return get_consumos_inventarios_live(unidad_negocio, periodo)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-def get_certificaciones_maquinas_new(unidad_negocio: str, periodo: str):
-    import urllib.request
-    import json
-    import calendar
-    import datetime
-    
-    periodo = normalize_periodo(periodo)
-    y, m = periodo.split('-')
-    y_int, m_int = int(y), int(m)
-    
-    # 1. Fetch configurations from local database overlapping with this period
-    # Period start and end dates
-    start_date = datetime.date(y_int, m_int, 1)
-    _, last_day = calendar.monthrange(y_int, m_int)
-    end_date = datetime.date(y_int, m_int, last_day)
-    
-    assigned_configs = []
-    try:
-        conn_local = get_supabase()
-        cur_local = conn_local.cursor()
-        cur_local.execute("""
-            SELECT id, sucursal, equipo_codigo, equipo_nombre, fecha_desde, fecha_hasta
-            FROM cert_config_equipos_asignados
-            WHERE fecha_desde <= %s AND (fecha_hasta IS NULL OR fecha_hasta >= %s)
-        """, (end_date, start_date))
-        rows = cur_local.fetchall()
-        cur_local.close()
-        conn_local.close()
-        for r in rows:
-            assigned_configs.append({
-                "id": r[0],
-                "sucursal": r[1],
-                "equipo_codigo": r[2],
-                "equipo_nombre": r[3],
-                "fecha_desde": r[4],
-                "fecha_hasta": r[5]
-            })
-    except Exception as db_err:
-        print("Error fetching cert_config_equipos_asignados:", db_err)
-        
-    # Maps equipo_nombre.lower().strip() -> configured sucursal
-    # (or mapping using code, we can check both name and code)
-    name_to_config = {}
-    code_to_config = {}
-    
-    for cfg in assigned_configs:
-        eq_name = str(cfg["equipo_nombre"]).strip().lower()
-        eq_code = str(cfg["equipo_codigo"]).strip().lower()
-        name_to_config[eq_name] = cfg
-        code_to_config[eq_code] = cfg
-
-    # 2. Fetch original certifications from Supabase
-    url = f"https://naxjzquhdzyoxtjataaw.supabase.co/rest/v1/certificaciones_maquinas?anio=eq.{y_int}&mes=eq.{m_int}"
-    apikey = "sb_publishable_K3r5ogAi25D2ffI6-9cWLg_VJddbdxF"
-    
-    req = urllib.request.Request(
-        url,
-        headers={
-            "apikey": apikey,
-            "Authorization": f"Bearer {apikey}"
-        }
-    )
-    
-    supabase_data = []
-    try:
-        with urllib.request.urlopen(req, timeout=5) as response:
-            supabase_data = json.loads(response.read().decode('utf-8'))
-    except Exception as e:
-        print("Error fetching certificaciones_maquinas from Supabase:", e)
-
-    # Process and override original records
-    final_certs = []
-    processed_configs = set()
-    
-    un_req = unidad_negocio.strip().lower().replace("cee", "").replace("enriquez", "").strip()
-    
-    for r in supabase_data:
-        maquina = str(r.get('maquina') or '').strip()
-        maquina_clean = maquina.lower()
-        maquina_code_clean = maquina_clean.split('/')[0].strip()
-        
-        cfg = name_to_config.get(maquina_clean) or code_to_config.get(maquina_code_clean)
-        
-        if cfg:
-            r['unidad_de_negocio'] = cfg['sucursal']
-            r['observaciones'] = (r.get('observaciones') or '') + " [Asignación configurada]"
-            processed_configs.add(cfg['id'])
-            
-        final_certs.append(r)
-        
-    # Create virtual records for any configured assignments that were NOT in the Supabase response
-    for cfg in assigned_configs:
-        if cfg['id'] not in processed_configs:
-            virtual_row = {
-                "id": -200 - cfg['id'],
-                "maquina": cfg['equipo_nombre'],
-                "unidad_de_negocio": cfg['sucursal'],
-                "mes": m_int,
-                "anio": y_int,
-                "observaciones": "Asignación configurada (Sin certificación en Supabase)",
-                "created_at": datetime.datetime.now().isoformat()
-            }
-            final_certs.append(virtual_row)
-
-    # Now filter by requested unidad_negocio
-    filtered = []
-    for r in final_certs:
-        un_db = str(r.get('unidad_de_negocio') or '').strip().lower().replace("cee", "").replace("enriquez", "").strip()
-        if un_req == un_db or un_req in un_db or un_db in un_req:
-            filtered.append(r)
-            
-    if not filtered and not assigned_configs:
-        mock_1 = {
-            "id": -101,
-            "maquina": "AE0001/Autoelevador",
-            "mes": m_int,
-            "anio": y_int,
-            "observaciones": "Certificación de prueba (Autogenerada porque la tabla está vacía)",
-            "unidad_de_negocio": unidad_negocio,
-            "created_at": "2026-06-21T18:00:00Z"
-        }
-        mock_2 = {
-            "id": -102,
-            "maquina": "M0169/Camioneta",
-            "mes": m_int,
-            "anio": y_int,
-            "observaciones": "Certificación mensual de camioneta taller",
-            "unidad_de_negocio": unidad_negocio,
-            "created_at": "2026-06-21T18:00:00Z"
-        }
-        filtered = [mock_1, mock_2]
-        
-    return filtered
-
-def get_equipos_live(unidad_negocio: str, periodo: str):
-    periodo = normalize_periodo(periodo)
-    # 1. Planilla
-    conn_supa = get_supabase()
-    cur_supa = conn_supa.cursor()
-    cur_supa.execute("""
-        SELECT id, equipo, concepto, horas_kilometros, precio_unitario, total, usuario_carga, fecha_carga
-        FROM cert_equipos_planilla
-        WHERE unidad_negocio = %s AND periodo = %s
-    """, (unidad_negocio, periodo))
-    rows_supa = cur_supa.fetchall()
-    cur_supa.close()
-    conn_supa.close()
-    
-    result = []
-    for r in rows_supa:
-        result.append({
-            "id": r[0],
-            "origen": "PLANILLA",
-            "equipo": r[1],
-            "concepto": r[2],
-            "horas_kilometros": float(r[3] or 0),
-            "precio_unitario": float(r[4] or 0),
-            "total": float(r[5] or 0),
-            "usuario_carga": r[6],
-            "fecha_carga": str(r[7])
-        })
-        
-    # 2. Finnegans
-    y, m = periodo.split('-')
-    conn_a = get_aurora()
-    cur_a = conn_a.cursor()
-    try:
-        cur_a.execute("""
-            SELECT fecha, documento, comprobante, equiposolicitantenombre, productonombre, itemcantidad, itemprecio, itemimporte, conceptonombre, descripcion
-            FROM ceesa_cee_certificados_ventas_internas
-            WHERE empresa = 'Taller Central CEE Enriquez'
-              AND EXTRACT(YEAR FROM CAST(fecha AS TIMESTAMP)) = %s
-              AND EXTRACT(MONTH FROM CAST(fecha AS TIMESTAMP)) = %s
-        """, (int(y), int(m)))
-        rows_a = cur_a.fetchall()
-        
-        for r in rows_a:
-            eq_solicitante = r[3] or ""
-            eq_clean = eq_solicitante.strip().lower()
-            unit_clean = unidad_negocio.strip().lower()
-            
-            matches = (eq_clean == unit_clean or eq_clean in unit_clean or unit_clean in eq_clean)
-            if matches:
-                qty = 0.0
-                try: qty = float(r[5] or 0)
-                except: pass
-                
-                price = 0.0
-                try: price = float(r[6] or 0)
-                except: pass
-                
-                total = 0.0
-                try: total = float(r[7] or 0)
-                except: pass
-                
-                result.append({
-                    "id": None,
-                    "origen": "FINNEGANS",
-                    "equipo": r[4] or "Equipo sin nombre",
-                    "concepto": r[8] or r[9] or "Alquiler",
-                    "horas_kilometros": qty,
-                    "precio_unitario": price,
-                    "total": total,
-                    "documento": r[1] or "",
-                    "comprobante": r[2] or "",
-                    "fecha": str(r[0])[:10] if r[0] else ""
-                })
-    finally:
-        cur_a.close()
-        conn_a.close()
-        
-    # 3. Supabase Nuevo (certificaciones_maquinas)
-    un_req = unidad_negocio.strip().lower().replace("cee", "").replace("enriquez", "").strip()
-    supabase_certs = get_certificaciones_maquinas_new(unidad_negocio, periodo)
-    if supabase_certs:
-        import urllib.request
-        import json
-        
-        # Query remote tarifas_equipos
-        url_tariffs = "https://naxjzquhdzyoxtjataaw.supabase.co/rest/v1/tarifas_equipos"
-        apikey = "sb_publishable_K3r5ogAi25D2ffI6-9cWLg_VJddbdxF"
-        req_tariffs = urllib.request.Request(
-            url_tariffs,
-            headers={
-                "apikey": apikey,
-                "Authorization": f"Bearer {apikey}"
-            }
-        )
-        tariffs_data = []
-        try:
-            with urllib.request.urlopen(req_tariffs, timeout=5) as response:
-                tariffs_data = json.loads(response.read().decode('utf-8'))
-        except Exception as tariff_err:
-            print("Error fetching tarifas_equipos from Supabase:", tariff_err)
-            
-        tariffs_map = {}
-        for t in tariffs_data:
-            code = str(t.get('codigo_equipo') or '').strip().lower()
-            try:
-                tariffs_map[code] = float(t.get('tarifa_neta') or 0)
-            except:
-                pass
-
-        conn_a = get_aurora()
-        cur_a = conn_a.cursor()
-        try:
-            # Query work logs in Finnegans for this period
-            cur_a.execute("""
-                SELECT maquina, codigomaquina, fecha, horastrabajadas, descripciontrabajo, centrodecosto, maquinista
-                FROM ceesa_cee_equipos_trabajos_realizados
-                WHERE EXTRACT(YEAR FROM CAST(fecha AS TIMESTAMP)) = %s
-                  AND EXTRACT(MONTH FROM CAST(fecha AS TIMESTAMP)) = %s
-            """, (int(y), int(m)))
-            all_work_logs = cur_a.fetchall()
-            
-            # Query billing prices for this period
-            cur_a.execute("""
-                SELECT productonombre, itemprecio
-                FROM ceesa_cee_certificados_ventas_internas
-                WHERE empresa = 'Taller Central CEE Enriquez'
-                  AND EXTRACT(YEAR FROM CAST(fecha AS TIMESTAMP)) = %s
-                  AND EXTRACT(MONTH FROM CAST(fecha AS TIMESTAMP)) = %s
-            """, (int(y), int(m)))
-            all_prices = cur_a.fetchall()
-            
-            price_map = {}
-            for row in all_prices:
-                p_name = str(row[0] or "").strip().lower()
-                try:
-                    price_map[p_name] = float(row[1] or 0)
-                except:
-                    pass
-                    
-            for cert in supabase_certs:
-                maquina_cert = str(cert.get('maquina') or '').strip()
-                maquina_cert_clean = maquina_cert.split('/')[0].strip().lower()
-                
-                # Match work logs
-                total_hours = 0.0
-                trabajos_set = set()
-                maquinistas_set = set()
-                
-                for wl in all_work_logs:
-                    wl_maquina = str(wl[0] or '').strip().lower()
-                    wl_codigo = str(wl[1] or '').strip().lower()
-                    wl_cc = str(wl[5] or '').strip().lower()
-                    
-                    m_match = (maquina_cert_clean == wl_codigo or 
-                               maquina_cert_clean in wl_maquina or 
-                               wl_codigo in maquina_cert_clean)
-                    
-                    cc_clean = wl_cc.replace("cee", "").replace("enriquez", "").strip()
-                    cc_match = (un_req == cc_clean or un_req in cc_clean or cc_clean in un_req)
-                    
-                    if m_match and cc_match:
-                        try:
-                            total_hours += float(wl[3] or 0)
-                        except:
-                            pass
-                        if wl[4] and str(wl[4]).strip() and str(wl[4]).strip().lower() != 'null':
-                            trabajos_set.add(str(wl[4]).strip())
-                        if wl[6] and str(wl[6]).strip() and str(wl[6]).strip().lower() != 'null':
-                            maquinistas_set.add(str(wl[6]).strip())
-                            
-                # Hours logic: priority to Supabase certificacion
-                horas_calc = float(cert.get('horas_calculadas') or 0.0)
-                horas_min = float(cert.get('horas_minimas') or 0.0)
-                horas_cobrar_db = float(cert.get('horas_a_cobrar') or 0.0)
-                
-                if horas_cobrar_db > 0.0:
-                    horas_a_cobrar = horas_cobrar_db
-                elif max(horas_calc, horas_min) > 0.0:
-                    horas_a_cobrar = max(horas_calc, horas_min)
-                else:
-                    horas_a_cobrar = total_hours if total_hours > 0 else 8.0
-                    
-                # Determine unit price: lookup in tariffs_map first
-                price_unit = tariffs_map.get(maquina_cert_clean, 0.0)
-                
-                if price_unit == 0.0:
-                    for p_name, val in price_map.items():
-                        if maquina_cert_clean in p_name or p_name in maquina_cert.lower():
-                            price_unit = val
-                            break
-                            
-                # Fallback prices for testing
-                if price_unit == 0.0:
-                    if 'ae0001' in maquina_cert_clean:
-                        price_unit = 25000.0
-                    elif 'm0169' in maquina_cert_clean:
-                        price_unit = 15000.0
-                    elif 'md0001' in maquina_cert_clean:
-                        price_unit = 25859.78
-                    else:
-                        price_unit = 18000.0
-                        
-                result.append({
-                    "id": cert.get('id'),
-                    "origen": "SUPABASE_CERT",
-                    "equipo": maquina_cert,
-                    "concepto": cert.get('observaciones') or "Certificación Imputada",
-                    "horas_kilometros": horas_a_cobrar,
-                    "horas_registro": horas_calc if horas_calc > 0 else horas_a_cobrar,
-                    "horas_a_cobrar": horas_a_cobrar,
-                    "disponibilidad": float(cert.get('disponibilidad') or 0.0),
-                    "utilizacion": float(cert.get('utilizacion') or 0.0),
-                    "fecha_certificacion": cert.get('fecha_certificacion') or cert.get('created_at') or f"{y}-{m}-01",
-                    "precio_unitario": price_unit,
-                    "total": horas_a_cobrar * price_unit,
-                    "documento": "Supabase Cert",
-                    "comprobante": "",
-                    "fecha": f"{y}-{m}-01",
-                    "usuario_carga": "Supabase",
-                    "fecha_carga": cert.get('created_at') or "",
-                    "detalles_trabajos": list(trabajos_set),
-                    "operarios": list(maquinistas_set),
-                    "unidad_de_negocio": cert.get('unidad_de_negocio'),
-                    "mes": cert.get('mes'),
-                    "anio": cert.get('anio')
-                })
-        except Exception as e:
-            print("Error joining certificaciones_maquinas with Finnegans:", e)
-        finally:
-            cur_a.close()
-            conn_a.close()
-            
-    return result
-
-@app.get("/api/equipos")
-def get_equipos(unidad_negocio: str, periodo: str, current_user = Depends(get_current_user)):
-    periodo = normalize_periodo(periodo)
-    cerrado = check_informe_cerrado(unidad_negocio, periodo, 'equipos')
-    if cerrado is not None:
-        return cerrado
-    try:
-        return get_equipos_live(unidad_negocio, periodo)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/equipos/upload")
-async def upload_equipos(
-    file: UploadFile = File(...),
-    unidad_negocio: str = Form(...),
-    periodo: str = Form(...),
-    current_user = Depends(get_current_user)
-):
-    periodo = normalize_periodo(periodo)
-    import io
-    import openpyxl
-    contents = await file.read()
-    wb = openpyxl.load_workbook(filename=io.BytesIO(contents), data_only=True)
-    ws = wb.active
-    
-    header_row_idx = None
-    headers = []
-    
-    for row_idx, row in enumerate(ws.iter_rows(values_only=True), start=1):
-        if not row: continue
-        row_str = [str(c or "").strip().lower() for c in row]
-        if any("equipo" in s for s in row_str) and any("concepto" in s for s in row_str):
-            header_row_idx = row_idx
-            headers = row_str
-            break
-            
-    if header_row_idx is None:
-        headers = [str(c or "").strip().lower() for c in ws[1]]
-        header_row_idx = 1
-        
-    idx_equipo = -1
-    idx_concepto = -1
-    idx_horas = -1
-    idx_precio = -1
-    idx_total = -1
-    
-    for i, h in enumerate(headers):
-        if "equipo" in h: idx_equipo = i
-        elif "concepto" in h: idx_concepto = i
-        elif "hora" in h or "kilom" in h or "km" in h: idx_horas = i
-        elif "precio" in h or "unit" in h: idx_precio = i
-        elif "total" in h or "importe" in h: idx_total = i
-        
-    if idx_equipo == -1 or idx_concepto == -1:
-        raise HTTPException(status_code=400, detail="El archivo no tiene las columnas requeridas (Equipo, Concepto).")
-        
-    conn = get_supabase()
-    cur = conn.cursor()
-    user_email = current_user.get("email", "unknown")
-    
-    inserted_count = 0
-    errors = []
-    
-    for row_idx, row in enumerate(ws.iter_rows(min_row=header_row_idx + 1, values_only=True), start=header_row_idx + 1):
-        if not row or not any(row): continue
-        
-        equipo_val = str(row[idx_equipo] or "").strip()
-        concepto_val = str(row[idx_concepto] or "").strip()
-        
-        if not equipo_val: continue
-        
-        horas_val = 0.0
-        if idx_horas != -1 and row[idx_horas] is not None:
-            try: horas_val = float(row[idx_horas])
-            except: pass
-            
-        precio_val = 0.0
-        if idx_precio != -1 and row[idx_precio] is not None:
-            try: precio_val = float(row[idx_precio])
-            except: pass
-            
-        total_val = horas_val * precio_val
-        if idx_total != -1 and row[idx_total] is not None:
-            try: total_val = float(row[idx_total])
-            except: pass
-            
-        try:
-            cur.execute("""
-                INSERT INTO cert_equipos_planilla (unidad_negocio, periodo, equipo, concepto, horas_kilometros, precio_unitario, total, usuario_carga)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            """, (unidad_negocio, periodo, equipo_val, concepto_val, horas_val, precio_val, total_val, user_email))
-            inserted_count += 1
-        except Exception as e:
-            errors.append(f"Fila {row_idx}: {str(e)}")
-            
-    conn.commit()
-    cur.close()
-    conn.close()
-    
-    return {"status": "ok", "inserted": inserted_count, "errors": errors}
-
-@app.delete("/api/equipos/bulk")
-def delete_equipos_bulk(unidad_negocio: str, periodo: str, current_user = Depends(get_current_user)):
-    periodo = normalize_periodo(periodo)
-    conn = get_supabase()
-    cur = conn.cursor()
-    try:
-        cur.execute("DELETE FROM cert_equipos_planilla WHERE unidad_negocio = %s AND periodo = %s", (unidad_negocio, periodo))
-        conn.commit()
-        return {"status": "ok"}
-    except Exception as e:
-        conn.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        cur.close()
-        conn.close()
-
-@app.delete("/api/equipos/{id}")
-def delete_equipo_item(id: int, current_user = Depends(get_current_user)):
-    conn = get_supabase()
-    cur = conn.cursor()
-    try:
-        cur.execute("DELETE FROM cert_equipos_planilla WHERE id = %s", (id,))
-        conn.commit()
-        return {"status": "ok"}
-    except Exception as e:
-        conn.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        cur.close()
-        conn.close()
-
-
-def get_certificaciones_transporte_new(unidad_negocio: str, periodo: str):
-    import urllib.request
-    import json
-    import calendar
-    import datetime
-    
-    periodo = normalize_periodo(periodo)
-    y, m = periodo.split('-')
-    y_int, m_int = int(y), int(m)
-    
-    # Rango de fecha
-    start_date = f"{y_int:04d}-{m_int:02d}-01"
-    _, last_day = calendar.monthrange(y_int, m_int)
-    end_date = f"{y_int:04d}-{m_int:02d}-{last_day:02d}"
-    
-    url = f"https://naxjzquhdzyoxtjataaw.supabase.co/rest/v1/certificaciones_transporte?fecha=gte.{start_date}&fecha=lte.{end_date}"
-    apikey = "sb_publishable_K3r5ogAi25D2ffI6-9cWLg_VJddbdxF"
-    
-    req = urllib.request.Request(
-        url,
-        headers={
-            "apikey": apikey,
-            "Authorization": f"Bearer {apikey}"
-        }
-    )
-    
-    supabase_data = []
-    try:
-        with urllib.request.urlopen(req, timeout=5) as response:
-            supabase_data = json.loads(response.read().decode('utf-8'))
-    except Exception as e:
-        print("Error fetching certificaciones_transporte from Supabase:", e)
-        
-    return supabase_data
-
-
-def get_transportes_live(unidad_negocio: str, periodo: str):
-    periodo = normalize_periodo(periodo)
-    y, m = periodo.split('-')
-    y_int, m_int = int(y), int(m)
-    
-    # 1. Obtener certificaciones de Supabase
-    supabase_certs = get_certificaciones_transporte_new(unidad_negocio, periodo)
-    
-    # 2. Obtener tarifas de Supabase
-    import urllib.request
-    import json
-    url_tariffs = "https://naxjzquhdzyoxtjataaw.supabase.co/rest/v1/tarifas_transporte"
-    apikey = "sb_publishable_K3r5ogAi25D2ffI6-9cWLg_VJddbdxF"
-    req_tariffs = urllib.request.Request(
-        url_tariffs,
-        headers={
-            "apikey": apikey,
-            "Authorization": f"Bearer {apikey}"
-        }
-    )
-    tariffs_data = []
-    try:
-        with urllib.request.urlopen(req_tariffs, timeout=5) as response:
-            tariffs_data = json.loads(response.read().decode('utf-8'))
-    except Exception as tariff_err:
-        print("Error fetching tarifas_transporte from Supabase:", tariff_err)
-        
-    tariffs_map = {}
-    for t in tariffs_data:
-        p_name = str(t.get('producto') or '').strip().lower()
-        try:
-            tariffs_map[p_name] = float(t.get('valor_tarifa') or 0)
-        except:
-            pass
-
-    # 3. Obtener partes de transporte de Finnegans (ceesa_transportes_taller)
-    conn_a = get_aurora()
-    cur_a = conn_a.cursor()
-    all_trans_logs = []
-    try:
-        cur_a.execute("""
-            SELECT fecha, documento, comprobante, transportista, chofer, producto, cantidad, unidad, sucursal
-            FROM ceesa_transportes_taller
-            WHERE EXTRACT(YEAR FROM CAST(fecha AS TIMESTAMP)) = %s
-              AND EXTRACT(MONTH FROM CAST(fecha AS TIMESTAMP)) = %s
-        """, (y_int, m_int))
-        all_trans_logs = cur_a.fetchall()
-    except Exception as e:
-        print("Error fetching ceesa_transportes_taller from Aurora:", e)
-    finally:
-        cur_a.close()
-        conn_a.close()
-
-    # Normalizar unidad solicitada
-    un_req = unidad_negocio.strip().lower().replace("cee", "").replace("enriquez", "").strip()
-    
-    filtered_certs = []
-    for cert in supabase_certs:
-        cert_chofer = str(cert.get('chofer') or '').strip().lower()
-        cert_producto = str(cert.get('producto') or '').strip().lower()
-        cert_transportista = str(cert.get('transportista') or '').strip().lower()
-        
-        is_my_unit = False
-        detalles_remitos = set()
-        
-        for log in all_trans_logs:
-            log_chofer = str(log[4] or '').strip().lower()
-            log_producto = str(log[5] or '').strip().lower()
-            log_transportista = str(log[3] or '').strip().lower()
-            log_sucursal = str(log[8] or '').strip().lower().replace("cee", "").replace("enriquez", "").strip()
-            
-            # Comparar chofer o producto/transportista
-            chofer_match = (cert_chofer != "" and (cert_chofer in log_chofer or log_chofer in cert_chofer))
-            prod_match = (cert_producto != "" and (cert_producto in log_producto or log_producto in cert_producto))
-            
-            if log_sucursal == un_req or un_req in log_sucursal or log_sucursal in un_req:
-                if chofer_match or (cert_chofer == "" and prod_match):
-                    is_my_unit = True
-                    if log[1]:
-                        detalles_remitos.add(str(log[1]))
-                        
-        # Si no hay partes en Finnegans para este mes, o si pertenece a nuestra unidad de negocio
-        if not all_trans_logs or is_my_unit:
-            # Buscar precio unitario
-            price_unit = tariffs_map.get(cert_producto, 0.0)
-            if price_unit == 0.0:
-                for prod_key, val in tariffs_map.items():
-                    if prod_key in cert_producto or cert_producto in prod_key:
-                        price_unit = val
-                        break
-            
-            tons = float(cert.get('toneladas') or 0.0)
-            qty = float(cert.get('cantidad') or 0.0)
-            
-            costo_calc = 0.0
-            if price_unit > 0.0:
-                if tons > 0.0:
-                    costo_calc = tons * price_unit
-                elif qty > 0.0:
-                    costo_calc = qty * price_unit
-                else:
-                    costo_calc = price_unit
-            else:
-                try:
-                    costo_calc = float(cert.get('costo') or 0.0)
-                except:
-                    costo_calc = 0.0
-                    
-            if price_unit == 0.0 and costo_calc > 0.0:
-                if tons > 0.0:
-                    price_unit = costo_calc / tons
-                elif qty > 0.0:
-                    price_unit = costo_calc / qty
-                else:
-                    price_unit = costo_calc
-
-            filtered_certs.append({
-                "id": cert.get('id'),
-                "origen": "SUPABASE_CERT",
-                "fecha": cert.get('fecha') or cert.get('fecha_certificacion') or f"{y_int}-{m_int:02d}-01",
-                "transportista": cert.get('transportista') or "Sin Transportista",
-                "chofer": cert.get('chofer') or "Sin Chofer",
-                "producto": cert.get('producto') or "Sin Producto",
-                "cantidad": qty,
-                "toneladas": tons,
-                "precio_unitario": price_unit,
-                "total": costo_calc,
-                "documento": "Supabase Cert",
-                "comprobante": "",
-                "remitos": list(detalles_remitos)
-            })
-
-    result = []
-    result.extend(filtered_certs)
-    
-    # Agregar fletes de Finnegans no certificados
-    matched_remitos = set()
-    for c in filtered_certs:
-        for r in c.get("remitos", []):
-            matched_remitos.add(r)
-            
-    for log in all_trans_logs:
-        log_doc = log[1] or ""
-        log_sucursal = str(log[8] or '').strip().lower().replace("cee", "").replace("enriquez", "").strip()
-        
-        if log_sucursal == un_req or un_req in log_sucursal or log_sucursal in un_req:
-            if log_doc not in matched_remitos:
-                qty = 0.0
-                try: qty = float(log[6] or 0.0)
-                except: pass
-                
-                unit = str(log[7] or '').strip().lower()
-                tons = qty if "ton" in unit else 0.0
-                
-                log_prod_clean = str(log[5] or '').strip().lower()
-                price_unit = tariffs_map.get(log_prod_clean, 0.0)
-                for prod_key, val in tariffs_map.items():
-                    if prod_key in log_prod_clean or log_prod_clean in prod_key:
-                        price_unit = val
-                        break
-                        
-                result.append({
-                    "id": None,
-                    "origen": "FINNEGANS",
-                    "fecha": str(log[0])[:10] if log[0] else "",
-                    "transportista": log[3] or "CARLOS E ENRIQUEZ SA",
-                    "chofer": log[4] or "Sin Chofer",
-                    "producto": log[5] or "Sin Producto",
-                    "cantidad": qty if tons == 0.0 else 1.0,
-                    "toneladas": tons,
-                    "precio_unitario": price_unit,
-                    "total": (tons if tons > 0.0 else qty) * price_unit,
-                    "documento": log_doc,
-                    "comprobante": log[2] or "",
-                    "remitos": [log_doc] if log_doc else []
-                })
-                
-    return result
-
-
-@app.get("/api/transportes")
-def get_transportes(unidad_negocio: str, periodo: str, current_user = Depends(get_current_user)):
-    periodo = normalize_periodo(periodo)
-    cerrado = check_informe_cerrado(unidad_negocio, periodo, 'transportes')
-    if cerrado is not None:
-        return cerrado
-    try:
-        return get_transportes_live(unidad_negocio, periodo)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-
-def get_certificados_obras_live(unidad_negocio: str, periodo: str):
-    periodo = normalize_periodo(periodo)
-    conn = get_supabase()
-    cur = conn.cursor()
-    try:
-        cur.execute("""
-            SELECT id, numero_interno, comitente, contratista, obra, fecha_certificado, estado, usuario_carga, fecha_carga
-            FROM cert_obras_maestro
-            WHERE unidad_negocio = %s AND periodo = %s
-            ORDER BY numero_interno ASC
-        """, (unidad_negocio, periodo))
-        maestros = cur.fetchall()
-        
-        sheets = []
-        for m in maestros:
-            maestro_id = m[0]
-            cur.execute("""
-                SELECT id, item, descripcion, unidad_medida, cantidad_aprobada, precio_unitario, presente_certificado, anterior_certificado, total_certificado, faltante_certificar, parcial_presente, parcial_anterior, parcial_total, monto_aprobado, avance_usd
-                FROM cert_obras_detalles
-                WHERE maestro_id = %s
-                ORDER BY id ASC
-            """, (maestro_id,))
-            details = cur.fetchall()
-            
-            items_list = []
-            for d in details:
-                items_list.append({
-                    "id": d[0],
-                    "item": d[1] or "",
-                    "descripcion": d[2] or "",
-                    "unidad_medida": d[3] or "",
-                    "cantidad_aprobada": float(d[4] or 0),
-                    "precio_unitario": float(d[5] or 0),
-                    "presente_certificado": float(d[6] or 0),
-                    "anterior_certificado": float(d[7] or 0),
-                    "total_certificado": float(d[8] or 0),
-                    "faltante_certificar": float(d[9] or 0),
-                    "parcial_presente": float(d[10] or 0),
-                    "parcial_anterior": float(d[11] or 0),
-                    "parcial_total": float(d[12] or 0),
-                    "monto_aprobado": float(d[13] or 0),
-                    "avance_usd": float(d[14] or 0)
-                })
-                
-            sheets.append({
-                "id": maestro_id,
-                "numero_interno": m[1],
-                "comitente": m[2] or "",
-                "contratista": m[3] or "",
-                "obra": m[4] or "",
-                "fecha_certificado": str(m[5]) if m[5] else "",
-                "estado": m[6],
-                "usuario_carga": m[7],
-                "fecha_carga": str(m[8]),
-                "items": items_list
-            })
-        return sheets
-    finally:
-        cur.close()
-        conn.close()
-
-@app.get("/api/certificados-obras")
-def get_certificados_obras(unidad_negocio: str, periodo: str, current_user = Depends(get_current_user)):
-    periodo = normalize_periodo(periodo)
-    cerrado = check_informe_cerrado(unidad_negocio, periodo, 'obras')
-    if cerrado is not None:
-        return cerrado
-    try:
-        return get_certificados_obras_live(unidad_negocio, periodo)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/certificados-obras/upload")
-async def upload_certificado_obra(
-    file: UploadFile = File(...),
-    unidad_negocio: str = Form(...),
-    periodo: str = Form(...),
-    current_user = Depends(get_current_user)
-):
-    periodo = normalize_periodo(periodo)
-    import io
-    import openpyxl
-    from datetime import datetime, date
-    
-    contents = await file.read()
-    wb = openpyxl.load_workbook(filename=io.BytesIO(contents), data_only=True)
-    ws = wb.active
-    
-    comitente = ""
-    contratista = ""
-    obra = ""
-    fecha_cert = None
-    
-    for row in ws.iter_rows(max_row=15, values_only=True):
-        if not row: continue
-        for col_idx, cell in enumerate(row):
-            cell_str = str(cell or "").strip().lower()
-            if "comitente" in cell_str and col_idx + 1 < len(row):
-                comitente = str(row[col_idx + 1] or "").strip()
-            elif "contratista" in cell_str and col_idx + 1 < len(row):
-                contratista = str(row[col_idx + 1] or "").strip()
-            elif "obra" in cell_str and col_idx + 1 < len(row):
-                if "total" not in cell_str:
-                    obra = str(row[col_idx + 1] or "").strip()
-            elif "fecha" in cell_str and col_idx + 1 < len(row):
-                val = row[col_idx + 1]
-                if isinstance(val, datetime):
-                    fecha_cert = val.date()
-                elif isinstance(val, date):
-                    fecha_cert = val
-                elif val:
-                    try:
-                        fecha_cert = datetime.strptime(str(val).strip()[:10], "%Y-%m-%d").date()
-                    except:
-                        try:
-                            fecha_cert = datetime.strptime(str(val).strip(), "%d/%m/%Y").date()
-                        except:
-                            pass
-
-    header_row_idx = None
-    headers = []
-    for row_idx, row in enumerate(ws.iter_rows(values_only=True), start=1):
-        if not row: continue
-        row_str = [str(c or "").strip().lower() for c in row]
-        if any("item" in s for s in row_str) and any("descrip" in s for s in row_str) and any("unidad" in s for s in row_str):
-            header_row_idx = row_idx
-            headers = row_str
-            break
-            
-    if header_row_idx is None:
-        raise HTTPException(status_code=400, detail="No se encontró la fila de cabecera con las columnas (Item, Descripción, Unidad de Medida).")
-        
-    idx_item = -1
-    idx_desc = -1
-    idx_um = -1
-    idx_cant_aprob = -1
-    idx_precio = -1
-    idx_pres_cert = -1
-    idx_ant_cert = -1
-    idx_tot_cert = -1
-    idx_faltante = -1
-    idx_parc_pres = -1
-    idx_parc_ant = -1
-    idx_parc_tot = -1
-    idx_monto_aprob = -1
-    idx_avance = -1
-    
-    for i, h in enumerate(headers):
-        if "item" in h: idx_item = i
-        elif "descrip" in h or "tarea" in h or "trabajo" in h: idx_desc = i
-        elif "unidad" in h or "u.m" in h: idx_um = i
-        elif "aprobada" in h or "cantidad aprob" in h: idx_cant_aprob = i
-        elif "precio" in h or "unitario" in h: idx_precio = i
-        elif "presente" in h and "certificado" in h and "parcial" not in h: idx_pres_cert = i
-        elif "anterior" in h and "certificado" in h and "parcial" not in h: idx_ant_cert = i
-        elif "total" in h and "certificado" in h and "parcial" not in h: idx_tot_cert = i
-        elif "faltante" in h: idx_faltante = i
-        elif "parcial presente" in h or ("parcial" in h and "presente" in h): idx_parc_pres = i
-        elif "parcial anterior" in h or ("parcial" in h and "anterior" in h): idx_parc_ant = i
-        elif "parcial total" in h or ("parcial" in h and "total" in h): idx_parc_tot = i
-        elif "monto aprobado" in h or "aprobado" in h: idx_monto_aprob = i
-        elif "avance" in h: idx_avance = i
-        
-    if idx_item == -1 or idx_desc == -1:
-         raise HTTPException(status_code=400, detail="Las columnas básicas 'Item' o 'Descripción' no fueron detectadas.")
-         
-    conn = get_supabase()
-    cur = conn.cursor()
-    
-    cur.execute("""
-        SELECT COALESCE(MAX(numero_interno), 0) + 1 
-        FROM cert_obras_maestro 
-        WHERE unidad_negocio = %s AND periodo = %s
-    """, (unidad_negocio, periodo))
-    next_num = cur.fetchone()[0]
-    
-    user_email = current_user.get("email", "unknown")
-    
-    cur.execute("""
-        INSERT INTO cert_obras_maestro (unidad_negocio, periodo, numero_interno, comitente, contratista, obra, fecha_certificado, estado, usuario_carga)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, 'BORRADOR', %s) RETURNING id
-    """, (unidad_negocio, periodo, next_num, comitente, contratista, obra, fecha_cert, user_email))
-    maestro_id = cur.fetchone()[0]
-    
-    def get_cell_val(row, idx):
-        if idx != -1 and idx < len(row) and row[idx] is not None:
-            val = row[idx]
-            if str(val).strip().upper() == "NULL" or str(val).strip() == "":
-                return 0.0
-            try: return float(val)
-            except: return 0.0
-        return 0.0
-        
-    inserted_items = 0
-    for row_idx, row in enumerate(ws.iter_rows(min_row=header_row_idx + 1, values_only=True), start=header_row_idx + 1):
-        if not row or not any(row): continue
-        item_val = str(row[idx_item] or "").strip()
-        desc_val = str(row[idx_desc] or "").strip()
-        
-        if not item_val and not desc_val: continue
-        
-        um_val = str(row[idx_um] or "").strip() if idx_um != -1 else ""
-        
-        cant_aprob = get_cell_val(row, idx_cant_aprob)
-        precio_unit = get_cell_val(row, idx_precio)
-        pres_cert = get_cell_val(row, idx_pres_cert)
-        ant_cert = get_cell_val(row, idx_ant_cert)
-        
-        tot_cert = get_cell_val(row, idx_tot_cert) if idx_tot_cert != -1 else 0.0
-        if idx_tot_cert == -1 or tot_cert == 0.0:
-            tot_cert = pres_cert + ant_cert
-            
-        faltante = get_cell_val(row, idx_faltante) if idx_faltante != -1 else 0.0
-        if idx_faltante == -1 or faltante == 0.0:
-            faltante = cant_aprob - tot_cert
-            
-        parc_pres = get_cell_val(row, idx_parc_pres) if idx_parc_pres != -1 else 0.0
-        if idx_parc_pres == -1 or parc_pres == 0.0:
-            parc_pres = pres_cert * precio_unit
-            
-        parc_ant = get_cell_val(row, idx_parc_ant) if idx_parc_ant != -1 else 0.0
-        if idx_parc_ant == -1 or parc_ant == 0.0:
-            parc_ant = ant_cert * precio_unit
-            
-        parc_tot = get_cell_val(row, idx_parc_tot) if idx_parc_tot != -1 else 0.0
-        if idx_parc_tot == -1 or parc_tot == 0.0:
-            parc_tot = tot_cert * precio_unit
-            
-        monto_aprob = get_cell_val(row, idx_monto_aprob) if idx_monto_aprob != -1 else 0.0
-        if idx_monto_aprob == -1 or monto_aprob == 0.0:
-            monto_aprob = cant_aprob * precio_unit
-            
-        avance = get_cell_val(row, idx_avance) if idx_avance != -1 else 0.0
-        if idx_avance == -1 or avance == 0.0:
-            avance = (tot_cert / cant_aprob * 100.0) if cant_aprob > 0.0 else 0.0
-        
-        cur.execute("""
-            INSERT INTO cert_obras_detalles (
-                maestro_id, item, descripcion, unidad_medida, cantidad_aprobada, precio_unitario, 
-                presente_certificado, anterior_certificado, total_certificado, faltante_certificar, 
-                parcial_presente, parcial_anterior, parcial_total, monto_aprobado, avance_usd
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (
-            maestro_id, item_val, desc_val, um_val, cant_aprob, precio_unit,
-            pres_cert, ant_cert, tot_cert, faltante,
-            parc_pres, parc_ant, parc_tot, monto_aprob, avance
-        ))
-        inserted_items += 1
-        
-    conn.commit()
-    cur.close()
-    conn.close()
-    
-    return {
-        "status": "ok",
-        "maestro_id": maestro_id,
-        "numero_interno": next_num,
-        "inserted_items": inserted_items
-    }
-
-class ConfirmCertificadoObraReq(BaseModel):
-    comitente: str
-    contratista: str
-    obra: str
-    fecha_certificado: Optional[str] = None
-    items: list
-
-@app.put("/api/certificados-obras/{maestro_id}/confirm")
-def confirm_certificado_obra(maestro_id: int, req: ConfirmCertificadoObraReq, current_user = Depends(get_current_user)):
-    conn = get_supabase()
-    cur = conn.cursor()
-    try:
-        cur.execute("""
-            UPDATE cert_obras_maestro 
-            SET comitente = %s, contratista = %s, obra = %s, fecha_certificado = %s, estado = 'CONFIRMADO'
-            WHERE id = %s
-        """, (req.comitente, req.contratista, req.obra, req.fecha_certificado if req.fecha_certificado else None, maestro_id))
-        
-        cur.execute("DELETE FROM cert_obras_detalles WHERE maestro_id = %s", (maestro_id,))
-        
-        for item in req.items:
-            cur.execute("""
-                INSERT INTO cert_obras_detalles (
-                    maestro_id, item, descripcion, unidad_medida, cantidad_aprobada, precio_unitario, 
-                    presente_certificado, anterior_certificado, total_certificado, faltante_certificar, 
-                    parcial_presente, parcial_anterior, parcial_total, monto_aprobado, avance_usd
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (
-                maestro_id, item.get("item"), item.get("descripcion"), item.get("unidad_medida"),
-                item.get("cantidad_aprobada", 0), item.get("precio_unitario", 0),
-                item.get("presente_certificado", 0), item.get("anterior_certificado", 0),
-                item.get("total_certificado", 0), item.get("faltante_certificar", 0),
-                item.get("parcial_presente", 0), item.get("parcial_anterior", 0),
-                item.get("parcial_total", 0), item.get("monto_aprobado", 0),
-                item.get("avance_usd", 0)
-            ))
-            
-        conn.commit()
-        return {"status": "ok"}
-    except Exception as e:
-        conn.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        cur.close()
-        conn.close()
-
-@app.delete("/api/certificados-obras/{maestro_id}")
-def delete_certificado_obra(maestro_id: int, current_user = Depends(get_current_user)):
-    conn = get_supabase()
-    cur = conn.cursor()
-    try:
-        cur.execute("DELETE FROM cert_obras_maestro WHERE id = %s", (maestro_id,))
-        conn.commit()
-        return {"status": "ok"}
-    except Exception as e:
-        conn.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        cur.close()
-        conn.close()
-
-from routers.ventas_router import router as ventas_router
-app.include_router(ventas_router, prefix="/api/ventas", tags=["Ventas"])

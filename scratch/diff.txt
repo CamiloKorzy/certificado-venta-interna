@@ -1,0 +1,87 @@
+diff --git a/backend/main.py b/backend/main.py
+index 1bf844c..e497a62 100644
+--- a/backend/main.py
++++ b/backend/main.py
+@@ -1,4 +1,4 @@
+-from fastapi import FastAPI, HTTPException, Request, Depends, UploadFile, File
++from fastapi import FastAPI, HTTPException, Request, Depends, UploadFile, File, Form
+ import io
+ from fastapi.middleware.cors import CORSMiddleware
+ from pydantic import BaseModel
+@@ -558,7 +558,13 @@ def save_config_centros_costo(sucursal: str, items: List[dict]):
+         conn.close()
+ 
+ @app.post("/api/config/ajustes-excel")
+-async def upload_ajustes_excel(file: UploadFile = File(...), current_user = Depends(get_current_user)):
++async def upload_ajustes_excel(
++    file: UploadFile = File(...), 
++    unidad: Optional[str] = Form(None),
++    periodo: Optional[str] = Form(None),
++    tipo: Optional[str] = Form(None),
++    current_user = Depends(get_current_user)
++):
+     contents = await file.read()
+     wb = openpyxl.load_workbook(filename=io.BytesIO(contents), data_only=True)
+     ws = wb.active
+@@ -587,15 +593,26 @@ async def upload_ajustes_excel(file: UploadFile = File(...), current_user = Depe
+     for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+         if not row or not any(row): continue
+         
+-        unidad_negocio = str(row[0] or "").strip()
+-        periodo = str(row[1] or "").strip()
+-        concepto = str(row[2] or "").strip()
+-        tipo_mov = str(row[3] or "").strip().upper()
+-        categoria = str(row[4] or "").strip()
+-        importe_val = row[5]
+-        observaciones = str(row[6] or "").strip() if len(row) > 6 else ""
+-        
+-        if not unidad_negocio or not periodo or not tipo_mov or importe_val is None:
++        # If parameters were sent via form (new UI), the Excel file has 4 columns: Concepto, Categoría, Importe, Observaciones
++        if unidad and periodo and tipo:
++            unidad_negocio = str(unidad).strip()
++            periodo_val = str(periodo).strip()
++            tipo_mov = str(tipo).strip().upper()
++            concepto = str(row[0] or "").strip()
++            categoria = str(row[1] or "").strip()
++            importe_val = row[2]
++            observaciones = str(row[3] or "").strip() if len(row) > 3 else ""
++        else:
++            # Old format fallback just in case
++            unidad_negocio = str(row[0] or "").strip()
++            periodo_val = str(row[1] or "").strip()
++            concepto = str(row[2] or "").strip()
++            tipo_mov = str(row[3] or "").strip().upper()
++            categoria = str(row[4] or "").strip()
++            importe_val = row[5]
++            observaciones = str(row[6] or "").strip() if len(row) > 6 else ""
++        
++        if not unidad_negocio or not periodo_val or not tipo_mov or importe_val is None:
+             errors.append(f"Fila {row_idx}: Faltan datos (Unidad, Periodo, Tipo o Importe).")
+             continue
+             
+@@ -608,10 +625,14 @@ async def upload_ajustes_excel(file: UploadFile = File(...), current_user = Depe
+                 errors.append(f"Fila {row_idx}: Unidad '{unidad_negocio}' no encontrada.")
+                 continue
+                 
+-        if tipo_mov not in ["INGRESO", "GASTO"]:
+-            errors.append(f"Fila {row_idx}: Tipo '{tipo_mov}' inválido. Use INGRESO o GASTO.")
++        if tipo_mov not in ["INGRESO", "GASTO", "COSTO"]:
++            errors.append(f"Fila {row_idx}: Tipo '{tipo_mov}' inválido. Use INGRESO o COSTO.")
+             continue
+             
++        # Convert GASTO to COSTO if imported from old files
++        if tipo_mov == "GASTO":
++            tipo_mov = "COSTO"
++            
+         try:
+             importe = float(importe_val)
+         except ValueError:
+@@ -621,7 +642,7 @@ async def upload_ajustes_excel(file: UploadFile = File(...), current_user = Depe
+         cur_supa.execute("""
+             INSERT INTO cert_ajustes_excel (unidad_negocio, periodo, concepto, tipo_movimiento, categoria, importe, observaciones, usuario_carga)
+             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+-        """, (unidad_negocio, periodo, concepto, tipo_mov, categoria, importe, observaciones, user_email))
++        """, (unidad_negocio, periodo_val, concepto, tipo_mov, categoria, importe, observaciones, user_email))
+         inserted_count += 1
+         
+     conn_supa.commit()

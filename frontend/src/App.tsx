@@ -13,6 +13,7 @@ import Transportes from './components/Transportes';
 import CertificadosObras from './components/CertificadosObras';
 import DashboardConsolidado from './components/DashboardConsolidado';
 import VentasTerceros from './components/VentasTerceros';
+import FacturasCompras from './components/FacturasCompras';
 import { Briefcase } from 'lucide-react';
 // ─── API Helper ───
 const API_URL = '';
@@ -2203,17 +2204,29 @@ function Ingresos({ token, onLogout, defaultUnidad, defaultPeriodo }: { token: s
 }
 
 function Costos({ token, defaultUnidad, defaultPeriodo }: { token: string, defaultUnidad?: string, defaultPeriodo?: string }) {
-  const [subTab, setSubTab] = useState<'resumen' | 'rrhh' | 'consumos' | 'equipos' | 'transportes'>('resumen');
+  const [subTab, setSubTab] = useState<'resumen' | 'rrhh' | 'consumos' | 'equipos' | 'transportes' | 'asientos' | 'facturas'>('resumen');
 
   return (
     <div className="bg-slate-50 min-h-screen pb-12 overflow-x-hidden font-sans">
-      <div className="bg-white border-b border-slate-200 shadow-sm mb-4">
-        <div className="max-w-[1800px] mx-auto px-6 flex items-center h-10 gap-1 overflow-x-auto whitespace-nowrap scrollbar-none">
+      <div className="bg-white border-b border-slate-200 shadow-sm mb-4 relative">
+        <div className="max-w-[1800px] mx-auto px-6 flex items-center h-12 gap-2 overflow-x-auto whitespace-nowrap pb-1">
           <button 
             onClick={() => setSubTab('resumen')}
             className={`px-4 h-full text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'resumen' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
           >
             <Wallet size={13} /> Resumen de Costos
+          </button>
+          <button 
+            onClick={() => setSubTab('facturas')}
+            className={`px-4 h-full text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'facturas' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            <FileText size={13} /> Facturas de Compras (Soporte)
+          </button>
+          <button 
+            onClick={() => setSubTab('asientos')}
+            className={`px-4 h-full text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${subTab === 'asientos' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            <FileText size={13} /> Asientos Contables (Soporte)
           </button>
           <button 
             onClick={() => setSubTab('rrhh')}
@@ -2247,6 +2260,8 @@ function Costos({ token, defaultUnidad, defaultPeriodo }: { token: string, defau
       {subTab === 'consumos' && <ConsumosInventarios token={token} unidadNegocio={defaultUnidad!} periodo={defaultPeriodo!} />}
       {subTab === 'equipos' && <Equipos token={token} unidadNegocio={defaultUnidad!} periodo={defaultPeriodo!} />}
       {subTab === 'transportes' && <Transportes token={token} unidadNegocio={defaultUnidad!} periodo={defaultPeriodo!} />}
+      {subTab === 'asientos' && <InformeGestion token={token} mode="asientos" defaultUnidad={defaultUnidad} defaultPeriodo={defaultPeriodo} />}
+      {subTab === 'facturas' && <FacturasCompras token={token} unidadNegocio={defaultUnidad!} periodo={defaultPeriodo!} />}
     </div>
   );
 }
